@@ -40,6 +40,7 @@ extern char pfs_trace_pbdname[PFS_MAX_PBDLEN];
 extern struct pfs_devops pfs_polardev_ops;
 //extern struct pfs_devops pfs_pangudev_ops;
 extern struct pfs_devops pfs_diskdev_ops;
+extern struct pfs_devops pfs_curvedev_ops;
 
 static struct pfs_devops *pfs_dev_ops[] = {
 #ifndef PFS_DISK_IO_ONLY
@@ -47,6 +48,9 @@ static struct pfs_devops *pfs_dev_ops[] = {
 #endif
 	//&pfs_pangudev_ops,
 	&pfs_diskdev_ops,
+#ifdef HAVE_NEBD
+	&pfs_curvedev_ops,
+#endif
 	NULL,
 };
 
@@ -137,6 +141,8 @@ pfsdev_type(const char *cluster, const char *devname)
 	/* local disk */
 	if (strcmp(cluster, CL_DISK) == 0)
 		return PFS_DEV_DISK;
+    if (strcmp(cluster, CL_CURVE) == 0)
+        return PFS_DEV_CURVE;
 #ifndef PFS_DISK_IO_ONLY
 	/* polarstore PBD */
 	if (strcmp(cluster, CL_POLAR) == 0 && isdigit(devname[0]))
@@ -616,6 +622,8 @@ pfsdev_trace_pbdname(const char *cluster, const char *pbdname)
 		    " tracing\n", pbdname, pfs_trace_pbdname);
 		return pfs_trace_pbdname;
 #endif
+    case PFS_DEV_CURVE:
+        return pbdname;
 	default:
 		return NULL;
 	}
