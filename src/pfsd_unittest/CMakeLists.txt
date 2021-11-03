@@ -23,29 +23,11 @@ link_directories(
     ${LIBRARY_OUTPUT_PATH}
 )
 
-add_executable(pfs-tools
-	cmd_pfs.cc
-	cmd_util.cc
-	cmd_chunk.cc
-	cmd_cp.cc
-	cmd_dir.cc
-	cmd_du.cc
-	cmd_dumpfs.cc
-	cmd_dumple.cc
-	cmd_flushlog.cc
-	cmd_fscp.cc
-	cmd_fstrim.cc
-	cmd_info.cc
-	cmd_map.cc
-	cmd_mkdir.cc
-	cmd_mkfs.cc
-	cmd_mount.cc
-	cmd_rename.cc
-	cmd_rm.cc
-	cmd_usedinfo.cc
-)
-SET_TARGET_PROPERTIES(pfs-tools
-	PROPERTIES OUTPUT_NAME pfs
+add_executable(
+	pfsd_unittest
+	pfsd_unittest.cc
+	pfsd_filetest.cc
+	pfsd_testenv.cc
 )
 
 add_definitions(-D__STDC_FORMAT_MACROS)
@@ -60,13 +42,14 @@ if(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "x86_64")
     set(CXXFLAGS ${CXXFLAGS}  -march=native)
 endif()
 
-target_link_libraries(pfs-tools
+target_link_libraries(pfsd_unittest
+    gtest
     -Wl,--start-group
     -Wl,--no-as-needed
     pfs
     pfsd
+    pthread
     -Wl,--end-group
-   pthread
 )
 
 add_dependencies(pfs-tools
@@ -74,5 +57,3 @@ add_dependencies(pfs-tools
     pfsd
 )
 
-configure_file(${PROJECT_SOURCE_DIR}/src/pfs_tools/pfsadm
-    ${EXECUTABLE_OUTPUT_PATH}/pfsadm COPYONLY)

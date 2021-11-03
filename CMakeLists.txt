@@ -13,6 +13,7 @@
 
 cmake_minimum_required (VERSION 2.8)
 project(pfsd CXX C ASM)
+include(CheckIncludeFile)
 
 message("compile pfsd for PostgreSQL")
 
@@ -20,6 +21,14 @@ set(CMAKE_BUILD_TYPE "Release")
 #set(CMAKE_BUILD_TYPE "Debug")
 
 include(CMakeLists-config.txt)
+
+check_include_file(/usr/include/nebd/libnebd.h HAVE_NEBD)
+
+if (HAVE_NEBD)
+link_directories(/usr/lib/nebd)
+set(CURVE_LIBS nebdclient nebd_common client_proto brpc cc_brpc_internal_proto cc_brpc_idl_options_proto 
+               json bthread bvar mcpack2pb json2pb butil protobuf protobuf_lite leveldb glog gflags)
+endif()
 
 set(COMMON_FLAGS
   -fno-strict-aliasing
@@ -89,7 +98,7 @@ if(DEFINED ENV{POLAR_LOG_RELEASE_LEVEL})
 	set(RELEASE_LEVEL $ENV{POLAR_LOG_RELEASE_LEVEL})
 endif()
 
-message("build log level release level "${RELEASE_LEVEL} " debug level "${DEBUG_LEVEL})
+message("build log level release level " ${RELEASE_LEVEL} " debug level " ${DEBUG_LEVEL})
 set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -ggdb -DDEBUG -DCHKSVR_LOG_LEVEL=${DEBUG_LEVEL}")
 set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O2 -finline-limit=100000 -DNDEBUG -DCHKSVR_LOG_LEVEL=${RELEASE_LEVEL}")
 set(CMAKE_C_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -ggdb -DDEBUG -DCHKSVR_LOG_LEVEL=${DEBUG_LEVEL}")
