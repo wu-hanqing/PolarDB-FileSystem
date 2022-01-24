@@ -22,3 +22,8 @@ ret = pfsd_mount(“curve”, “pool@@pfs_test_”, 1, PFS_RDWR);
 - 卷名不能超过64个字符
 
   pfsd内部规定了pbd name不能超过64个字符，否则需要修改宏，并重新编译。
+
+- 启动pfsdaemon
+ 
+  启动pfsdaemon的命令行参数也需要变换，例如
+/usr/local/polarstore/pfsd/bin/start_pfsd.sh -p pool@@pfs_test_
