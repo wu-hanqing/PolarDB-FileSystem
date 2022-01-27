@@ -76,3 +76,10 @@ add_dependencies(pfs-tools
 
 configure_file(${PROJECT_SOURCE_DIR}/src/pfs_tools/pfsadm
     ${EXECUTABLE_OUTPUT_PATH}/pfsadm COPYONLY)
+
+install(TARGETS pfs-tools DESTINATION "/usr/local/bin")
+install(FILES ${EXECUTABLE_OUTPUT_PATH}/pfsadm DESTINATION "/usr/local/bin"
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
+        WORLD_READ WORLD_EXECUTE
+)
+

@@ -13,10 +13,17 @@
 
 cmake_minimum_required (VERSION 2.8)
 project(pfsd CXX C ASM)
+set(pfsd_VERSION_MAJOR 2)
+set(pfsd_VERSION_MINOR 0)
+set(pfsd_VERSION_PATCH 0)
+set(pfsd_VERSION 
+    ${pfsd_VERSION_MAJOR}.${pfsd_VERSION_MINOR}.${pfsd_VERSION_MATCH})
+
 include(CheckIncludeFile)
 
 message("compile pfsd for PostgreSQL")
 
+set(PKG_DIR "/usr/local/polarstore/pfsd")
 set(CMAKE_BUILD_TYPE "Release")
 #set(CMAKE_BUILD_TYPE "Debug")
 
@@ -26,6 +33,11 @@ check_include_file(/usr/include/nebd/libnebd.h HAVE_NEBD)
 
 if (HAVE_NEBD)
 link_directories(/usr/lib/nebd)
+# set install rpath
+# or set target's property INSTALL_RPATH to /usr/lib/nebd
+# set_target_properties(target1 PROPERTIES INSTALL_RPATH /usr/lib/nebd)
+set(CMAKE_INSTALL_RPATH "/usr/lib/nebd")
+
 set(CURVE_LIBS nebdclient nebd_common client_proto brpc cc_brpc_internal_proto cc_brpc_idl_options_proto 
                json bthread bvar mcpack2pb json2pb butil protobuf protobuf_lite leveldb glog gflags)
 endif()
@@ -115,3 +127,59 @@ execute_process(COMMAND mkdir -p ${PROJECT_SOURCE_DIR}/include)
 execute_process(COMMAND cp ${PROJECT_SOURCE_DIR}/src/pfs_sdk/pfsd_sdk.h ${PROJECT_SOURCE_DIR}/include/)
 
 add_subdirectory(src)
+
+set(CPACK_PACKAGE_NAME pfsd)
+set(CPACK_PACKAGE_VENDOR "Netease")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Polar filesystem")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY pfsd)
+set(CPACK_PACKAGE_VERSION_MAJOR ${pfsd_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${pfsd_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${pfsd_VERSION_PATCH})
+set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${RAW_GIT_DESC}-${pfsd_VERSION_MAJOR}.${pfsd_VERSION_MINOR}.${pfsd_VERSION_PATCH}-${CMAKE_SYSTEM_PROCESSOR}")
+set(CPACK_VERBATIM_VARIABLES TRUE)
+set(CPACK_MONOLITHIC_INSTALL TRUE)
+set(CPACK_PACKAGE_CONTACT "yfxu@")
+set(CPACK_GENERATOR "RPM;DEB")
+#don't detect nebd library
+set(CPACK_RPM_PACKAGE_AUTOREQ FALSE)
+file(GLOB pfsd_HEADERS
+     ${PROJECT_SOURCE_DIR}/src/pfs_sdk/pfsd_sdk.h
+)
+
+file(GLOB deploy_FILES
+     "${PROJECT_SOURCE_DIR}/deploy_scripts/*"
+)
+
+install(
+  FILES
+	${pfsd_HEADERS}
+  DESTINATION "${PKG_DIR}/include")
+install(
+  FILES
+	conf/pfsd_logger.conf
+  DESTINATION "${PKG_DIR}/conf")
+install(
+  FILES
+	${deploy_FILES}
+  DESTINATION "${PKG_DIR}/bin"
+  PERMISSIONS  OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+)
+  
+install(
+  FILES
+	src/pfsd/pfsd.init
+  DESTINATION "/etc/init.d/"
+  RENAME pfsd_env
+)
+
+install(
+  FILES
+	etc/polarfs.conf
+  DESTINATION "/etc/"
+)
+
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+    "${CMAKE_CURRENT_SOURCE_DIR}/package/deb/preinst;${CMAKE_CURRENT_SOURCE_DIR}/package/deb/postrm")
+set(CPACK_RPM_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/package/rpm/preinst")
+set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/package/rpm/postinst")
+include(CPack)

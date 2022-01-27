@@ -70,3 +70,8 @@ target_link_libraries(pfsd_shm_tool; pfsd;rt;pthread)
 
 SET_TARGET_PROPERTIES(pfsd PROPERTIES LINKER_LANGUAGE CXX)
 SET_TARGET_PROPERTIES(pfsd_shm_tool PROPERTIES LINKER_LANGUAGE CXX)
+
+install(TARGETS pfsd ARCHIVE DESTINATION "${PKG_DIR}/lib")
+install(TARGETS pfsd_test LIBRARY DESTINATION "${PKG_DIR}/lib")
+install(TARGETS pfsd_shm_tool DESTINATION "${PKG_DIR}/bin")
+
