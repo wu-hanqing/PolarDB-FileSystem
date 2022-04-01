@@ -906,6 +906,63 @@ pfs_log_trim(pfs_log_t *log)
 	return 0;
 }
 
+static int pfs_log_writebuf_flush(pfs_log_t *log)
+{
+	pfs_file_t *logf = log->log_file;
+	ssize_t wlen;
+
+	if (log->log_writebuf_dirty) {
+		wlen = pfs_file_pwrite(logf, log->log_writebuf, log->log_writebuf_sz,
+				log->log_writebuf_off);
+		if (wlen != log->log_writebuf_sz)
+			return -EIO;
+		log->log_writebuf_dirty = 0;
+	}
+	return 0; 
+}
+
+static char *pfs_log_writebuf_get(pfs_log_t *log, uint64_t offset, size_t len,
+		size_t *outlen)
+{
+	pfs_file_t *logf = log->log_file;
+	uint64_t align_off = offset / log->log_writebuf_sz * log->log_writebuf_sz;
+	ssize_t rlen, wlen;
+
+	if (offset < log->log_writebuf_off ||
+			offset >= log->log_writebuf_off + log->log_writebuf_sz) {
+		if (pfs_log_writebuf_flush(log)) {
+			return NULL;
+		}
+		if (!(offset == align_off && len >= log->log_writebuf_sz)) {
+			/* if the buffer will not be fully overwritten */
+			rlen = pfs_file_pread(logf, log->log_writebuf, log->log_writebuf_sz,
+					align_off);
+			if (rlen <= 0) {
+				return NULL;
+			}
+			PFS_ASSERT(rlen == log->log_writebuf_sz);
+		}
+		log->log_writebuf_off = align_off;
+	}
+
+	*outlen = log->log_writebuf_sz - (offset - log->log_writebuf_off);
+	if (*outlen > len)
+		*outlen = len;
+	return log->log_writebuf + (offset - log->log_writebuf_off);
+}
+
+static ssize_t pfs_log_writebuf_fill(pfs_log_t *log, char *buf, size_t len,
+		uint64_t offset)
+{
+	size_t out_len = -1LL;
+	char *out_buf = pfs_log_writebuf_get(log, offset, len, &out_len);
+	if (out_buf) {
+		memcpy(out_buf, buf, out_len);
+		log->log_writebuf_dirty = 1;
+	}
+	return out_len;
+}
+
 /*
  * pfs_log_write:
  *
@@ -928,14 +985,18 @@ pfs_log_write(pfs_log_t *log, char *buf, size_t buflen, uint64_t offset)
 	 * should be wrapped around
 	 */
 	OFF_MODULAR_ADD(offset, 0, lr->log_size);
+
 	for (wlen = 0, left = buflen; left > 0; left -= wlen, buf += wlen) {
 		wlen = left;
 		LEN_MODULAR_CUT(wlen, offset, lr->log_size);
 
-		wlen = pfs_file_pwrite(logf, buf, wlen, offset);
+		wlen = pfs_log_writebuf_fill(log, buf, wlen, offset);
 		if (wlen < 0)
-		       return wlen;
+			return wlen;
 		OFF_MODULAR_ADD(offset, wlen, lr->log_size);
+	}
+	if (pfs_log_writebuf_flush(log)) {
+		return -EIO;
 	}
 
 	return buflen;
@@ -1774,6 +1835,17 @@ pfs_log_start(pfs_log_t *log)
 	log->log_workbuf = buf;
 	log->log_workbufsz = PFS_FRAG_SIZE;
 	memset(log->log_workbuf, 0, log->log_workbufsz);
+
+	log->log_writebuf_off = -1LL;
+	log->log_writebuf_dirty = 0;
+	log->log_writebuf_sz = PBD_SECTOR_SIZE;
+	log->log_writebuf = (char *)pfs_mem_malloc(log->log_writebuf_sz, M_FRAG);
+	if (log->log_writebuf == NULL) {
+		pfs_mem_free(log->log_workbuf, M_FRAG);
+		log->log_workbuf = NULL;
+		ERR_RETVAL(ENOMEM);
+	}
+
 	log->log_paxos_got = false;
 	log->log_paxos_ts.tv_sec = 0;
 	log->log_paxos_ts.tv_nsec = 0;
@@ -1813,6 +1885,12 @@ pfs_log_stop(pfs_log_t *log)
 		pfs_mem_free(log->log_workbuf, M_FRAG);
 		log->log_workbuf = NULL;
 		log->log_workbufsz = 0;
+	}
+
+	if (log->log_writebuf) {
+		pfs_mem_free(log->log_writebuf, M_FRAG);
+		log->log_writebuf = NULL;
+		log->log_writebuf_sz = 0;
 	}
 
 	pfs_trimgroup_fini(log->log_workgrp);
