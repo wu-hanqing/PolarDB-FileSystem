@@ -974,7 +974,7 @@ pfs_log_write(pfs_log_t *log, char *buf, size_t buflen, uint64_t offset)
 {
 	pfs_file_t *logf = log->log_file;
 	pfs_leader_record_t *lr = &log->log_leader;
-	int wlen, rlen;
+	int wlen;
 	size_t left;
 
 	PFS_ASSERT(buflen < pfs_log_space(log));
