@@ -995,7 +995,9 @@ pfs_log_write(pfs_log_t *log, char *buf, size_t buflen, uint64_t offset)
 			return wlen;
 		OFF_MODULAR_ADD(offset, wlen, lr->log_size);
 	}
-	pfs_log_writebuf_flush(log);
+	if (pfs_log_writebuf_flush(log)) {
+		return -EIO;
+	}
 
 	return buflen;
 }
