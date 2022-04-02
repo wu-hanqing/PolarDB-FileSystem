@@ -28,6 +28,7 @@
 #define CL_PANGU	"river"
 #define CL_DISK		"disk"
 #define CL_CURVE	"curve"
+#define CL_CURVE2	"curve2"
 #ifndef PFS_DISK_IO_ONLY
 #define CL_DEFAULT	CL_POLAR
 #else
@@ -65,6 +66,7 @@ typedef enum pfs_devtype {
 #endif
 	PFS_DEV_DISK,
 	PFS_DEV_CURVE,
+	PFS_DEV_CURVE2,
 	PFS_DEV_MAX,
 } pfs_devtype_t;
 
