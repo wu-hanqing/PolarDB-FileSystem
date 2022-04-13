@@ -17,13 +17,9 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/src/trace/include/
     )
 
-if (HAVE_NEBD)
-    set(NEBD_SRC devio_curve.cc)
-endif()
-
 set(SRC_LIST
     devio_disk.cc
-    ${NEBD_SRC}
+    devio_curve.cc
     pfs_admin.cc
     pfs_alloc.cc
     pfs_api.cc
@@ -64,9 +60,11 @@ if (HAVE_NEBD)
 target_compile_definitions(pfs PRIVATE HAVE_NEBD)
 endif()
 
+message("${CURVE_LIBS}")
+
 target_link_libraries(pfs
-    ${CURVE_LIBS}
     -Wl,--start-group
+    ${CURVE_LIBS}
     rt
     pthread
     dl

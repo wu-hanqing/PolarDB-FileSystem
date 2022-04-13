@@ -29,18 +29,12 @@ set(CMAKE_BUILD_TYPE "Release")
 
 include(CMakeLists-config.txt)
 
-check_include_file(/usr/include/nebd/libnebd.h HAVE_NEBD)
-
-if (HAVE_NEBD)
-link_directories(/usr/lib/nebd)
-# set install rpath
-# or set target's property INSTALL_RPATH to /usr/lib/nebd
-# set_target_properties(target1 PROPERTIES INSTALL_RPATH /usr/lib/nebd)
-set(CMAKE_INSTALL_RPATH "/usr/lib/nebd")
-
-set(CURVE_LIBS nebdclient nebd_common client_proto brpc cc_brpc_internal_proto cc_brpc_idl_options_proto 
-               json bthread bvar mcpack2pb json2pb butil protobuf protobuf_lite leveldb glog gflags)
-endif()
+link_directories(/usr/lib/curve)
+set(CURVE_LIBS -lcbd -lcurve_client -lcurve_common -lcurve_auth -lcurve_concurrent
+    -lnameserver2_proto -ltopology_proto -lchunkserver-protos -lbrpc -lbutil -lbvar
+    -lbthread -lcc_brpc_internal_proto -ljson2pb -lmcpack2pb -lcc_brpc_idl_options_proto
+    -lcommon_proto -lscan_proto
+    -lprotobuf -lprotobuf_lite -lrt -lssl -lcrypto -ldl -lz -lpthread -lleveldb -lgflags -lglog)
 
 set(COMMON_FLAGS
   -fno-strict-aliasing

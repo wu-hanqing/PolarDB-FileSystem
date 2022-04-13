@@ -35,7 +35,7 @@ fi
 
 ulimit -c unlimited
 
-${BASE_DIR}/../bin/pfsdaemon $* -c ${CONF_FILE}/pfsd_logger.conf
+nohup ${BASE_DIR}/../bin/pfsdaemon $* -c ${CONF_FILE}/pfsd_logger.conf -f 1>/dev/null 2>&1 &
 
 sleep 1
 

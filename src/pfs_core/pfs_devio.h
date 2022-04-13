@@ -65,6 +65,7 @@ typedef enum pfs_devtype {
 #endif
 	PFS_DEV_DISK,
 	PFS_DEV_CURVE,
+	PFS_DEV_CURVE2,
 	PFS_DEV_MAX,
 } pfs_devtype_t;
 

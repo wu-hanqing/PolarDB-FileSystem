@@ -41,16 +41,13 @@ extern struct pfs_devops pfs_polardev_ops;
 //extern struct pfs_devops pfs_pangudev_ops;
 extern struct pfs_devops pfs_diskdev_ops;
 extern struct pfs_devops pfs_curvedev_ops;
-
 static struct pfs_devops *pfs_dev_ops[] = {
 #ifndef PFS_DISK_IO_ONLY
 	&pfs_polardev_ops,
 #endif
 	//&pfs_pangudev_ops,
 	&pfs_diskdev_ops,
-#ifdef HAVE_NEBD
 	&pfs_curvedev_ops,
-#endif
 	NULL,
 };
 
