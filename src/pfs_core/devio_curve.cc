@@ -31,16 +31,17 @@
 #include "pfs_option.h"
 #include "pfs_impl.h"
 
-#include <nebd/libnebd.h>
+#include "libcurve.h"
 
 typedef struct pfs_curvedev {
     pfs_dev_t   dk_base;
     int         dk_fd;
     size_t      dk_sectsz;
+    char        dk_path[PATH_MAX];
 } pfs_curvedev_t;
 
 typedef struct pfs_curveiocb {
-    NebdClientAioContext ctx;
+    CurveAioContext 	 ctx;
     pfs_devio_t          *pfs_io;
 } pfs_curveiocb_t;
 
@@ -59,26 +60,30 @@ typedef struct pfs_curveioq {
 static int64_t curve_iodepth = 65536;
 PFS_OPTION_REG(curve_iodepth, pfs_check_ival_normal);
 
-static pthread_mutex_t nebd_init_lock = PTHREAD_MUTEX_INITIALIZER;
-static bool nebd_inited;
+using namespace curve::client;
+static pthread_mutex_t curve_init_lock = PTHREAD_MUTEX_INITIALIZER;
+static curve::client::CurveClient *g_curve;
+
+#define CURVE_CONF_PATH "/etc/curve/client.conf"
 
 static int
-pfs_init_curve_nebd(void)
+pfs_init_curve(void)
 {
-    if (nebd_inited)
+    if (g_curve)
         return 0;
 
     int ret = 0;
-    pthread_mutex_lock(&nebd_init_lock);
-    if (!nebd_inited) {
-        if (nebd_lib_init()) {
+    pthread_mutex_lock(&curve_init_lock);
+    if (!g_curve) {
+    	g_curve = new curve::client::CurveClient;
+        if (g_curve->Init(CURVE_CONF_PATH)) {
             pfs_etrace("can not init nebd client, errno=%d\n", errno);
+            delete g_curve;
+            g_curve = NULL;
             ret = -1;
-        } else {
-            nebd_inited = true;
         }
     }
-    pthread_mutex_unlock(&nebd_init_lock);
+    pthread_mutex_unlock(&curve_init_lock);
     return ret;
 }
 
@@ -129,51 +134,36 @@ pfs_curvedev_need_throttle(pfs_dev_t *dev, pfs_ioq_t *ioq)
     return (dkioq->dkq_inflight_count >= curve_iodepth);
 }
 
-static void
-pfs_replace_path_seperator(char *path)
-{
-    char *s = path;
-
-    while (*path) {
-        if (*path == '@')
-            *path = '/';
-        ++path;
-    }
-    pfs_itrace("disk dev path: %s\n", s);
-}
-
 static int
 pfs_curvedev_open(pfs_dev_t *dev)
 {
     pfs_curvedev_t *dkdev = (pfs_curvedev_t *)dev;
-    char path[PATH_MAX];
+    char path[PATH_MAX], *p;
     int fd, err, sectsz;
-    NebdOpenFlags openflags;
+    OpenFlags openflags;
 
-    if (pfs_init_curve_nebd())
+    openflags.exclusive = false;
+    if (pfs_init_curve())
         ERR_RETVAL(EINVAL);
 
     dkdev->dk_fd = -1;
-    if (snprintf(path, sizeof(path), "cbd:%s", dev->d_devname) >=
-        (int)sizeof(path)) {
-        ERR_RETVAL(ENAMETOOLONG);
+    strcpy(path, dev->d_devname);
+    p = strstr(path, "@@");
+    if (p == NULL) {
+	return -EINVAL;
     }
-
-    /*
-     * If path contains '$', need to replace it with '/'
-     */
-    pfs_replace_path_seperator(path);
+    strcpy(path, p+1);
+    path[0] = '/';
 
     pfs_itrace("open curve disk: %s, d_flags:0x%x\n", path, dev->d_flags);
-    openflags.exclusive = 0;
-    fd = nebd_lib_open_with_flags(path, &openflags);
+    fd = g_curve->Open(path, openflags);
 
     if (fd < 0) {
         err = errno;
         pfs_etrace("can not open curve disk %s, %s\n", path, strerror(err));
         ERR_RETVAL(err);
     }
-
+    strcpy(dkdev->dk_path, path);
     sectsz = 4096; //FIXME
 
     dkdev->dk_fd = fd;
@@ -185,31 +175,31 @@ static int
 pfs_curvedev_reopen(pfs_dev_t *dev)
 {
     pfs_curvedev_t *dkdev = (pfs_curvedev_t *)dev;
-    char path[PATH_MAX];
+    char path[PATH_MAX], *p;
     int fd, err, sectsz;
 
-    if (snprintf(path, sizeof(path), "cbd:%s", dev->d_devname) >=
-        (int)sizeof(path)) {
-        ERR_RETVAL(ENAMETOOLONG);
+    strcpy(path, dev->d_devname);
+    p = strstr(path, "@@");
+    if (p == NULL) {
+	return -EINVAL;
     }
-
-    /*
-     * If path contains '$', need to replace it with '/'
-     */
-    pfs_replace_path_seperator(path);
+    strcpy(path, p+1);
+    path[0] = '/';
 
     /*
      * RW should guarantee the data is written to disk,
      * while RO should bypass page cache.
      */
     if (dkdev->dk_fd >= 0) {
-        nebd_lib_close(dkdev->dk_fd);
+        g_curve->Close(dkdev->dk_fd);
         dkdev->dk_fd = -1;
     }
 
     pfs_itrace("reopen curve disk: %s, now d_flags:0x%x", path, dev->d_flags);
 
-    fd = nebd_lib_open(path);
+    OpenFlags openflags;
+    openflags.exclusive = false;
+    fd = g_curve->Open(path, openflags);
     if (fd < 0) {
         err = errno;
         pfs_etrace("cant open %s: %s\n", path, strerror(err));
@@ -218,6 +208,7 @@ pfs_curvedev_reopen(pfs_dev_t *dev)
 
     sectsz = 4096; //FIXME
 
+    strcpy(dkdev->dk_path, path);
     dkdev->dk_fd = fd;
     dkdev->dk_sectsz = (size_t)sectsz;
     return 0;
@@ -230,7 +221,7 @@ pfs_curvedev_close(pfs_dev_t *dev)
     int err = 0;
 
     if (dkdev->dk_fd >= 0)
-        err = nebd_lib_close(dkdev->dk_fd);
+        err = g_curve->Close(dkdev->dk_fd);
     dkdev->dk_fd = -1;
     return err;
 }
@@ -242,7 +233,7 @@ pfs_curvedev_info(pfs_dev_t *dev, struct pbdinfo *pi)
     size_t size;
     int err = 0;
 
-    size = nebd_lib_filesize(dkdev->dk_fd);
+    size = g_curve->StatFile(dkdev->dk_path);
     if ((ssize_t)size == -1) {
         err = errno;
         pfs_etrace("curve failed to get disk size, errno=%d\n", err);
@@ -303,7 +294,7 @@ pfs_curvedev_deq_complete_io(pfs_curveioq_t *dkioq, pfs_devio_t *io)
 }
 
 static void
-pfs_curvedev_aio_callback(struct NebdClientAioContext* ctx)
+pfs_curvedev_aio_callback(struct CurveAioContext* ctx)
 {
     pfs_curveiocb_t *iocb = container_of(ctx, pfs_curveiocb_t, ctx);
     pfs_devio_t *io = iocb->pfs_io;
@@ -335,7 +326,7 @@ pfs_curvedev_io_prep_pread(pfs_curvedev_t *dkdev, pfs_devio_t *io, pfs_curveiocb
     iocb->ctx.offset = io->io_bda;
     iocb->ctx.length = io->io_len;
     iocb->ctx.buf = io->io_buf;
-    iocb->ctx.op = LIBAIO_OP::LIBAIO_OP_READ;
+    iocb->ctx.op = LIBCURVE_OP_READ;
     iocb->ctx.cb = pfs_curvedev_aio_callback;
     return 0;
 }
@@ -349,7 +340,7 @@ pfs_curvedev_io_prep_pwrite(pfs_curvedev_t *dkdev, pfs_devio_t *io, pfs_curveioc
     iocb->ctx.offset = io->io_bda;
     iocb->ctx.length = io->io_len;
     iocb->ctx.buf = io->io_buf;
-    iocb->ctx.op = LIBAIO_OP::LIBAIO_OP_WRITE;
+    iocb->ctx.op = LIBCURVE_OP_WRITE;
     iocb->ctx.cb = pfs_curvedev_aio_callback;
     return 0;
 }
@@ -363,7 +354,7 @@ pfs_curvedev_io_prep_trim(pfs_curvedev_t *dkdev, pfs_devio_t *io, pfs_curveiocb_
     iocb->ctx.offset = io->io_bda;
     iocb->ctx.length = io->io_len;
     iocb->ctx.buf = io->io_buf;
-    iocb->ctx.op = LIBAIO_OP::LIBAIO_OP_DISCARD;
+//  iocb->ctx.op = LIBAIO_OP::LIBAIO_OP_DISCARD;
     iocb->ctx.cb = pfs_curvedev_aio_callback;
     return 0;
 }
@@ -388,7 +379,7 @@ pfs_curvedev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
     case PFSDEV_REQ_RD:
         err = pfs_curvedev_io_prep_pread(dkdev, io, iocb);
         if (err == 0){
-            if (nebd_lib_aio_pread(dkdev->dk_fd, &iocb->ctx)) {
+            if (g_curve->AioRead(dkdev->dk_fd, &iocb->ctx, UserDataType::RawBuffer)) {
                 err = errno;
             }
         }
@@ -396,7 +387,7 @@ pfs_curvedev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
     case PFSDEV_REQ_WR:
         err = pfs_curvedev_io_prep_pwrite(dkdev, io, iocb);
         if (err == 0) {
-            if (nebd_lib_aio_pwrite(dkdev->dk_fd, &iocb->ctx)) {
+            if (g_curve->AioWrite(dkdev->dk_fd, &iocb->ctx, UserDataType::RawBuffer)) {
                 err = errno;
             }
         }
@@ -404,9 +395,8 @@ pfs_curvedev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
     case PFSDEV_REQ_TRIM:
         err = pfs_curvedev_io_prep_trim(dkdev, io, iocb);
         if (err == 0) {
-            if (nebd_lib_discard(dkdev->dk_fd, &iocb->ctx)) {
-                err = errno;
-            }
+            iocb->ctx.ret = 0;
+            pfs_curvedev_aio_callback(&iocb->ctx);
         }
         break;
     default:
