@@ -17,14 +17,9 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/src/trace/include/
     )
 
-if (HAVE_NEBD)
-    set(NEBD_SRC devio_curve.cc)
-endif()
-
 set(SRC_LIST
     devio_disk.cc
-    ${NEBD_SRC}
-    devio_curve2.cc
+    devio_curve.cc
     pfs_admin.cc
     pfs_alloc.cc
     pfs_api.cc
