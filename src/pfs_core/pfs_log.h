@@ -101,6 +101,11 @@ typedef struct pfs_log {
 	char		*log_workbuf;
 	ssize_t		log_workbufsz;
 
+	char        *log_writebuf;
+	size_t      log_writebuf_sz;
+	uint64_t    log_writebuf_off;
+	int         log_writebuf_dirty;
+
 	log_req_t	log_trimreq;
 
 	pfs_trimgroup_t	log_grpbuf[2];
