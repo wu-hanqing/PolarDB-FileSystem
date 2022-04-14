@@ -140,6 +140,8 @@ pfsdev_type(const char *cluster, const char *devname)
 		return PFS_DEV_DISK;
     if (strcmp(cluster, CL_CURVE) == 0)
         return PFS_DEV_CURVE;
+    if (strcmp(cluster, CL_CURVE2) == 0)
+        return PFS_DEV_CURVE2;
 #ifndef PFS_DISK_IO_ONLY
 	/* polarstore PBD */
 	if (strcmp(cluster, CL_POLAR) == 0 && isdigit(devname[0]))

@@ -110,8 +110,8 @@ retry:
 		close(shmfd);
 		shmfd = -1;
 
-		pfsd_info("ch %lu, unit %lu, sizeof pfsd_shm %gM", nc,
-		    unit_size, shmsize/1024.0/1024.0);
+		pfsd_info("unit %lu, ch %lu, nreq %d, sizeof pfsd_shm %gM",
+			unit_size, nc, nreq, shmsize/1024.0/1024.0);
 
 		g_shm[si] = (pfsd_shm_t*)shmaddr[si];
 		if (g_shm[si]->sh_magic == PFSD_SHM_MAGIC &&

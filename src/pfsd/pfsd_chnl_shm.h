@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <semaphore.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "pfsd_chnl.h"
 #include "pfsd_common.h"
@@ -61,9 +62,13 @@ typedef struct pidfile_data {
 }__attribute__((aligned(4096))) pidfile_data_t;
 
 typedef struct chnl_ctx_shm {
-	int	 ctx_pidfile_fd;
+	int	ctx_pidfile_fd;
+	int	ctx_io_sock_fd;
+	int	ctx_io_sock_gen;
+	pthread_rwlock_t ctx_io_sock_rwlock;
 	char	ctx_pidfile_dir[PFSD_MAX_SVR_ADDR_SIZE]; /* pidfile dir which be watched by inotify */
 	char	ctx_pidfile_addr[PFSD_MAX_SVR_ADDR_SIZE];/* pidfile with absolute path */
+	char	ctx_io_sock_addr[PFSD_MAX_SVR_ADDR_SIZE];/* io notice dir */
 	bool	ctx_is_svr;
 	union {
 		/* For client if ctx_is_svr is false */

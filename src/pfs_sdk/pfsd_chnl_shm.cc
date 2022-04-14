@@ -25,6 +25,12 @@
 #include <sys/mman.h>
 #include <sys/inotify.h>
 #include <stddef.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <poll.h>
 
 #include "pfsd_chnl_shm.h"
 #include "pfsd_chnl_impl.h"
@@ -40,6 +46,8 @@
 
 #define PIDFILE_MODE_MOUNT_REQ 0666
 #define PIDFILE_MODE_UMOUNT_REQ 0777
+
+static void pfsd_shm_reconnect_socket(chnl_ctx_shm_t *ctx, int gen);
 
 /* Server side */
 static int
@@ -371,6 +379,88 @@ out:
 #endif
 }
 
+static int
+chnl_connect_socket(chnl_ctx_shm_t *ctx)
+{
+	struct sockaddr_un sockaddr;
+	int sock, rc, flags, n;
+	socklen_t len;
+
+	memset(&sockaddr, 0, sizeof(struct sockaddr_un));
+	sock = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+	if (sock == -1) {
+		PFSD_C_ELOG("socket() error: %d", errno);
+		return -1;
+	}
+
+	sockaddr.sun_family = AF_UNIX;
+	strcpy(sockaddr.sun_path, ctx->ctx_io_sock_addr); 
+	len = sizeof(sockaddr);
+#ifdef PFSD_SERVER
+	/* small buffer is enough, don't auto scaling */
+	n = 512;
+	setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &n, sizeof(n));
+
+	unlink(ctx->ctx_io_sock_addr);
+	rc = bind(sock, (struct sockaddr *)(void *)&sockaddr, len);
+	if (rc == -1){
+		pfsd_error("bind error: %d", errno);
+		close(sock);
+		return -1;
+	}
+	pfsd_info("opened io-notify socket fd: %d", sock);
+	rc = chmod(ctx->ctx_io_sock_addr, 0777);
+	if (rc == -1)
+		pfsd_error("chmod error: %d", errno);
+#else
+	rc = connect(sock, (struct sockaddr *)(void *)&sockaddr, len);
+	if (rc == -1) {
+		PFSD_CLIENT_LOG("connect() error: %d", errno);
+		close(sock);
+		return -1;
+	}
+	PFSD_CLIENT_LOG("opened io-notify socket fd: %d", sock);
+#endif
+	flags = fcntl(sock, F_GETFL, 0);
+	if (flags == -1) {
+		PFSD_C_ELOG("fcntl(F_GETFL) error: %d", errno);
+		close(sock);
+		return -1;
+	}
+	if (fcntl(sock, F_SETFL, flags | O_NONBLOCK)){
+		PFSD_C_ELOG("fcntl(F_SETFL) error: %d", errno);
+		close(sock);
+		return -1;
+	}
+	ctx->ctx_io_sock_fd = sock;
+
+	return 0;
+}
+
+static void
+pfsd_shm_reconnect_socket(chnl_ctx_shm_t *ctx, int gen)
+{
+	pthread_rwlock_wrlock(&ctx->ctx_io_sock_rwlock);
+	if (gen != ctx->ctx_io_sock_gen) {
+		pthread_rwlock_unlock(&ctx->ctx_io_sock_rwlock);
+		return;
+	}
+
+	close(ctx->ctx_io_sock_fd);
+	ctx->ctx_io_sock_fd = -1;
+
+	for (;;) {
+		if (chnl_connect_socket(ctx)) {
+			PFSD_CLIENT_LOG("reconnect io-notify socket failed, retrying");
+			sleep(1);
+		} else {
+			PFSD_CLIENT_LOG("reconnect io-notify socket success");
+			break;
+		}
+	}
+	pthread_rwlock_unlock(&ctx->ctx_io_sock_rwlock);
+}
+
 typedef struct {
 	void *chnl_ctx;
 	void *chnl_op;
@@ -485,6 +575,11 @@ chnl_listen_shm(void *chnl_ctx, void *chnl_op, const char *svr_addr, void *arg1,
 		}
 	}
 
+	if (chnl_connect_socket(ctx)){
+		pfsd_error("can not bind socket %s", ctx->ctx_io_sock_addr);
+		goto fail;
+	}
+
 	memcpy(ctx->svr.shm_fname, arg1, sizeof(ctx->svr.shm_fname));
 
 	inotify_fd = inotify_init();
@@ -514,11 +609,30 @@ fail:
 	return -1;
 }
 
+static void chnl_wait_io_shm(struct worker *wk)
+{
+	int fd = wk->w_ctx->ctx_io_sock_fd;
+	char buf[512];
+        struct pollfd ev;
+	int rc;
+
+	ev.fd = fd;
+	ev.events = POLLIN;
+	ev.revents = 0;
+
+	poll(&ev, 1, 5);
+	rc = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
+	if (rc != 0 && errno != EAGAIN) {
+		pfsd_warn("recv error %d", errno);
+	}
+}
+
 /* server side */
 static int
-chnl_prepare_shm(const char *pbdname, int nworkers, void *arg1)
+chnl_prepare_shm(void *ctx_ptr, const char *pbdname, int nworkers, void *arg1)
 {
 #ifdef PFSD_SERVER
+	chnl_ctx_shm_t *ctx = (chnl_ctx_shm_t *) ctx_ptr;
 	const char *shm_dir = (const char *)arg1;
 	int err;
 
@@ -528,26 +642,15 @@ chnl_prepare_shm(const char *pbdname, int nworkers, void *arg1)
 		return err;
 	}
 
-	/* prepare for cpu affinity */
-	g_cpufile = (pfsd_cpu_record_t *)pfsd_worker_affinity_prepare(nworkers);
-	if (g_ncpu > 1 && g_cpufile == NULL) {
-		pfsd_warn("cpu number is %d, but can't set affinity, "
-		    "may hurt performance.", g_ncpu);
-	}
+	worker_t *worker = pfsd_create_workers(nworkers);
+	PFSD_ASSERT(worker != NULL);
 
-	worker_t *workers = pfsd_create_workers(nworkers);
-	PFSD_ASSERT(workers != NULL);
+	worker->w_ctx = ctx;
+	worker->w_wait_io = chnl_wait_io_shm;
+	int r = pthread_create(&worker->w_tid, NULL, pfsd_worker_routine, worker);
+	PFSD_ASSERT(r == 0);
 
-	for (int i = 0; i < nworkers; ++i) {
-		workers[i].w_idx = i;
-		int r = pthread_create(&workers[i].w_tid, NULL,
-		    pfsd_worker_routine, &workers[i]);
-		PFSD_ASSERT(r == 0);
-	}
-
-	g_workers = workers;
-	g_nworkers = nworkers;
-
+	g_worker = worker;
 #endif
 	return 0;
 }
@@ -952,7 +1055,8 @@ chnl_ctx_create_shm(const char *svr_addr, bool is_svr)
 
 	result->ctx_is_svr = is_svr;
 	result->ctx_pidfile_fd = -1;
-
+	result->ctx_io_sock_fd = -1;
+	pthread_rwlock_init(&result->ctx_io_sock_rwlock, NULL);
 	if (is_svr) {
 		sem_init(&result->svr.shm_listen_thread_latch,
 		    PTHREAD_PROCESS_PRIVATE, 0);
@@ -965,11 +1069,20 @@ chnl_ctx_create_shm(const char *svr_addr, bool is_svr)
 		goto fail;
 	}
 
+	name_len = snprintf(result->ctx_io_sock_addr, PFSD_MAX_SVR_ADDR_SIZE,
+	    "%s.sock", svr_addr);
+	if (name_len >= PFSD_MAX_SVR_ADDR_SIZE) {
+		errno = ENAMETOOLONG;
+		goto fail;
+	}
+
 	/* It can't overflow */
 	snprintf(result->ctx_pidfile_dir, PFSD_MAX_SVR_ADDR_SIZE, "%s", svr_addr);
 	return result;
 
 fail:
+	if (result)
+		pthread_rwlock_destroy(&result->ctx_io_sock_rwlock);
 	free(result);
 	return NULL;
 }
@@ -1179,6 +1292,11 @@ chnl_connection_release_shm(chnl_ctx_shm_t *chnl_ctx, bool forced, bool wait)
 		else
 			errno = EAGAIN;
 	}
+
+	if (ctx->ctx_io_sock_fd > 0) {
+		close(ctx->ctx_io_sock_fd);
+		ctx->ctx_io_sock_fd = -1;
+	}
 #endif
 }
 
@@ -1189,7 +1307,7 @@ chnl_ctx_destroy_shm(void *chnl_ctx)
 		chnl_ctx_shm_t *ctx = (chnl_ctx_shm_t *)chnl_ctx;
 		if (ctx->ctx_is_svr)
 			sem_destroy(&ctx->svr.shm_listen_thread_latch);
-
+		pthread_rwlock_destroy(&ctx->ctx_io_sock_rwlock);
 		free(ctx);
 	}
 }
@@ -1341,6 +1459,13 @@ chnl_connect_shm(void *chnl_ctx, const char *cluster, const char *pbdname,
 	result = chnl_connection_poll_shm(ctx, timeout_us, reconn);
 	conn_id = result;
 
+	if (conn_id != -1) {
+		if (chnl_connect_socket(ctx)) {
+			chnl_connection_release_shm(ctx, true, false);
+			PFSD_CLIENT_ELOG("can not connect socket %s", ctx->ctx_io_sock_addr);
+			return  -1;
+		}
+	}
 fini:
 	return conn_id;
 #else
@@ -1359,6 +1484,25 @@ chnl_close_shm(void *chnl_ctx, bool forced)
 		return -1;
 #endif
 	return 0;
+}
+
+static void
+chnl_notify_server(chnl_ctx_shm_t *ctx)
+{
+	char c = 'a';
+
+	int expect = 0;
+	for (;;){
+		pthread_rwlock_rdlock(&ctx->ctx_io_sock_rwlock);
+		int gen = ctx->ctx_io_sock_gen;
+		int rc = send(ctx->ctx_io_sock_fd, &c, 1, MSG_NOSIGNAL);
+		int err = errno;
+		pthread_rwlock_unlock(&ctx->ctx_io_sock_rwlock);
+		if (rc > 0 || (rc == -1 && err == EAGAIN)) {
+			return;
+		}
+		pfsd_shm_reconnect_socket(ctx, gen);
+	}
 }
 
 /* client side */
@@ -1382,6 +1526,7 @@ chnl_send_req_sync_shm(void *chnl_ctx, int64_t req_len,
 		return -1;
 
 	pfsd_shm_send_request(ch, req);
+	chnl_notify_server(ctx);
 #endif
 	return 0;
 }

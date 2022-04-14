@@ -157,6 +157,14 @@ int FormatTime(char* buf, size_t bufsize)
 	    (_len_ > 0 ? _len_-1 : 0), _buf_, getpid(), __func__, __LINE__, ##__VA_ARGS__); \
 } while(0)
 
+#ifdef PFSD_SERVER
+#define PFSD_C_LOG		    pfsd_info
+#define PFSD_C_ELOG		    pfsd_error
+#else
+#define PFSD_C_LOG		    PFSD_CLIENT_LOG
+#define PFSD_C_ELOG		    PFSD_CLIENT_ELOG
+#endif
+
 /* PFSD_CPUSET_FILE must in same volume for all pods */
 #define PFSD_CPUSET_FILE "/var/run/pfsd/pfsd.cpuset"
 #define PFSD_CPUSET_TIMEOUT_SECONDS (60)

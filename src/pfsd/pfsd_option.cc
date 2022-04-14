@@ -42,10 +42,6 @@ sanity_check()
 	PFSD_TRIM_VALUE(g_option.o_workers, 1, PFSD_WORKER_MAX);
 	PFSD_TRIM_VALUE(g_option.o_usleep, 0, 1000);
 	worker_usleep_us = g_option.o_usleep;
-	if (worker_usleep_us == 0) {
-		/* Don't set affinity if busy polling */
-		g_option.o_affinity = 0;
-	}
 
 	if (strlen(g_option.o_pbdname) == 0) {
 		fprintf(stderr, "pbdname is empty\n");
@@ -63,12 +59,11 @@ sanity_check()
 static void __attribute__((constructor))
 init_default_value()
 {
-	g_option.o_workers = 32;
+	g_option.o_workers = 256;
 	g_option.o_usleep = int(worker_usleep_us);
 	strncpy(g_option.o_log_cfg, "pfsd_logger.conf", sizeof g_option.o_log_cfg);
 	strncpy(g_option.o_shm_dir, PFSD_SHM_PATH, sizeof g_option.o_shm_dir);
 	g_option.o_daemon = 1;
-	g_option.o_affinity = 1;
 	server_id = 0;
 }
 
@@ -76,7 +71,7 @@ int
 pfsd_parse_option(int ac, char *av[])
 {
 	int ch = 0;
-	while ((ch = getopt(ac, av, "w:s:i:c:p:a:l:b:e:fd")) != -1) {
+	while ((ch = getopt(ac, av, "w:s:i:c:p:a:l:e:fd")) != -1) {
 		switch (ch) {
 			case 'f':
 				g_option.o_daemon = 0;
@@ -84,14 +79,6 @@ pfsd_parse_option(int ac, char *av[])
 
 			case 'd':
 				g_option.o_daemon = 1;
-				break;
-			case 'b':
-				{
-					errno = 0;
-					long w = strtol(optarg, NULL, 10);
-					if (errno == 0)
-						g_option.o_affinity = (w == 0) ? 0 : 1;
-				}
 				break;
 			case 'w':
 				{
@@ -150,7 +137,6 @@ pfsd_usage(const char *prog)
 					" -w #nworkers\n"
 					" -c log_config_file\n"
 					" -p pbdname\n"
-					" -b (if bind cpuset)\n"
 					" -e db ins id\n"
 					" -a shm directory\n"
 					" -i #inode_list_size\n", prog);
