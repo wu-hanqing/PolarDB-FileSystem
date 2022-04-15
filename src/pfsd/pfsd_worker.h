@@ -33,7 +33,7 @@ typedef struct worker {
 	int w_nch;
 	int w_nworkers;
 	pthread_t *w_io_workers;
-	struct pfsd_iochannel *w_channels[PFSD_SHM_MAX  *PFSD_WORKER_MAX];
+	struct pfsd_iochannel *w_channels[10000];
 	sem_t w_sem; /*for sync start thread */
 	worker_wait_io_t w_wait_io;
 } worker_t;
