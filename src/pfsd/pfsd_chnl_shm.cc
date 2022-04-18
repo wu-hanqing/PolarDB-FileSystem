@@ -620,11 +620,17 @@ static void chnl_wait_io_shm(struct worker *wk)
 	ev.events = POLLIN;
 	ev.revents = 0;
 
-	poll(&ev, 1, 5);
+again:
+	rc = poll(&ev, 1, 5);
+	if (rc == 0)
+		return;
 	rc = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
-	if (rc != 0 && errno != EAGAIN) {
+	if (rc == -1 && errno != EAGAIN) {
 		pfsd_warn("recv error %d", errno);
+		return;
 	}
+	if (rc == -1)
+		goto again;
 }
 
 /* server side */

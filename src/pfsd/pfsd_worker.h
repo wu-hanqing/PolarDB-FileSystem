@@ -32,7 +32,9 @@ typedef struct worker {
 	struct chnl_ctx_shm *w_ctx;
 	int w_nch;
 	int w_nworkers;
+	int w_npollers;
 	pthread_t *w_io_workers;
+	pthread_t *w_io_pollers;
 	struct pfsd_iochannel *w_channels[10000];
 	sem_t w_sem; /*for sync start thread */
 	worker_wait_io_t w_wait_io;

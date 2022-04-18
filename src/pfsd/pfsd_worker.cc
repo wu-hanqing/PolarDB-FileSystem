@@ -44,6 +44,7 @@ typedef std::pair<pfsd_iochannel_t *, int> WorkItem;
 static moodycamel::BlockingConcurrentQueue<WorkItem> g_work_queue;
 
 static void *io_worker(void *arg);
+static void *io_poller(void *arg);
 #define IO_WORKERS 100
 static pthread_t io_worker_h[IO_WORKERS];
 
@@ -72,7 +73,9 @@ pfsd_create_workers(int nworkers)
 
 	worker->w_nch = 0;
 	worker->w_nworkers = nworkers;
+	worker->w_npollers = 2;
 	worker->w_io_workers = (pthread_t *)calloc(nworkers, sizeof(pthread_t));
+	worker->w_io_pollers = (pthread_t *)calloc(worker->w_npollers, sizeof(pthread_t));
 	sem_init(&worker->w_sem, PTHREAD_PROCESS_PRIVATE, 0);
 
 	return worker;
@@ -103,6 +106,20 @@ static int init_io_workers(worker_t *wk)
 	return 0;
 }
 
+static int init_io_pollers(worker_t *wk)
+{
+	int i;
+
+	pfsd_info("create %d io workers", wk->w_nworkers);
+
+	for (i = 0; i < wk->w_npollers; ++i) {
+		if (pthread_create(&wk->w_io_pollers[i], NULL, io_poller, wk)) {
+			pfsd_error("can not create io poller thread, idx = %d", i);
+		}
+	}
+	return 0;
+}
+
 static void stop_io_workers(worker_t *wk)
 {
 	int i;
@@ -113,6 +130,15 @@ static void stop_io_workers(worker_t *wk)
 
 	for (i = 0; i < wk->w_nworkers; ++i) {
 		pthread_join(wk->w_io_workers[i], NULL);
+	}
+}
+
+static void stop_io_pollers(worker_t *wk)
+{
+	int i;
+
+	for (i = 0; i < wk->w_npollers; ++i) {
+		pthread_join(wk->w_io_pollers[i], NULL);
 	}
 }
 
@@ -162,10 +188,24 @@ pfsd_worker_routine(void *arg)
 
 	init_io_workers(wk);
 
+	init_io_pollers(wk);
+
+	while (!g_stop)
+		usleep(1000);
+
+	stop_io_workers(wk);
+	stop_io_pollers(wk);
+	drain_work_queue();
+	return NULL;
+}
+
+static void* io_poller(void *arg)
+{
+	worker_t *wk = (worker_t*)(arg);
+
 	moodycamel::ProducerToken ptok(g_work_queue);
 
 	while (!g_stop) {
-		int found = 0;
 		for (int i = 0; i < wk->w_nch; ++i) {
 			int index = -1;
 			pfsd_iochannel_t *ch = wk->w_channels[i];
@@ -191,17 +231,10 @@ pfsd_worker_routine(void *arg)
 
 				g_work_queue.enqueue(ptok, {ch, index});
 				g_currentPid = PFSD_INVALID_PID;
-				found = 1;
 			}
 		}
-		if (found)
-			continue;
-
 		wk->w_wait_io(wk);
 	}
-
-	stop_io_workers(wk);
-	drain_work_queue();
 	return NULL;
 }
 
