@@ -59,6 +59,7 @@ sanity_check()
 static void __attribute__((constructor))
 init_default_value()
 {
+    g_option.o_pollers = 2;
 	g_option.o_workers = 256;
 	g_option.o_usleep = int(worker_usleep_us);
 	strncpy(g_option.o_log_cfg, "pfsd_logger.conf", sizeof g_option.o_log_cfg);
@@ -71,7 +72,7 @@ int
 pfsd_parse_option(int ac, char *av[])
 {
 	int ch = 0;
-	while ((ch = getopt(ac, av, "w:s:i:c:p:a:l:e:fd")) != -1) {
+	while ((ch = getopt(ac, av, "w:s:i:c:p:a:l:e:fd:r")) != -1) {
 		switch (ch) {
 			case 'f':
 				g_option.o_daemon = 0;
@@ -115,6 +116,14 @@ pfsd_parse_option(int ac, char *av[])
 			case 'a':
 				strncpy(g_option.o_shm_dir, optarg, sizeof g_option.o_shm_dir);
 				break;
+            case 'r':
+                {
+					errno = 0;
+					long w = strtol(optarg, NULL, 10);
+					if (errno == 0)
+						g_option.o_pollers = (unsigned int)(w);
+                }
+                break;
 			default:
 				return -1;
 		}

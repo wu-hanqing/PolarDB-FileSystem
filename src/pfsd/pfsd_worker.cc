@@ -37,6 +37,8 @@
 #include "pfsd_chnl_shm.h"
 #include "pfsd_worker.h"
 
+#include "pfsd_option.h"
+
 #include "blockingconcurrentqueue.h"
 
 typedef std::pair<pfsd_iochannel_t *, int> WorkItem;
@@ -73,7 +75,7 @@ pfsd_create_workers(int nworkers)
 
 	worker->w_nch = 0;
 	worker->w_nworkers = nworkers;
-	worker->w_npollers = 2;
+	worker->w_npollers = g_option.o_pollers;
 	worker->w_io_workers = (pthread_t *)calloc(nworkers, sizeof(pthread_t));
 	worker->w_io_pollers = (pthread_t *)calloc(worker->w_npollers, sizeof(pthread_t));
 	sem_init(&worker->w_sem, PTHREAD_PROCESS_PRIVATE, 0);
