@@ -40,7 +40,6 @@ extern pfsd_option_t g_option;
 
 int pfsd_parse_option(int ac, char *av[]);
 void pfsd_usage(const char *prog);
-void pfsd_worker_usleep();
 
 #endif
 

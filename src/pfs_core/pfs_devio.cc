@@ -47,7 +47,6 @@ static struct pfs_devops *pfs_dev_ops[] = {
 #endif
 	//&pfs_pangudev_ops,
 	&pfs_diskdev_ops,
-	&pfs_curvedev_ops,
 	NULL,
 };
 

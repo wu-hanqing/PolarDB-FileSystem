@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.23.1)
 project(pfsd CXX C ASM)
 set(pfsd_VERSION_MAJOR 2)
 set(pfsd_VERSION_MINOR 1)
@@ -21,6 +21,25 @@ set(pfsd_VERSION
 
 include(CheckIncludeFile)
 
+include(FindPkgConfig)
+if (NOT PKG_CONFIG_FOUND)
+    message(FATAL_ERROR "pkg_config not found")
+endif()
+
+find_package(gflags REQUIRED)
+include_directories(${GFLAGS_INCLUDE_DIR})
+pkg_check_modules(dpdk REQUIRED libdpdk)
+pkg_check_modules(spdk_env_dpdk REQUIRED spdk_env_dpdk)
+pkg_check_modules(spdk_init REQUIRED spdk_init)
+pkg_check_modules(spdk_log REQUIRED spdk_log)
+pkg_check_modules(spdk_bdev REQUIRED spdk_bdev)
+pkg_check_modules(spdk_bdev_nvme REQUIRED spdk_bdev_nvme)
+
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_INSTALL_RPATH ${dpdk_LIBRARY_DIRS} ${spdk_init_LIBRARY_DIRS})
+set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 message("compile pfsd for PostgreSQL")
 
 set(PKG_DIR "/usr/local/polarstore/pfsd")
@@ -28,14 +47,6 @@ set(CMAKE_BUILD_TYPE "Release")
 #set(CMAKE_BUILD_TYPE "Debug")
 
 include(CMakeLists-config.txt)
-
-link_directories(/usr/lib/curve)
-set(CMAKE_INSTALL_RPATH /usr/lib/curve)
-set(CURVE_LIBS -lcbd -lcurve_client -lcurve_common -lcurve_auth -lcurve_concurrent
-    -lnameserver2_proto -ltopology_proto -lchunkserver-protos -lbrpc -lbutil -lbvar
-    -lbthread -lcc_brpc_internal_proto -ljson2pb -lmcpack2pb -lcc_brpc_idl_options_proto
-    -lcommon_proto -lscan_proto
-    -lprotobuf -lprotobuf_lite -lrt -lssl -lcrypto -ldl -lz -lpthread -lleveldb -lgflags -lglog)
 
 set(COMMON_FLAGS
   -fno-strict-aliasing

@@ -18,8 +18,8 @@ include_directories(
     )
 
 set(SRC_LIST
+    pfs_spdk.cc
     devio_disk.cc
-    devio_curve.cc
     pfs_admin.cc
     pfs_alloc.cc
     pfs_api.cc
@@ -56,15 +56,21 @@ add_library(pfs STATIC
     ${SRC_LIST_LIB}
 )
 
-if (HAVE_NEBD)
-target_compile_definitions(pfs PRIVATE HAVE_NEBD)
-endif()
-
-message("${CURVE_LIBS}")
+target_include_directories(pfs PUBLIC ${dpdk_INCLUDE_DIRS})
+target_include_directories(pfs PUBLIC ${spdk_init_INCLUDE_DIRS})
+target_link_directories(pfs PUBLIC ${dpdk_LIBRARY_DIRS})
+target_link_libraries(pfs
+        ${spdk_init_LIBRARIES}
+        ${spdk_log_LIBRARIES}
+        ${spdk_bdev_LIBRARIES}
+        ${spdk_bdev_nvme_LIBRARIES}
+        ${spdk_env_dpdk_LIBRARIES}
+        ${dpdk_LIBRARIES}
+	${GFLAGS_LIBRARIES}
+)
 
 target_link_libraries(pfs
     -Wl,--start-group
-    ${CURVE_LIBS}
     rt
     pthread
     dl
