@@ -26,7 +26,7 @@
 
 unsigned int server_id = 0; /* db ins id */
 
-DEFINE_bool(daemon, true, "become daemon process");
+DEFINE_bool(daemon, false, "become daemon process");
 DEFINE_int32(server_id, 0, "PFSD server id");
 DEFINE_string(log_cfg, "pfsd_logger.conf", "ZLOG config file");
 DEFINE_string(pbd_name, "", "PBD name");
@@ -65,7 +65,7 @@ init_default_value()
 	g_option.o_workers = 256;
 	strncpy(g_option.o_log_cfg, "pfsd_logger.conf", sizeof g_option.o_log_cfg);
 	strncpy(g_option.o_shm_dir, PFSD_SHM_PATH, sizeof g_option.o_shm_dir);
-	g_option.o_daemon = 1;
+	g_option.o_daemon = 0;
 	server_id = 0;
 }
 

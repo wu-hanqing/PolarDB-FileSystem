@@ -29,6 +29,7 @@ endif()
 find_package(gflags REQUIRED)
 include_directories(${GFLAGS_INCLUDE_DIR})
 pkg_check_modules(dpdk REQUIRED libdpdk)
+pkg_check_modules(spdk_dpdklibs REQUIRED spdk_dpdklibs)
 pkg_check_modules(spdk_env_dpdk REQUIRED spdk_env_dpdk)
 pkg_check_modules(spdk_init REQUIRED spdk_init)
 pkg_check_modules(spdk_log REQUIRED spdk_log)
@@ -40,11 +41,87 @@ set(CMAKE_INSTALL_RPATH ${dpdk_LIBRARY_DIRS} ${spdk_init_LIBRARY_DIRS})
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
+set(SPDK_LIBS
+ -Wl,--push-state
+ -Wl,--no-as-needed
+ -Wl,--whole-archive
+ -Bstatic
+ spdk_bdev_null
+ spdk_bdev_nvme
+ spdk_bdev_passthru
+ spdk_bdev_lvol
+ spdk_bdev_raid
+ spdk_bdev_error
+ spdk_bdev_gpt
+ spdk_bdev_split
+ spdk_bdev_delay
+ spdk_bdev_zone_block
+ spdk_blobfs_bdev
+ spdk_blobfs
+ spdk_blob_bdev
+ spdk_lvol
+ spdk_blob
+ spdk_nvme
+ spdk_bdev_ftl
+ spdk_ftl
+ spdk_bdev_aio
+ spdk_bdev_virtio
+ spdk_virtio
+ spdk_accel_ioat
+ spdk_ioat
+ spdk_scheduler_dynamic
+ spdk_env_dpdk
+ spdk_scheduler_dpdk_governor
+ spdk_scheduler_gscheduler
+ spdk_sock_posix
+ spdk_event
+ spdk_event_bdev
+ spdk_bdev
+ spdk_notify
+ spdk_dma
+ spdk_event_accel
+ spdk_accel
+ spdk_event_vmd
+ spdk_vmd
+ spdk_event_sock
+ spdk_init
+ spdk_thread
+ spdk_trace
+ spdk_sock
+ spdk_rpc
+ spdk_jsonrpc
+ spdk_json
+ spdk_util
+ spdk_log
+ -Wl,--no-whole-archive
+
+ -Wl,--whole-archive
+ rte_bus_pci
+ rte_cryptodev
+ rte_dmadev
+ rte_eal
+ rte_ethdev
+ rte_hash
+ rte_kvargs
+ rte_mbuf
+ rte_mempool
+ rte_mempool_ring
+ rte_net
+ rte_pci
+ rte_power
+ rte_rcu
+ rte_ring
+ rte_telemetry
+ rte_vhost
+ -Wl,--no-whole-archive
+ -Wl,--pop-state
+)
+
 message("compile pfsd for PostgreSQL")
 
 set(PKG_DIR "/usr/local/polarstore/pfsd")
-set(CMAKE_BUILD_TYPE "Release")
-#set(CMAKE_BUILD_TYPE "Debug")
+#set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "Debug")
 
 include(CMakeLists-config.txt)
 

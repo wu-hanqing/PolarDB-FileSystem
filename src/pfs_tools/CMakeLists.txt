@@ -66,7 +66,8 @@ target_link_libraries(pfs-tools
     pfs
     pfsd
     -Wl,--end-group
-   pthread
+    ${SPDK_LIBS}
+    pthread
 )
 
 add_dependencies(pfs-tools

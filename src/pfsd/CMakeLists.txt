@@ -52,12 +52,10 @@ if(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "x86_64")
 endif()
 
 target_link_libraries(pfsdaemon
-    -Wl,--start-group
-    -Wl,--no-as-needed
     pfs
+    ${SPDK_LIBS}
     libzlog.a
     pthread
-    -Wl,--end-group
 )
 
 target_compile_definitions(pfsdaemon PUBLIC PFSD_SERVER)

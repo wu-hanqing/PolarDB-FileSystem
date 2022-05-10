@@ -22,6 +22,7 @@
 #include "pfs_tls.h"
 #include "pfs_trace.h"
 #include "pfs_stat.h"
+#include "pfs_spdk.h"
 
 /*
  * TLS manages txs, locks, and meta data exception handling.
@@ -75,8 +76,10 @@ pfs_tls_destroy(void *data)
 	pfs_tls_t *tls = (pfs_tls_t *)data;
 	pfs_ioq_t *ioq;
 
-	if (tls == NULL)
+	if (tls == NULL) {
+        pfs_exit_spdk_thread();
 		return;
+    }
 	/*
 	 * NOTE: never call get_current_tls() in this func!
 	 * or we will get a new tls, rather than the "tls" refered to
@@ -91,6 +94,7 @@ pfs_tls_destroy(void *data)
 	}
 	pfs_mem_free(tls, M_TLS);
 	pfs_mntstat_nthreads_change(-1);
+    pfs_exit_spdk_thread();
 }
 
 void __attribute__((constructor))

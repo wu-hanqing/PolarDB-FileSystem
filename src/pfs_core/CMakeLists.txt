@@ -20,6 +20,7 @@ include_directories(
 set(SRC_LIST
     pfs_spdk.cc
     devio_disk.cc
+    devio_spdk.cc
     pfs_admin.cc
     pfs_alloc.cc
     pfs_api.cc
@@ -56,26 +57,20 @@ add_library(pfs STATIC
     ${SRC_LIST_LIB}
 )
 
+#message("spdk_init_LIB:= ${spdk_init_LIBRARIES}")
+#message("spdk_log_LIB:= ${spdk_log_LIBRARIES}")
+#message("spdk_bdev_LIB:= ${spdk_bdev_LIBRARIES}")
+message("spdk_bdev_nvme_LIB:= ${spdk_bdev_nvme_LIBRARIES}")
+#message("spdk_bdev_nvme_LDFLAGS:= ${spdk_bdev_nvme_LDFLAGS}")
+message("spdk_env_dpdk_LIB:= ${spdk_env_dpdk_LIBRARIES}")
+message("spdk_env_dpdk_LIB:= ${spdk_dpdklibs_LIBRARIES}")
+
 target_include_directories(pfs PUBLIC ${dpdk_INCLUDE_DIRS})
 target_include_directories(pfs PUBLIC ${spdk_init_INCLUDE_DIRS})
 target_link_directories(pfs PUBLIC ${dpdk_LIBRARY_DIRS})
-target_link_libraries(pfs
-        ${spdk_init_LIBRARIES}
-        ${spdk_log_LIBRARIES}
-        ${spdk_bdev_LIBRARIES}
-        ${spdk_bdev_nvme_LIBRARIES}
-        ${spdk_env_dpdk_LIBRARIES}
-        ${dpdk_LIBRARIES}
-	${GFLAGS_LIBRARIES}
-)
 
 target_link_libraries(pfs
-    -Wl,--start-group
-    rt
-    pthread
-    dl
-    aio
-    -Wl,--end-group
+ gflags numa dl pthread rt uuid crypto m aio
 )
 
 set_property(TARGET pfs PROPERTY POSITION_INDEPENDENT_CODE ON)

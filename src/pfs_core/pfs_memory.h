@@ -73,7 +73,9 @@ enum {
 	M_INODE_BLK_TABLE,
 	M_CURVE_IOQ,
 	M_CURVE_DEV,
-
+    M_SPDK_TARGET,
+    M_SPDK_DEV_IOQ,
+    M_SPDK_DEV,
 	M_NTYPE
 };
 

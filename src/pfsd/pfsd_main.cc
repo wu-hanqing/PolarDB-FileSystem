@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <signal.h>
+#include <gflags/gflags.h>
 
 #include "pfsd_common.h"
 #include "pfsd_shm.h"
@@ -41,24 +42,23 @@ reload_handler(int num)
 /* used for libpfs logger */
 zlog_category_t *original_zlog_cat = NULL;
 
-int main(int ac, char *av[])
+extern int pfs_spdk_setup(void);
+
+int main(int argc, char *argv[])
 {
 	const char *pbdname;
 	int err;
-	if (pfsd_parse_option(ac, av) != 0) {
-		pfsd_usage(av[0]);
-		return -1;
-	}
 
-	if (ac == 1)
-		pfsd_usage(av[0]);
+	gflags::ParseCommandLineFlags(&argc, &argv, true);
+	if (pfsd_parse_option(argc, argv))
+		return 1;
 
 	pbdname = g_option.o_pbdname;
 	err = pfsd_write_pid(pbdname);
 	if (err != 0) {
 		fprintf(stderr, "pfsd %s may already running, err %d.\n", 
 		    pbdname, err);
-		return -1;
+		return 1;
 	}
 
 	/* init signal */
@@ -99,6 +99,8 @@ int main(int ac, char *av[])
 
 	fprintf(stderr, "starting pfsd[%d] %s\n", getpid(), pbdname);
 	pfsd_info("starting pfsd[%d] %s", getpid(), pbdname);
+
+	pfs_spdk_setup();
 
 	/* init communicate shm and inotify stuff */
 	if (pfsd_chnl_listen(PFSD_USER_PID_DIR, pbdname, g_option.o_workers, 

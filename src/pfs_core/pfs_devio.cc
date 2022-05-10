@@ -41,12 +41,14 @@ extern struct pfs_devops pfs_polardev_ops;
 //extern struct pfs_devops pfs_pangudev_ops;
 extern struct pfs_devops pfs_diskdev_ops;
 extern struct pfs_devops pfs_curvedev_ops;
+extern struct pfs_devops pfs_spdk_dev_ops;
 static struct pfs_devops *pfs_dev_ops[] = {
 #ifndef PFS_DISK_IO_ONLY
 	&pfs_polardev_ops,
 #endif
 	//&pfs_pangudev_ops,
 	&pfs_diskdev_ops,
+    &pfs_spdk_dev_ops,
 	NULL,
 };
 
@@ -141,6 +143,11 @@ pfsdev_type(const char *cluster, const char *devname)
         return PFS_DEV_CURVE;
     if (strcmp(cluster, CL_CURVE2) == 0)
         return PFS_DEV_CURVE2;
+    if (strcmp(cluster, CL_CURVE2) == 0)
+        return PFS_DEV_CURVE2;
+    if (strcmp(cluster, CL_SPDK) == 0)
+        return PFS_DEV_SPDK;
+
 #ifndef PFS_DISK_IO_ONLY
 	/* polarstore PBD */
 	if (strcmp(cluster, CL_POLAR) == 0 && isdigit(devname[0]))

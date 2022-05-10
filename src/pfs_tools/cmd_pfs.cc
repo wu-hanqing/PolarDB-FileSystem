@@ -35,7 +35,7 @@
 #include "pfs_util.h"
 #include "pfs_trace.h"
 #include "pfs_namei.h"
-
+#include "pfs_spdk.h"
 #include "cmd_impl.h"
 
 vfs_mgr pfs;
@@ -236,6 +236,8 @@ static struct option long_opts_common[] = {
 	{ "hostid",	required_argument,	NULL,	'H' },
 	{ "cluster",	required_argument,	NULL,	'C' },
 	{ "enable_pfsd", required_argument,	NULL,	'E' },
+    { "spdk_json", required_argument, NULL, 'J' },
+    { "spdk_init", no_argument, NULL, 'S' },
 	{ 0 },
 };
 
@@ -248,7 +250,7 @@ getopt_common(int argc, char *argv[], cmd_opts_t *co)
 	co->co_common.cluster = CL_DEFAULT;
 	co->co_common.enable_pfsd = 1;
 	optind = 1;
-	while ((opt = getopt_long(argc, argv, "+hH:C:t:E:", long_opts_common,
+	while ((opt = getopt_long(argc, argv, "+hH:C:t:E:J:S", long_opts_common,
 	    NULL)) != -1) {
 		switch (opt) {
 		case 'H':
@@ -261,6 +263,8 @@ getopt_common(int argc, char *argv[], cmd_opts_t *co)
 
 		case 'C':
 			co->co_common.cluster = optarg;
+            if (strcmp(optarg, "spdk") == 0)
+                co->co_common.init_spdk = 1; 
 			break;
 
 		case 't':
@@ -271,6 +275,13 @@ getopt_common(int argc, char *argv[], cmd_opts_t *co)
 			co->co_common.enable_pfsd = atoi(optarg);
 			break;
 
+        case 'J':
+            pfs_spdk_conf_set_json_config_file(optarg);
+            co->co_common.init_spdk = 1; 
+            break;
+        case 'S':
+            co->co_common.init_spdk = 1; 
+            break;
 		case 'h':
 		default:
 			usage();
@@ -976,6 +987,11 @@ main(int argc, char *argv[])
 	optind = getopt_common(argc, argv, &co);
 	if (optind < 0)
 	       return -1;
+    if (co.co_common.init_spdk) {
+        if (pfs_spdk_setup())
+           return 1;
+    }
+
 	argc -= optind;
 	argv += optind;
 
