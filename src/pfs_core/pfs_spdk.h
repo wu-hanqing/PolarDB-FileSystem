@@ -33,7 +33,6 @@ int pfs_put_spdk_io_channel(struct spdk_io_channel *ch);
 void pfs_spdk_close_all_io_channels(struct spdk_bdev_desc *desc);
 void pfs_exit_spdk_thread(void);
 size_t pfs_spdk_poll_thread(struct pfs_spdk_thread *thread);                      
-size_t pfs_spdk_poll_current_thread(void);
 
 void pfs_spdk_conf_set_blocked_pci(const char *s);
 void pfs_spdk_conf_set_allowed_pci(const char *s);

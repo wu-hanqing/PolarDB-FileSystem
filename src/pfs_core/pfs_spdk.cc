@@ -303,13 +303,6 @@ pfs_spdk_poll_thread(struct pfs_spdk_thread *thread)
     return spdk_thread_poll(thread->spdk_thread, 0, 0);
 }
 
-size_t
-pfs_spdk_poll_current_thread(void)
-{
-    struct pfs_spdk_thread *thread = pfs_current_spdk_thread();
-    return pfs_spdk_poll_thread(thread);
-}
-
 static void
 pfs_spdk_bdev_close_targets(void *arg)
 {
@@ -367,77 +360,15 @@ pfs_spdk_bdev_fini_start(void *arg)
     spdk_subsystem_fini(pfs_spdk_bdev_fini_done, done);
 }
 
-static void *
-spdk_init_thread_poll(void *arg)
+static void *thread_poll_loop(void *arg)
 {
-    struct init_param *iparam = (struct init_param *)arg;
-    struct spdk_env_opts    opts;
-    struct pfs_spdk_thread  *mytd, *thread, *tmp;
-    struct spdk_thread  *spdk_thread;
-    bool            done;
-    int         rc;
-    struct timespec     ts;
+    struct pfs_spdk_thread *mytd = (struct pfs_spdk_thread *)arg;
+    struct pfs_spdk_thread *thread, *tmp;
+    struct timespec ts;
+    int rc;
+    bool done;
 
-    SPDK_DEBUGLOG(thread, "FALSE FALSE FASLE");
-    memset(&opts, 0, sizeof(opts));
-    spdk_env_opts_init(&opts);
-    set_spdk_opts_from_gflags(&opts);
-
-    if (spdk_env_init(&opts) < 0) {
-        SPDK_ERRLOG("Unable to initialize SPDK env\n");
-        rc = EINVAL;
-        goto err_exit;
-    }
-
-    spdk_unaffinitize_thread();
-
-    if (!FLAGS_spdk_log_flags.empty()) {
-        // duplicate string
-        std::unique_ptr<char, decltype(free)*>
-            store(strdup(FLAGS_spdk_log_flags.c_str()), free);
-        char *log_flags = store.get();
-        char *tok = strtok(log_flags, ",");
-        do {
-            rc = spdk_log_set_flag(tok);
-            if (rc < 0) {
-                SPDK_ERRLOG("unknown spdk log flag %s\n", tok);
-                rc = EINVAL;
-                goto err_exit;
-            }
-        } while ((tok = strtok(NULL, ",")) != NULL);
-#ifdef DEBUG
-        spdk_log_set_print_level(SPDK_LOG_DEBUG);
-#endif
-    }
-
-    spdk_thread_lib_init(pfs_spdk_schedule_thread,
-        sizeof(struct pfs_spdk_thread));
-
-    /* Create an SPDK thread temporarily */
-    rc = pfs_spdk_init_thread(&mytd, false);
-    if (rc < 0) {
-        SPDK_ERRLOG("Failed to create initialization thread\n");
-        goto err_exit;
-    }
-
-    spdk_thread = mytd->spdk_thread;
-    /* Initialize the bdev layer */
-    done = false;
-    spdk_thread_send_msg(spdk_thread, pfs_spdk_bdev_init_start, &done);
-
-    do {
-        pfs_spdk_poll_thread(mytd);
-    } while (!done);
-
-    /*
-     * Continue polling until there are no more events.
-     * This handles any final events posted by pollers.
-     */
-    while (pfs_spdk_poll_thread(mytd) > 0) {}
-
-    iparam->rc = 0;
-    sem_post(&iparam->sem);
-
+    spdk_set_thread(mytd->spdk_thread);
     while (g_poll_loop) {
         pfs_spdk_poll_thread(mytd);
 
@@ -474,7 +405,7 @@ spdk_init_thread_poll(void *arg)
 
     /* Finalize the bdev layer */
     done = false;
-    spdk_thread_send_msg(spdk_thread, pfs_spdk_bdev_fini_start, &done);
+    spdk_thread_send_msg(thread->spdk_thread, pfs_spdk_bdev_fini_start, &done);
 
     do {
         TAILQ_FOREACH_SAFE(thread, &g_gc_threads, link, tmp) {
@@ -503,46 +434,88 @@ spdk_init_thread_poll(void *arg)
     }
 
     pthread_exit(NULL);
-
-err_exit:
-    iparam->rc = rc;
-    sem_post(&iparam->sem);
-    pthread_exit(NULL);
 }
 
 static int
 pfs_spdk_init_env(void)
 {
-    struct init_param param;
-    int rc;
+    struct spdk_env_opts    opts;
+    struct pfs_spdk_thread  *mytd, *thread, *tmp;
+    struct spdk_thread  *spdk_thread;
+    bool                done;
+    int                 rc;
+    struct timespec     ts;
 
-    sem_init(&param.sem, 0, 0);
-    param.rc = -1;
+    memset(&opts, 0, sizeof(opts));
+    spdk_env_opts_init(&opts);
+    set_spdk_opts_from_gflags(&opts);
 
-    /*
-     * Spawn a thread to handle initialization operations and to poll things
-     * like the admin queues periodically.
-     */
-    rc = pthread_create(&g_init_thread_id, NULL, &spdk_init_thread_poll,
-        &param);
-    if (rc != 0) {
-        SPDK_ERRLOG("Unable to spawn thread to poll admin queue. It won't be polled.\n");
-        goto out;
+    if (spdk_env_init(&opts) < 0) {
+        pfs_etrace("Unable to initialize SPDK env\n");
+        return -1;
     }
 
-    while (sem_wait(&param.sem) == -1 && errno == EINTR) {}
+    spdk_unaffinitize_thread();
 
-    rc = param.rc;
-out:
-    sem_destroy(&param.sem);
-    return rc;
+    if (!FLAGS_spdk_log_flags.empty()) {
+        // duplicate string
+        std::unique_ptr<char, decltype(free)*>
+            store(strdup(FLAGS_spdk_log_flags.c_str()), free);
+        char *log_flags = store.get();
+        char *tok = strtok(log_flags, ",");
+        do {
+            rc = spdk_log_set_flag(tok);
+            if (rc < 0) {
+                pfs_etrace("unknown spdk log flag %s\n", tok);
+                return -1;
+            }
+        } while ((tok = strtok(NULL, ",")) != NULL);
+#ifdef DEBUG
+        spdk_log_set_print_level(SPDK_LOG_DEBUG);
+#endif
+    }
+
+    spdk_thread_lib_init(pfs_spdk_schedule_thread,
+        sizeof(struct pfs_spdk_thread));
+
+    /* Create an SPDK thread temporarily */
+    rc = pfs_spdk_init_thread(&mytd, false);
+    if (rc < 0) {
+        pfs_etrace("Failed to create initialization thread\n");
+        return rc;
+    }
+
+    spdk_thread = mytd->spdk_thread;
+    /* Initialize the bdev layer */
+    done = false;
+    spdk_thread_send_msg(spdk_thread, pfs_spdk_bdev_init_start, &done);
+
+    do {
+        pfs_spdk_poll_thread(mytd);
+    } while (!done);
+
+    /*
+     * Continue polling until there are no more events.
+     * This handles any final events posted by pollers.
+     */
+    while (pfs_spdk_poll_thread(mytd) > 0) {}
+
+    spdk_set_thread(NULL);
+    rc = pthread_create(&g_init_thread_id, NULL, thread_poll_loop, mytd);
+    if (rc) {
+        fprintf(stderr, "can not create spdk thread poll thread\n");
+        abort();
+    }
+
+    return 0;
 }
+
 int
 pfs_spdk_setup(void)
 {
     static pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-    spdk_log_set_level(SPDK_LOG_DEBUG);
+    spdk_log_set_level(SPDK_LOG_DEBUG); // FIXME
     pthread_mutex_lock(&init_mutex);
     if (!g_spdk_env_initialized) {
         if (pfs_spdk_init_env()) {
@@ -552,14 +525,14 @@ pfs_spdk_setup(void)
         }
 
         g_spdk_env_initialized = true;
-	atexit(pfs_spdk_cleanup);
+	    atexit(pfs_spdk_cleanup);
     }
     pthread_mutex_unlock(&init_mutex);
 
     SPDK_PRINTF("%s found devices:\n", __func__);
     struct spdk_bdev *bdev;
     for (bdev = spdk_bdev_first(); bdev; bdev = spdk_bdev_next(bdev)) {
-	SPDK_PRINTF("1: name: %s, size: %ld",
+	    SPDK_PRINTF("1: name: %s, size: %ld",
 	    spdk_bdev_get_name(bdev),
             spdk_bdev_get_num_blocks(bdev) * spdk_bdev_get_block_size(bdev));
     }
@@ -578,7 +551,7 @@ pfs_spdk_cleanup(void)
     ts.tv_sec += 5;
     rc = pthread_timedjoin_np(g_init_thread_id, NULL, &ts);
     if (rc) {
-	printf("can not join spdk polling thread, %s\n", strerror(rc));
+	    printf("can not join spdk polling thread, %s\n", strerror(rc));
     }
     spdk_env_fini();
     spdk_log_close();

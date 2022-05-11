@@ -18,6 +18,6 @@
 # chkconfig: 35 99 99
 # description: create directories for pfsd
 
-mkdir -m 0777 /var/run/pfs && mkdir -m 0777 /var/run/pfsd && mkdir -m 0777 /dev/shm/pfsd && touch /var/run/pfsd/.pfsd
+mkdir -m 0777 -p /var/run/pfs && mkdir -m 0777 -p /var/run/pfsd && mkdir -m 0777 -p /dev/shm/pfsd && touch /var/run/pfsd/.pfsd
 
 

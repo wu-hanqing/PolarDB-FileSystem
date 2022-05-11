@@ -40,7 +40,6 @@ extern char pfs_trace_pbdname[PFS_MAX_PBDLEN];
 extern struct pfs_devops pfs_polardev_ops;
 //extern struct pfs_devops pfs_pangudev_ops;
 extern struct pfs_devops pfs_diskdev_ops;
-extern struct pfs_devops pfs_curvedev_ops;
 extern struct pfs_devops pfs_spdk_dev_ops;
 static struct pfs_devops *pfs_dev_ops[] = {
 #ifndef PFS_DISK_IO_ONLY
@@ -528,6 +527,23 @@ pfsdev_trim(int devi, uint64_t bda)
 
 	io = pfs_io_create(dev, PFSDEV_REQ_TRIM, NULL, PFSDEV_TRIMSIZE, bda,
 	    IO_WAIT);
+	PFS_VERIFY(io != NULL);
+
+	return pfsdev_do_io(dev, io);
+}
+
+int
+pfsdev_flush(int devi)
+{
+	pfs_dev_t *dev;
+	pfs_devio_t *io;
+
+	PFS_ASSERT(0 <= devi && devi < PFS_MAX_NCHD);
+	dev = pfs_devs[devi];
+	PFS_ASSERT(dev != NULL);
+	if (!dev->d_ops->dop_has_cache(dev))
+		return 0;
+	io = pfs_io_create(dev, PFSDEV_REQ_FLUSH, NULL, 0, 0, IO_WAIT);
 	PFS_VERIFY(io != NULL);
 
 	return pfsdev_do_io(dev, io);

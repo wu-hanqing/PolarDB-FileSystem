@@ -122,6 +122,7 @@ typedef struct pfs_devops {
 			    pfs_devio_t *io);
 	pfs_devio_t *	(*dop_wait_io)(pfs_dev_t *dev, pfs_ioq_t *ioq,
 			    pfs_devio_t *io);
+	int		(*dop_has_cache)(pfs_dev_t *dev);
 } pfs_devops_t;
 
 /* pfs device */
@@ -146,6 +147,7 @@ int	pfsdev_close(int devi);
 int	pfsdev_info(int devi, pbdinfo_t *pi);
 int	pfsdev_reload(int devi);
 int	pfsdev_trim(int devi, uint64_t bda);
+int	pfsdev_flush(int devi);
 int	pfsdev_pread_flags(int devi, void *buf, size_t len, uint64_t bda,
 	    int flags);
 int	pfsdev_pwrite_flags(int devi, void *buf, size_t len, uint64_t bda,

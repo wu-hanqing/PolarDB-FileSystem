@@ -74,6 +74,7 @@ void pfsd_worker_handle_opendir(pfsd_iochannel *ch, int index, const opendir_req
 void pfsd_worker_handle_readdir(pfsd_iochannel *ch, int index, const readdir_request_t *req, readdir_response_t *rsp);
 void pfsd_worker_handle_access(pfsd_iochannel *ch, int index, const access_request_t *req, access_response_t *rsp);
 void pfsd_worker_handle_lseek(pfsd_iochannel *ch, int index, const lseek_request_t *req, lseek_response_t *rsp);
+void pfsd_worker_handle_fsync(pfsd_iochannel *ch, int index, const fsync_request_t *req, fsync_response_t *rsp);
 
 /*for debug : return current processing request's pid  */
 pid_t pfsd_worker_current_processing_pid();

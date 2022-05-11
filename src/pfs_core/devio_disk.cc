@@ -546,6 +546,12 @@ pfs_diskdev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
 	return NULL;
 }
 
+static int
+pfs_diskdev_has_cache(pfs_dev_t *dev)
+{
+    return 0;
+}
+
 /* register device operations */
 struct pfs_devops pfs_diskdev_ops = {
 	.dop_name		= "disk",
@@ -553,7 +559,7 @@ struct pfs_devops pfs_diskdev_ops = {
 	.dop_size		= sizeof(pfs_diskdev_t),
 	.dop_memtag		= M_DISK_DEV,
 	.dop_open		= pfs_diskdev_open,
-        .dop_reopen		= pfs_diskdev_reopen,
+	.dop_reopen		= pfs_diskdev_reopen,
 	.dop_close		= pfs_diskdev_close,
 	.dop_info		= pfs_diskdev_info,
 	.dop_reload		= pfs_diskdev_reload,
@@ -561,4 +567,5 @@ struct pfs_devops pfs_diskdev_ops = {
 	.dop_need_throttle	= pfs_diskdev_need_throttle,
 	.dop_submit_io 		= pfs_diskdev_submit_io,
 	.dop_wait_io 		= pfs_diskdev_wait_io,
+	.dop_has_cache		= pfs_diskdev_has_cache
 };

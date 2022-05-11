@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 	struct sigaction sig;
 	memset(&sig, 0, sizeof(sig));
 	sig.sa_handler = signal_handler;
-	sigaction(SIGINT, &sig, NULL);
+//	sigaction(SIGINT, &sig, NULL);
 	sig.sa_handler = reload_handler;
 	sigaction(SIGHUP, &sig, NULL);
 	sig.sa_handler = SIG_IGN;

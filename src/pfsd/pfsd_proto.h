@@ -44,6 +44,7 @@ enum {
 	PFSD_REQUEST_RENAME,
 	PFSD_REQUEST_LSEEK,
 	PFSD_REQUEST_GROWFS,
+	PFSD_REQUEST_FSYNC,
 
 	PFSD_RESPONSE_MOUNT = 1000, /* Deprecated */
 	PFSD_RESPONSE_OPEN,
@@ -64,6 +65,7 @@ enum {
 	PFSD_RESPONSE_RENAME,
 	PFSD_RESPONSE_LSEEK,
 	PFSD_RESPONSE_GROWFS,
+	PFSD_RESPONSE_FSYNC,
 };
 
 inline
@@ -468,6 +470,18 @@ typedef struct {
 	uint64_t r_data_size;
 } readdir_response_t;
 
+typedef struct {
+	COMMON_REQUEST_HEADER;
+
+	int64_t f_ino;
+} fsync_request_t;
+
+typedef struct {
+	COMMON_RESPONSE_HEADER;
+
+	int r_res;
+} fsync_response_t;
+
 typedef struct pfsd_request {
 	uint32_t shm_epoch;
 	union {
@@ -494,6 +508,7 @@ typedef struct pfsd_request {
 		rename_request_t re_req;
 		lseek_request_t l_req;
 		access_request_t a_req;
+		fsync_request_t fsync_req;
 
 		pfsd_request_holder_t holder;
 	};
@@ -552,6 +567,7 @@ typedef struct {
 		rename_response_t re_rsp;
 		lseek_response_t l_rsp;
 		access_response_t a_rsp;
+		fsync_response_t fsync_rsp;
 
 		pfsd_response_holder_t holder;
 	};

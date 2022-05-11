@@ -116,16 +116,24 @@ set(SPDK_LIBS
  -Wl,--no-whole-archive
  -Wl,--pop-state
 )
+include(CheckIncludeFile)
 
 message("compile pfsd for PostgreSQL")
 
 include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
 
 set(PKG_DIR "/usr/local/polarstore/pfsd")
-#set(CMAKE_BUILD_TYPE "Release")
-set(CMAKE_BUILD_TYPE "Debug")
+set(CMAKE_BUILD_TYPE "Release")
+#set(CMAKE_BUILD_TYPE "Debug")
 
 include(CMakeLists-config.txt)
+
+link_directories(/usr/lib/curve)
+set(CURVE_LIBS -lcbd -lcurve_client -lcurve_common -lcurve_auth -lcurve_concurrent
+    -lnameserver2_proto -ltopology_proto -lchunkserver-protos -lbrpc -lbutil -lbvar
+    -lbthread -lcc_brpc_internal_proto -ljson2pb -lmcpack2pb -lcc_brpc_idl_options_proto
+    -lcommon_proto -lscan_proto
+    -lprotobuf -lprotobuf_lite -lrt -lssl -lcrypto -ldl -lz -lpthread -lleveldb -lgflags -lglog)
 
 set(COMMON_FLAGS
   -fno-strict-aliasing

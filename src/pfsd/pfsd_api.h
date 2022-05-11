@@ -32,6 +32,8 @@ ssize_t	pfsd_pread_svr(pfs_mount_t *mnt, pfs_inode_t *inode, void *buf,
 ssize_t	pfsd_pwrite_svr(pfs_mount_t *mnt, pfs_inode_t *inode, int flags,
 	    const void *buf, size_t len, off_t off, ssize_t *file_size, uint64_t btime);
 
+int	pfsd_fsync_svr(pfs_mount_t *mnt, pfs_inode_t *inode, uint64_t btime);
+
 int	pfsd_truncate_svr(const char *pbdpath, off_t len);
 int	pfsd_ftruncate_svr(pfs_mount_t *mnt, pfs_inode_t *in, off_t len, uint64_t btime);
 
@@ -49,6 +51,7 @@ int	pfsd_readdir_svr(pfs_mount_t *mnt, int64_t dino, int64_t ino,
 	    uint64_t offset, struct dirent *entry, int64_t *next_ino);
 
 off_t	pfsd_lseek_end_svr(pfs_mount_t *mnt, pfs_inode_t *in, off_t off, uint64_t btime);
+int	pfsd_fsync_svr(pfs_mount_t *mnt, pfs_inode_t *in, uint64_t btime);
 
 #endif
 

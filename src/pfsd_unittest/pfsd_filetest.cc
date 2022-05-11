@@ -100,6 +100,11 @@ TEST_F(FileTest, test) {
     EXPECT_EQ(n, 7);
 }
 
+TEST_F(FileTest, fsync) {
+    int n = pfsd_fsync(fd_);
+    EXPECT_EQ(n, 0);
+}
+
 TEST_F(FileTest, pfsd_hole_read) {
 	fileobj fo("/" + g_testenv->pbdname_ + "/hole_read", O_CREAT|O_TRUNC);
 	int fd = fo.getfd();
