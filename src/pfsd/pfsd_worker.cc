@@ -24,6 +24,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#include <deque>
+
 #include "pfs_api.h"
 #include "pfs_inode.h"
 #include "pfsd_api.h"
@@ -39,11 +41,12 @@
 
 #include "pfsd_option.h"
 
-#include "blockingconcurrentqueue.h"
 
 typedef std::pair<pfsd_iochannel_t *, int> WorkItem;
 
-static moodycamel::BlockingConcurrentQueue<WorkItem> g_work_queue;
+static pthread_mutex_t g_work_mtx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_work_cond = PTHREAD_COND_INITIALIZER;
+static std::deque<WorkItem> g_work_queue;
 
 static void *io_worker(void *arg);
 static void *io_poller(void *arg);
@@ -126,9 +129,11 @@ static void stop_io_workers(worker_t *wk)
 {
 	int i;
 
+	pthread_mutex_lock(&g_work_mtx);
 	for (i = 0; i < wk->w_nworkers; ++i) {
-		g_work_queue.enqueue({nullptr, -1});
+		g_work_queue.push_back({nullptr, -1});
 	}
+	pthread_mutex_unlock(&g_work_mtx);
 
 	for (i = 0; i < wk->w_nworkers; ++i) {
 		pthread_join(wk->w_io_workers[i], NULL);
@@ -148,8 +153,9 @@ static void drain_work_queue(void)
 {
 	WorkItem w;
 
-	while(g_work_queue.try_enqueue(w))
-		;
+	pthread_mutex_lock(&g_work_mtx);
+	g_work_queue.clear();
+	pthread_mutex_unlock(&g_work_mtx);
 }
 
 void*
@@ -205,8 +211,6 @@ static void* io_poller(void *arg)
 {
 	worker_t *wk = (worker_t*)(arg);
 
-	moodycamel::ProducerToken ptok(g_work_queue);
-
 	while (!g_stop) {
 		for (int i = 0; i < wk->w_nch; ++i) {
 			int index = -1;
@@ -231,7 +235,10 @@ static void* io_poller(void *arg)
 					rsp->error = 0;
 				}
 
-				g_work_queue.enqueue(ptok, {ch, index});
+				pthread_mutex_lock(&g_work_mtx);
+				g_work_queue.push_back({ch, index});
+				pthread_cond_signal(&g_work_cond);
+				pthread_mutex_unlock(&g_work_mtx);
 				g_currentPid = PFSD_INVALID_PID;
 			}
 		}
@@ -243,7 +250,6 @@ static void* io_poller(void *arg)
 static void *io_worker(void *arg)
 {
 	worker_t *wk = (worker_t*)(arg);
-	moodycamel::ConsumerToken ctok(g_work_queue);
 
 	char name[32];
 	snprintf(name, sizeof(name), "pfsd-worker");
@@ -251,7 +257,15 @@ static void *io_worker(void *arg)
 
 	for (;;) {
 		WorkItem w;
-		g_work_queue.wait_dequeue(ctok, w);
+
+		pthread_mutex_lock(&g_work_mtx);
+		while (g_work_queue.empty()) {
+			pthread_cond_wait(&g_work_cond, &g_work_mtx);
+		}
+		w = g_work_queue.front();
+		g_work_queue.pop_front();
+		pthread_mutex_unlock(&g_work_mtx);
+
 		pfsd_iochannel_t *ch = w.first;
 		if (ch == nullptr)
 			break;

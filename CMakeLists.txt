@@ -119,6 +119,8 @@ set(SPDK_LIBS
 
 message("compile pfsd for PostgreSQL")
 
+include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
+
 set(PKG_DIR "/usr/local/polarstore/pfsd")
 #set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_BUILD_TYPE "Debug")
@@ -128,7 +130,7 @@ include(CMakeLists-config.txt)
 set(COMMON_FLAGS
   -fno-strict-aliasing
   #-fstack-protector
-  #-fsanitize=address
+  -fsanitize=address
   #-DEV_STANDALONE
   -Wall
   -Werror
