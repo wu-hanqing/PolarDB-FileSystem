@@ -282,6 +282,7 @@ pfs_io_start(pfs_devio_t *io)
 	case PFSDEV_REQ_RD:	stat = STAT_PFS_DEV_READ_BW; break;
 	case PFSDEV_REQ_WR: 	stat = STAT_PFS_DEV_WRITE_BW; break;
 	case PFSDEV_REQ_TRIM:	stat = -1; break;
+	case PFSDEV_REQ_FLUSH:	stat = -1; break;
 	default: PFS_ASSERT("io_start bad op" == NULL); break;
 	}
 	if (stat < 0)
@@ -300,6 +301,7 @@ pfs_io_end(pfs_devio_t *io)
 	case PFSDEV_REQ_RD:	stat = STAT_PFS_DEV_READ_DONE; break;
 	case PFSDEV_REQ_WR: 	stat = STAT_PFS_DEV_WRITE_DONE; break;
 	case PFSDEV_REQ_TRIM: 	stat = STAT_PFS_DEV_TRIM_DONE; break;
+	case PFSDEV_REQ_FLUSH: 	stat = STAT_PFS_DEV_FLUSH_DONE; break;
 	default: PFS_ASSERT("io_end bad op" == NULL); break;
 	}
 	PFS_STAT_LATENCY_VALUE((StatType)stat, &io->io_start_ts);
@@ -309,6 +311,7 @@ pfs_io_end(pfs_devio_t *io)
 		case PFSDEV_REQ_RD:	stat = MNT_STAT_DEV_READ; break;
 		case PFSDEV_REQ_WR: 	stat = MNT_STAT_DEV_WRITE; break;
 		case PFSDEV_REQ_TRIM: 	stat = MNT_STAT_DEV_TRIM; break;
+		case PFSDEV_REQ_FLUSH: 	stat = MNT_STAT_DEV_FLUSH; break;
 		default: PFS_ASSERT("io_end bad op" == NULL); break;
 	}
 
@@ -450,6 +453,8 @@ pfsdev_close(int devi)
 {
 	int		err;
 	pfs_dev_t	*dev;
+
+	pfsdev_flush(devi);
 
 	PFS_ASSERT(0 <= devi && devi < PFS_MAX_NCHD);
 	dev = pfs_devs[devi];
