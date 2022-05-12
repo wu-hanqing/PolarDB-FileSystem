@@ -92,9 +92,10 @@ static const char* mountstat_name[MNT_STAT_TYPE_COUNT] = {
     "dev_read",
     "dev_write",
     "dev_trim",
+    "dev_flush",
     "meta_rdlock",
     "meta_wrlock",
-    "dev_flush",
+    "fsync",
 };
 
 static const char* mountstat_api_name[MNT_STAT_FILE_SPEC_TYPE_COUNT] = {
