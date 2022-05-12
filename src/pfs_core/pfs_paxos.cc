@@ -156,6 +156,8 @@ write_leader(pfs_mount_t *mnt, struct pfs_leader_record *lr)
 	lr_end->checksum = cpu_to_le32(checksum);
 
 	rv = pfs_write_paxos_sector(mnt, 0, lr_end);
+	if (rv == 0)
+		rv = pfsdev_flush(mnt->mnt_ioch_desc);
 	pfs_mem_free(lr_end, M_PAXOS_SECTOR);
 	return rv;
 }
