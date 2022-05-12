@@ -391,11 +391,13 @@ pfs_trimgroup_flush(pfs_trimgroup_t *grp, int iodesc, pfs_txid_t *tail_txid,
 		if (rv < 0) {
 			pfs_etrace("trim log failed bda @%lld rv=%d\n",
 			    sb->s_bda, rv);
+			pfsdev_flush(iodesc);
 			return rv;
 		}
 		n++;
 	}
 	if (n > 0) {
+        	pfsdev_flush(iodesc);
 		*tail_txid = grp->g_rtxid;
 		*tail_offset = grp->g_roffset;
 	}
