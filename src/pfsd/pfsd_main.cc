@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <gflags/gflags.h>
+#include <semaphore.h>
 
 #include "pfsd_common.h"
 #include "pfsd_shm.h"
@@ -28,10 +29,12 @@
 
 #include "pfsd_chnl.h"
 
+static sem_t main_sem;
 static void
 signal_handler(int num)
 {
 	g_stop = true;
+	sem_post(&main_sem);
 }
 
 static void
@@ -53,6 +56,7 @@ int main(int argc, char *argv[])
 	if (pfsd_parse_option(argc, argv))
 		return 1;
 
+	sem_init(&main_sem, 0, 0);
 	pbdname = g_option.o_pbdname;
 	err = pfsd_write_pid(pbdname);
 	if (err != 0) {
@@ -65,7 +69,7 @@ int main(int argc, char *argv[])
 	struct sigaction sig;
 	memset(&sig, 0, sizeof(sig));
 	sig.sa_handler = signal_handler;
-//	sigaction(SIGINT, &sig, NULL);
+	sigaction(SIGINT, &sig, NULL);
 	sig.sa_handler = reload_handler;
 	sigaction(SIGHUP, &sig, NULL);
 	sig.sa_handler = SIG_IGN;
@@ -111,7 +115,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* notify worker start */
-	worker_t *wk = g_worker ;
+	worker_t *wk = g_worker;
 	sem_post(&wk->w_sem);
 
 	int windex = 0;
@@ -122,12 +126,14 @@ int main(int argc, char *argv[])
 			pfsd_shm_recycle_request(ch);
 		}
 
-		sleep(10);
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec++;
+        sem_timedwait(&main_sem, &ts);
 	}
 
 	/* exit */
 	if (g_worker != NULL && g_worker->w_nch != 0) {
-		sem_post(&g_worker->w_sem);
 		pfsd_info("[pfsd]pthread_join worker");
 		pthread_join(g_worker->w_tid, NULL);
 	}
