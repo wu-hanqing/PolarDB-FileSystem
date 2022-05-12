@@ -1644,7 +1644,44 @@ retry:
 int
 pfsd_fsync(int fd)
 {
-	return 0;
+	if (fd < 0) {
+		errno = EBADF;
+		return -1;
+	}
+
+	pfsd_file_t *file = NULL;
+	PFSD_SDK_GET_FILE(fd);
+
+	pfsd_iochannel_t *ch = NULL;
+	pfsd_request_t *req = NULL;
+	int rv = -1;
+	pfsd_response_t *rsp = NULL;
+
+retry:
+	if (pfsd_chnl_buffer_alloc(s_connid, 0, (void**)&req, 0,
+	    (void**)&rsp, NULL, (long*)(&ch)) != 0) {
+		pfsd_put_file(file);
+		errno = ENOMEM;
+		return -1;
+	}
+
+	/* fill request */
+	req->type = PFSD_REQUEST_FSYNC;
+	req->fsync_req.f_ino = file->f_inode;
+	req->common_pl_req = file->f_common_pl;
+
+	pfsd_chnl_send_recv(s_connid, req, 0, rsp, 0, NULL, pfsd_tolong(ch), 0);
+	CHECK_STALE(rsp);
+
+	rv = rsp->fsync_rsp.r_res;
+	if (rv != 0) {
+		errno = rsp->error;
+		PFSD_CLIENT_ELOG("fsync %ld error: %s", file->f_inode, strerror(errno));
+	}
+
+	pfsd_put_file(file);
+	pfsd_chnl_buffer_free(s_connid, req, rsp, NULL, pfsd_tolong(ch));
+	return rv;
 }
 
 ssize_t
