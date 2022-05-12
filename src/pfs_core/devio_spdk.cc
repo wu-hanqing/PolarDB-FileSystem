@@ -39,8 +39,6 @@
 #include "pfs_impl.h"
 #include "pfs_spdk.h"
 
-struct pfs_spdk_iocb;
-
 typedef struct pfs_spdk_dev {
     /* must be first member */
     pfs_dev_t   dk_base;
@@ -57,6 +55,8 @@ typedef struct pfs_spdk_dev {
     struct spdk_io_channel *dk_ch;
     int         dk_stop;
     char        dk_path[128];
+    sem_t       dk_sem;
+    int         dk_jobs;
 } pfs_spdk_dev_t;
 
 typedef struct pfs_spdk_iocb {
@@ -79,7 +79,7 @@ typedef struct pfs_spdk_ioq {
     TAILQ_HEAD(, pfs_devio) dkq_inflight_queue;
     TAILQ_HEAD(, pfs_devio) dkq_complete_queue;
     struct buf_ring *dkq_done_q;
-    sem_t            dkq_done_sem;
+    sem_t       dkq_done_sem;
 } pfs_spdk_ioq_t;
 
 struct bdev_open_param {
@@ -200,14 +200,23 @@ err_exit:
     param->rc = 0;
     sem_post(&param->sem);
 
+    struct spdk_thread *spdk_thread = thread->spdk_thread;
     while (!dkdev->dk_stop) {
-        spdk_thread_poll(thread->spdk_thread, 0, 0);
+        while (__atomic_load_n(&dkdev->dk_jobs, __ATOMIC_RELAXED)) {
+            spdk_thread_poll(spdk_thread, 0, spdk_get_ticks());
+        }
+ 
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += 1;
+        sem_timedwait(&dkdev->dk_sem, &ts);
     }
-
+ 
     pfs_put_spdk_io_channel(dkdev->dk_ch);
     spdk_bdev_close(dkdev->dk_desc);
-    while (spdk_thread_poll(thread->spdk_thread, 0, 0)) {
-    }
+
+    while (spdk_thread_poll(spdk_thread, 0, 0))
+        {}
     return NULL;
 }
 
@@ -222,11 +231,14 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
     sem_init(&param.sem, 0, 0);
     param.dkdev = dkdev;
     param.rc = 0;
-
+ 
     dkdev->dk_stop = 0;
+    dkdev->dk_jobs = 0;
+    sem_init(&dkdev->dk_sem, 0, 0);
     err = pthread_create(&dkdev->dk_pthread, NULL, bdev_thread_msg_loop,
                          &param);
     if (err) {
+        sem_destroy(&dkdev->dk_sem);
         pfs_etrace("can not create device msg thread %s, %s\n", dev->d_devname,
                    strerror(err));
         return -err;
@@ -249,8 +261,9 @@ pfs_spdk_dev_close(pfs_dev_t *dev)
         return 0;
     
     dkdev->dk_stop = 1;
+    sem_post(&dkdev->dk_sem);
     pthread_join(dkdev->dk_pthread, NULL);
-
+    sem_destroy(&dkdev->dk_sem);
     return 0;
 }
 
@@ -334,9 +347,9 @@ pfs_spdk_dev_io_done(struct spdk_bdev_io *bdev_io,
     io->io_error = success ? 0 : -EIO;
     io->io_private = nullptr;
 
+    __atomic_sub_fetch(&iocb->dev->dk_jobs, 1, __ATOMIC_RELAXED);
     buf_ring_enqueue(dkioq->dkq_done_q, iocb);
     sem_post(&dkioq->dkq_done_sem);
-
     spdk_bdev_free_io(bdev_io);
 }
 
@@ -557,7 +570,7 @@ pfs_spdk_dev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)ioq;
     pfs_spdk_iocb_t *iocb = nullptr;
     spdk_msg_fn fn = nullptr;
-    int err = 0;
+    int err = 0, count = 0;
 
     iocb = (pfs_spdk_iocb_t *)calloc(1, sizeof(pfs_spdk_iocb_t));
     iocb->pfs_io = io;
@@ -600,12 +613,17 @@ pfs_spdk_dev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
         PFS_ASSERT("unsupported io type" == NULL);
     }
 
+    __atomic_fetch_add(&dkdev->dk_jobs, 1, __ATOMIC_RELAXED);
     err = spdk_thread_send_msg(dkdev->dk_thread->spdk_thread, fn, iocb);
     while (err == -ENOMEM) {
         pfs_etrace("%s spdk_thread_send_msg failed, retrying\n", __func__);
         usleep(1000);
         err = spdk_thread_send_msg(dkdev->dk_thread->spdk_thread, fn, iocb);
     }
+    __atomic_thread_fence(__ATOMIC_ACQ_REL);
+    sem_getvalue(&dkdev->dk_sem, &count);
+    if (!count)
+        sem_post(&dkdev->dk_sem);
 
     if (err) {
 fail:

@@ -110,9 +110,6 @@ parse_pci_address(struct spdk_env_opts *opts)
             (*pa)[opts->num_pci_addr++] = addr;
         }
     }
-
-    spdk_log_set_level((spdk_log_level )FLAGS_spdk_log_level);
-    spdk_log_set_print_level((spdk_log_level)FLAGS_spdk_log_print_level);
 }
 
 static void
@@ -515,7 +512,9 @@ pfs_spdk_setup(void)
 {
     static pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-    spdk_log_set_level(SPDK_LOG_DEBUG); // FIXME
+    spdk_log_set_level((spdk_log_level)FLAGS_spdk_log_level);
+    spdk_log_set_print_level((spdk_log_level)FLAGS_spdk_log_print_level);
+
     pthread_mutex_lock(&init_mutex);
     if (!g_spdk_env_initialized) {
         if (pfs_spdk_init_env()) {
@@ -529,12 +528,12 @@ pfs_spdk_setup(void)
     }
     pthread_mutex_unlock(&init_mutex);
 
-    SPDK_PRINTF("%s found devices:\n", __func__);
+    pfs_itrace("found devices:\n");
     struct spdk_bdev *bdev;
     for (bdev = spdk_bdev_first(); bdev; bdev = spdk_bdev_next(bdev)) {
-	    SPDK_PRINTF("1: name: %s, size: %ld",
-	    spdk_bdev_get_name(bdev),
-            spdk_bdev_get_num_blocks(bdev) * spdk_bdev_get_block_size(bdev));
+         pfs_itrace("\t1: name: %s, size: %ld",
+	     spdk_bdev_get_name(bdev),
+             spdk_bdev_get_num_blocks(bdev) * spdk_bdev_get_block_size(bdev));
     }
     return 0;
 }
@@ -544,6 +543,7 @@ pfs_spdk_cleanup(void)
 {
     struct timespec ts;
     int rc;
+
     g_poll_loop = false;
     pfs_exit_spdk_thread();
 
@@ -552,9 +552,10 @@ pfs_spdk_cleanup(void)
     rc = pthread_timedjoin_np(g_init_thread_id, NULL, &ts);
     if (rc) {
 	    printf("can not join spdk polling thread, %s\n", strerror(rc));
+    } else {
+        spdk_env_fini();
+        spdk_log_close();
     }
-    spdk_env_fini();
-    spdk_log_close();
 }
 
 static void
@@ -618,9 +619,6 @@ void pfs_spdk_conf_set_allowed_pci(const char *s)
 
 void pfs_spdk_conf_set_json_config_file(const char *s)
 {
-    FLAGS_spdk_log_flags="bdev,thread";
-    spdk_log_set_print_level(SPDK_LOG_DEBUG);
-    spdk_log_set_flag("bdev");
     FLAGS_spdk_json_config_file = s;
 }
 
