@@ -46,7 +46,7 @@ struct init_param {
     int rc;
 };
 
-#define SPDK_FIO_POLLING_TIMEOUT 1000000000ULL
+#define POLLING_TIMEOUT 1000000000ULL
 static __thread bool g_pfs_thread = false;
 static TAILQ_HEAD(, pfs_spdk_thread) g_gc_threads =
     TAILQ_HEAD_INITIALIZER(g_gc_threads);
@@ -331,7 +331,7 @@ pfs_spdk_calc_timeout(struct pfs_spdk_thread *thread, struct timespec *ts)
     now = spdk_get_ticks();
 
     if (timeout == 0) {
-        timeout = now + (SPDK_FIO_POLLING_TIMEOUT * spdk_get_ticks_hz()) / SPDK_SEC_TO_NSEC;
+        timeout = now + (POLLING_TIMEOUT * spdk_get_ticks_hz()) / SPDK_SEC_TO_NSEC;
     }
 
     if (timeout > now) {
@@ -365,6 +365,8 @@ static void *thread_poll_loop(void *arg)
     int rc;
     bool done;
 
+    pthread_setname_np(pthread_self(), "pfs_spdk_gc");
+
     spdk_set_thread(mytd->spdk_thread);
     while (g_poll_loop) {
         pfs_spdk_poll_thread(mytd);
@@ -387,7 +389,7 @@ static void *thread_poll_loop(void *arg)
         }
 
         /* Figure out how long to sleep. */
-        clock_gettime(CLOCK_MONOTONIC, &ts);
+        clock_gettime(CLOCK_REALTIME, &ts);
         pfs_spdk_calc_timeout(mytd, &ts);
 
         rc = pthread_cond_timedwait(&g_init_cond, &g_init_mtx, &ts);
@@ -402,7 +404,7 @@ static void *thread_poll_loop(void *arg)
 
     /* Finalize the bdev layer */
     done = false;
-    spdk_thread_send_msg(thread->spdk_thread, pfs_spdk_bdev_fini_start, &done);
+    spdk_thread_send_msg(mytd->spdk_thread, pfs_spdk_bdev_fini_start, &done);
 
     do {
         TAILQ_FOREACH_SAFE(thread, &g_gc_threads, link, tmp) {
