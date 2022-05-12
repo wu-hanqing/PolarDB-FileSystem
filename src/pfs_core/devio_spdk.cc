@@ -164,6 +164,7 @@ bdev_thread_msg_loop(void *arg)
     pfs_dev_t *dev = &dkdev->dk_base;
     int err;
 
+    pthread_setname_np(pthread_self(), "pfs_dev");
     err = spdk_bdev_open_ext(dev->d_devname, dev_writable(dev),
                              bdev_event_cb, dkdev, &dkdev->dk_desc);
     if (err) {
