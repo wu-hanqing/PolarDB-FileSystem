@@ -62,7 +62,7 @@ static void
 bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
     void *event_ctx)
 {
-    SPDK_WARNLOG("Unsupported bdev event: type %d\n", type);
+    pfs_etrace("Unsupported bdev event: type %d\n", type);
     return;
 }
 
@@ -311,8 +311,7 @@ pfs_spdk_bdev_close_targets(void *arg)
 
     TAILQ_FOREACH_SAFE(target, &thread->targets, link, tmp) {
         if (target->ref != 0) {
-            SPDK_ERRLOG("target ref is not zero\n");
-            abort();
+            pfs_etrace("target ref is not zero, should put io channel before thread exiting\n");
         }
 
         TAILQ_REMOVE(&thread->targets, target, link);
@@ -414,6 +413,8 @@ static void *thread_poll_loop(void *arg)
             pfs_spdk_poll_thread(thread);
         }
     } while (!done);
+
+    pfs_itrace("spdk bdev subsystem is shutdown now");
 
     /* Now exit all the threads */
     TAILQ_FOREACH(thread, &g_gc_threads, link) {
@@ -536,13 +537,9 @@ pfs_spdk_setup(void)
     pfs_itrace("found devices:\n");
     struct spdk_bdev *bdev;
     for (bdev = spdk_bdev_first(); bdev; bdev = spdk_bdev_next(bdev)) {
-         pfs_itrace("\t1: name: %s, size: %ld",
+         pfs_itrace("\t name: %s, size: %ld",
 	     spdk_bdev_get_name(bdev),
              spdk_bdev_get_num_blocks(bdev) * spdk_bdev_get_block_size(bdev));
-
-         printf("%s\n", pfs_get_dev_pci_address(bdev).c_str());
-         cpu_set_t set;
-         pfs_get_dev_local_cpus(bdev, &set);
     }
     return 0;
 }
@@ -578,7 +575,7 @@ pfs_recycle_thread_io_channels(struct pfs_spdk_thread *thread,
     pthread_mutex_lock(&thread->mtx);
     TAILQ_FOREACH_SAFE(target, &thread->targets, link, tmp) {
         if (target->desc == desc) {
-            if (target->ref != 0) {
+            if (!thread->exited && target->ref != 0) {
                 target->closed = 1;
             } else {
                 TAILQ_REMOVE(&thread->targets, target, link);
@@ -591,18 +588,6 @@ pfs_recycle_thread_io_channels(struct pfs_spdk_thread *thread,
     spdk_set_thread(origin);
 }
 
-void pfs_spdk_close_all_io_channels(struct spdk_bdev_desc *desc)
-{
-    struct pfs_spdk_thread *thread;
-
-    pthread_mutex_lock(&g_pfs_mtx);
-    TAILQ_FOREACH(thread, &g_pfs_threads, link) {
-        assert(thread->on_pfs_list);
-        pfs_recycle_thread_io_channels(thread, desc);
-    }
-    pthread_mutex_unlock(&g_pfs_mtx);
-}
-
 void pfs_exit_spdk_thread(void)
 {
     struct spdk_thread *spdk_td = spdk_get_thread();
@@ -611,6 +596,7 @@ void pfs_exit_spdk_thread(void)
     if (spdk_td == NULL)
         return;
     pfs_td = (pfs_spdk_thread *)spdk_thread_get_ctx(spdk_td);
+    pfs_td->exited = 1;
     spdk_set_thread(NULL);
     pfs_spdk_cleanup_thread(pfs_td);
 }

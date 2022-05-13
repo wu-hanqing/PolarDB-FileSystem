@@ -25,7 +25,8 @@ struct pfs_spdk_thread {
     TAILQ_HEAD(, pfs_spdk_target) targets;
     TAILQ_ENTRY(pfs_spdk_thread) link;
     int on_pfs_list;
-    int	get_count;
+    int get_count;
+    int exited;
     pthread_mutex_t mtx;
 };
 
