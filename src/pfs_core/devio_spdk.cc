@@ -57,6 +57,7 @@ typedef struct pfs_spdk_dev {
     char        dk_path[128];
     sem_t       dk_sem;
     int         dk_jobs;
+    pthread_mutex_t dk_msg_mutex;
 } pfs_spdk_dev_t;
 
 typedef struct pfs_spdk_iocb {
@@ -162,9 +163,12 @@ bdev_thread_msg_loop(void *arg)
     struct bdev_open_param *param = (struct bdev_open_param *)arg;
     pfs_spdk_dev_t *dkdev = param->dkdev;
     pfs_dev_t *dev = &dkdev->dk_base;
+    cpu_set_t cpuset;
+    char thread_name[64];
     int err;
 
-    pthread_setname_np(pthread_self(), "pfs_dev");
+    snprintf(thread_name, sizeof(thread_name), "pfs-dev-%s", dev->d_devname);
+    pthread_setname_np(pthread_self(), thread_name);
     err = spdk_bdev_open_ext(dev->d_devname, dev_writable(dev),
                              bdev_event_cb, dkdev, &dkdev->dk_desc);
     if (err) {
@@ -198,8 +202,22 @@ err_exit:
                dev->d_devname, dkdev->dk_block_num, dkdev->dk_block_size,
                dkdev->dk_unit_size, dkdev->dk_has_cache);
 
+    if (pfs_get_dev_local_cpus(dkdev->dk_bdev, &cpuset) == 0) {
+        std::string tmp = pfs_cpuset_to_string(&cpuset);
+        err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t),
+            &cpuset);
+        if (err == 0) {
+            pfs_itrace("bind %s thread to cpuset : %s", thread_name, tmp.c_str());
+        } else {
+            pfs_etrace("can not bind %s thread to cpuset: %s", thread_name, tmp.c_str());
+        }
+    } else {
+        pfs_etrace("can not get device %s's thread local cpuset", dev->d_devname);
+    }
+
     param->rc = 0;
     sem_post(&param->sem);
+
 
     struct spdk_thread *spdk_thread = thread->spdk_thread;
     while (!dkdev->dk_stop) {
@@ -236,10 +254,16 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
     dkdev->dk_stop = 0;
     dkdev->dk_jobs = 0;
     sem_init(&dkdev->dk_sem, 0, 0);
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
+    pthread_mutex_init(&dkdev->dk_msg_mutex, &attr);
+    pthread_mutexattr_destroy(&attr);
     err = pthread_create(&dkdev->dk_pthread, NULL, bdev_thread_msg_loop,
                          &param);
     if (err) {
         sem_destroy(&dkdev->dk_sem);
+        pthread_mutex_destroy(&dkdev->dk_msg_mutex);
         pfs_etrace("can not create device msg thread %s, %s\n", dev->d_devname,
                    strerror(err));
         return -err;
@@ -265,6 +289,7 @@ pfs_spdk_dev_close(pfs_dev_t *dev)
     sem_post(&dkdev->dk_sem);
     pthread_join(dkdev->dk_pthread, NULL);
     sem_destroy(&dkdev->dk_sem);
+    pthread_mutex_destroy(&dkdev->dk_msg_mutex);
     return 0;
 }
 
@@ -615,11 +640,15 @@ pfs_spdk_dev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
     }
 
     __atomic_fetch_add(&dkdev->dk_jobs, 1, __ATOMIC_RELAXED);
+    pthread_mutex_lock(&dkdev->dk_msg_mutex);
     err = spdk_thread_send_msg(dkdev->dk_thread->spdk_thread, fn, iocb);
+    pthread_mutex_unlock(&dkdev->dk_msg_mutex);
     while (err == -ENOMEM) {
         pfs_etrace("%s spdk_thread_send_msg failed, retrying\n", __func__);
         usleep(1000);
+   	pthread_mutex_lock(&dkdev->dk_msg_mutex);
         err = spdk_thread_send_msg(dkdev->dk_thread->spdk_thread, fn, iocb);
+    	pthread_mutex_unlock(&dkdev->dk_msg_mutex);
     }
     __atomic_thread_fence(__ATOMIC_ACQ_REL);
     sem_getvalue(&dkdev->dk_sem, &count);

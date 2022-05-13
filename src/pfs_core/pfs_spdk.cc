@@ -4,6 +4,8 @@
 
 #include <semaphore.h>
 #include <memory>
+#include <stack>
+#include <vector>
 #include <stdlib.h>
 #include <string.h>
 #include <gflags/gflags.h>
@@ -12,6 +14,7 @@
 #include <spdk/string.h>
 #include <spdk/log.h>
 #include <spdk/util.h>
+#include <spdk/json.h>
 
 DEFINE_string(spdk_name, "pfsd", "give a name for spdk_env");
 DEFINE_string(spdk_core_mask, "", "spdk cpu core mask");
@@ -536,6 +539,10 @@ pfs_spdk_setup(void)
          pfs_itrace("\t1: name: %s, size: %ld",
 	     spdk_bdev_get_name(bdev),
              spdk_bdev_get_num_blocks(bdev) * spdk_bdev_get_block_size(bdev));
+
+         printf("%s\n", pfs_get_dev_pci_address(bdev).c_str());
+         cpu_set_t set;
+         pfs_get_dev_local_cpus(bdev, &set);
     }
     return 0;
 }
@@ -632,5 +639,178 @@ void pfs_spdk_conf_set_name(const char *s)
 void pfs_spdk_conf_set_env_context(const char *s)
 {
     FLAGS_spdk_env_context = s;
+}
+
+int
+pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *set)
+{
+    std::string pci_addr;
+
+    pci_addr = pfs_get_dev_pci_address(bdev);
+    if (pci_addr.empty())
+        return -1;
+    return pfs_get_pci_local_cpus(pci_addr, set);
+}
+
+static int
+json_write_cb(void *cb_ctx, const void *data, size_t size)
+{
+	FILE *f = (FILE*) cb_ctx;
+	size_t rc;
+
+	rc = fwrite(data, 1, size, f);
+	return rc == size ? 0 : -1;
+}
+
+std::string 
+pfs_get_dev_pci_address(struct spdk_bdev *bdev)
+{
+    std::string address;
+    std::vector<spdk_json_val> values;
+    struct spdk_json_write_ctx *w;
+    char *json = NULL, *end;
+    size_t json_size = 0;
+    ssize_t values_cnt, rc;
+    struct spdk_json_val *nvme, *o, *v;
+    FILE *f = open_memstream(&json, &json_size);
+
+    if (0) {
+err:
+        return "";
+    }
+
+    w = spdk_json_write_begin(json_write_cb, f, SPDK_JSON_WRITE_FLAG_FORMATTED);
+    spdk_json_write_object_begin(w);
+    spdk_bdev_dump_info_json(bdev, w);
+    spdk_json_write_object_end(w);
+    spdk_json_write_end(w);
+    fclose(f);
+    f = NULL;
+
+    std::unique_ptr<char, decltype(free)*> json_store(json, free);
+
+    rc = spdk_json_parse(json, json_size, NULL, 0, (void **)&end,
+            SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
+    if (rc < 0) {
+        pfs_etrace("Parsing JSON configuration failed (%zd)\n", rc);
+        goto err;
+    }
+
+    values.resize(rc);
+
+    rc = spdk_json_parse(json, json_size, values.data(), values.size(),
+             (void **)&end, SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
+    if (rc != values.size()) {
+        pfs_etrace("Parsing JSON configuration failed (%zd)\n", rc);
+        goto err;
+    }
+
+    rc = spdk_json_find_array(values.data(), "nvme", NULL, &nvme); 
+    if (rc) {
+        pfs_etrace("No 'nvme' key in JSON.\n");
+        goto err;
+    }
+
+    for (o = spdk_json_array_first(nvme); o; o = spdk_json_next(o)) {
+        rc = spdk_json_find_string(o, "pci_address", NULL, &v);
+        if (rc == 0) {
+            char *s = NULL;
+            rc = spdk_json_decode_string(v, &s);
+            if (rc == 0) {
+                address = s;
+                free(s);
+                break;
+            }
+        }
+    }
+
+    return address;
+}
+
+int
+pfs_get_pci_local_cpus(const std::string& pci_addr, cpu_set_t *set)
+{
+    size_t size = 0;
+    char *line = NULL; 
+    std::stack<uint32_t> local_cpus;
+    uint32_t mask;
+    int widx;
+    bool found = false;
+
+    if (pci_addr.empty())
+        return -1;
+
+    std::string sys_path=std::string("/sys/bus/pci/devices/") + pci_addr +
+        "/local_cpus"; 
+    FILE *fp = fopen(sys_path.c_str(), "r");
+    if (fp == NULL) {
+        return -1;
+    } 
+
+    if (getline(&line, &size, fp) == -1) {
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+
+    char *t, *p = line, *e = NULL;
+    while ((t = strsep(&p, ","))) {
+        mask = (uint32_t)strtol(t, &e, 16);
+        if (*e != '\0' && *e != '\n') {
+            pfs_etrace("can not pass cpu list\n");
+            return -1;
+        }
+        local_cpus.push(mask);
+    }
+
+    widx = 0;
+    while (!local_cpus.empty()) {
+        mask = local_cpus.top();
+        local_cpus.pop();
+        for (int i = 0; i < 32; ++i) {
+            if (mask & (1 << i)) {
+                int cpu = (widx * 32) + i;
+                CPU_SET(cpu, set);
+                found = true;
+            }
+        }
+        widx++;
+    }
+
+    if (found)
+        return 0;
+    return -1;
+}
+
+std::string
+pfs_cpuset_to_string(const cpu_set_t *mask)
+{
+    int i = 0, j = 0;
+    char buf[64];
+    std::string s;
+
+    for (i = 0; i < CPU_SETSIZE; i++) {
+        if (CPU_ISSET(i, mask)) {
+            int run = 0;
+            for (j = i + 1; j < CPU_SETSIZE; j++) {
+                if (CPU_ISSET(j, mask)) run++;
+                else break;
+            }
+            if (!run)
+                sprintf(buf, "%d,", i);
+            else if (run == 1) {
+                sprintf(buf, "%d,%d,", i, i + 1);
+                i++;
+            } else {
+                sprintf(buf, "%d-%d,", i, i + run);
+                i += run;
+            }
+            s += buf;
+        }
+    }
+    if (!s.empty()) {
+        s.pop_back(); // remove last ','
+    }
+    return s;
 }
 

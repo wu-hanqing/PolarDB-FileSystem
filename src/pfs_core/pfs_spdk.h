@@ -6,6 +6,9 @@
 #include <spdk/thread.h>
 #include <spdk/queue.h>
 
+#include <string>
+#include <sched.h>
+
 struct pfs_spdk_target {
     struct spdk_bdev_desc *desc;
     struct spdk_io_channel *channel;
@@ -42,6 +45,11 @@ void pfs_spdk_conf_set_env_context(const char *s);
 
 int pfs_spdk_setup(void);
 void pfs_spdk_cleanup(void);
+
+int pfs_get_pci_local_cpus(const std::string &pci_addr, cpu_set_t *set);
+std::string pfs_get_dev_pci_address(struct spdk_bdev *dev);
+int pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *set);
+std::string pfs_cpuset_to_string(const cpu_set_t *mask);
 
 class pfs_spdk_io_channel_guard {
 public:
