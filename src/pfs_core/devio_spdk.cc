@@ -25,6 +25,7 @@
 #include <string.h>
 #include <limits.h>
 #include <semaphore.h>
+#include <gflags/gflags.h>
 
 #include <spdk/env.h>
 #include <spdk/log.h>
@@ -38,6 +39,16 @@
 #include "pfs_option.h"
 #include "pfs_impl.h"
 #include "pfs_spdk.h"
+
+#define timespecadd(tsp, usp, vsp)                                      \
+    do {                                                            \
+        (vsp)->tv_sec = (tsp)->tv_sec + (usp)->tv_sec;          \
+        (vsp)->tv_nsec = (tsp)->tv_nsec + (usp)->tv_nsec;       \
+        if ((vsp)->tv_nsec >= 1000000000L) {                    \
+            (vsp)->tv_sec++;                                \
+            (vsp)->tv_nsec -= 1000000000L;                  \
+        }                                                       \
+    } while (0)
 
 typedef struct pfs_spdk_dev {
     /* must be first member */
@@ -90,6 +101,7 @@ struct bdev_open_param {
 };
 
 static const int64_t g_iodepth = 128;
+DEFINE_int32(pfs_spdk_driver_poll_delay, 10, "pfs spdk driver busy poll delay time(us)");
 
 static void pfs_spdk_dev_io_fini_pread(void *iocb);
 static void pfs_spdk_dev_io_fini_pwrite(void *iocb);
@@ -218,8 +230,8 @@ err_exit:
     param->rc = 0;
     sem_post(&param->sem);
 
-
     struct spdk_thread *spdk_thread = thread->spdk_thread;
+    struct timespec timeout = {0, FLAGS_pfs_spdk_driver_poll_delay * 1000};
     while (!dkdev->dk_stop) {
         while (__atomic_load_n(&dkdev->dk_jobs, __ATOMIC_RELAXED)) {
             spdk_thread_poll(spdk_thread, 0, spdk_get_ticks());
@@ -227,7 +239,7 @@ err_exit:
  
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += 1;
+        timespecadd(&ts, &timeout, &ts);
         sem_timedwait(&dkdev->dk_sem, &ts);
     }
  
