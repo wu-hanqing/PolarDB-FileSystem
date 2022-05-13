@@ -39,6 +39,22 @@
 #include "pfs_impl.h"
 #include "pfs_spdk.h"
 
+#define NWORKER 2
+
+typedef struct pfs_bdev_worker {
+    struct pfs_spdk_dev *dkdev;
+    struct pfs_spdk_thread *thread;
+    struct spdk_io_channel *ch;
+    int idx;
+    int rc;
+    int stop;
+    int jobs;
+    sem_t start_sem;
+    sem_t sem;
+    pthread_mutex_t msg_mutex;
+    pthread_t pthread;
+} pfs_bdev_worker_t;
+
 typedef struct pfs_spdk_dev {
     /* must be first member */
     pfs_dev_t   dk_base;
@@ -52,12 +68,10 @@ typedef struct pfs_spdk_dev {
     int         dk_has_cache;
     pthread_t   dk_pthread;
     struct pfs_spdk_thread *dk_thread;
-    struct spdk_io_channel *dk_ch;
     int         dk_stop;
     char        dk_path[128];
     sem_t       dk_sem;
-    int         dk_jobs;
-    pthread_mutex_t dk_msg_mutex;
+    pfs_bdev_worker_t dk_workers[NWORKER];
 } pfs_spdk_dev_t;
 
 typedef struct pfs_spdk_iocb {
@@ -68,6 +82,7 @@ typedef struct pfs_spdk_iocb {
     struct spdk_bdev_io_wait_entry bdev_io_wait;
     spdk_msg_fn io_done;
     struct pfs_spdk_ioq *ioq;
+    struct pfs_bdev_worker *worker;
 } pfs_spdk_iocb_t;
 
 typedef struct pfs_spdk_ioq {
@@ -81,6 +96,7 @@ typedef struct pfs_spdk_ioq {
     TAILQ_HEAD(, pfs_devio) dkq_complete_queue;
     struct buf_ring *dkq_done_q;
     sem_t       dkq_done_sem;
+    unsigned    dkq_id;
 } pfs_spdk_ioq_t;
 
 struct bdev_open_param {
@@ -116,6 +132,8 @@ pfs_spdk_dev_destroy_ioq(pfs_ioq_t *ioq)
 static pfs_ioq_t *
 pfs_spdk_dev_create_ioq(pfs_dev_t *dev)
 {
+    static unsigned ioq_id = 0;
+
     pfs_spdk_ioq_t *dkioq;
     void *p;
     int err;
@@ -138,6 +156,7 @@ pfs_spdk_dev_create_ioq(pfs_dev_t *dev)
 	    return NULL;
     }
     sem_init(&dkioq->dkq_done_sem, 0, 0);
+    dkioq->dkq_id = __atomic_fetch_add(&ioq_id, 1, __ATOMIC_RELAXED);
     return (pfs_ioq_t *)dkioq;
 }
 
@@ -174,20 +193,11 @@ bdev_thread_msg_loop(void *arg)
     if (err) {
         pfs_etrace("can not open spdk device %s, %s\n", dev->d_devname,
                    strerror(err));
-err_exit:
         param->rc = err;
         sem_post(&param->sem);
         return NULL;
     }
     dkdev->dk_bdev = spdk_bdev_desc_get_bdev(dkdev->dk_desc);
-    dkdev->dk_ch = pfs_get_spdk_io_channel(dkdev->dk_desc);
-    if (dkdev->dk_ch == NULL) {
-        pfs_etrace("can nnot get io channel of spdk device: %s\n",
-                  dev->d_devname);
-        spdk_bdev_close(dkdev->dk_desc);
-        err = ENOMEM;
-        goto err_exit;
-    }
     strncpy(dkdev->dk_path, dev->d_devname, sizeof(dkdev->dk_path));
     dkdev->dk_path[sizeof(dkdev->dk_path)-1] = 0;
     dkdev->dk_block_num = spdk_bdev_get_num_blocks(dkdev->dk_bdev);
@@ -218,21 +228,65 @@ err_exit:
     param->rc = 0;
     sem_post(&param->sem);
 
-
     struct spdk_thread *spdk_thread = thread->spdk_thread;
     while (!dkdev->dk_stop) {
-        while (__atomic_load_n(&dkdev->dk_jobs, __ATOMIC_RELAXED)) {
-            spdk_thread_poll(spdk_thread, 0, spdk_get_ticks());
-        }
- 
+        spdk_thread_poll(spdk_thread, 0, spdk_get_ticks());
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
         ts.tv_sec += 1;
         sem_timedwait(&dkdev->dk_sem, &ts);
     }
  
-    pfs_put_spdk_io_channel(dkdev->dk_ch);
     spdk_bdev_close(dkdev->dk_desc);
+
+    while (spdk_thread_poll(spdk_thread, 0, 0))
+        {}
+    return NULL;
+}
+
+void *
+bdev_thread_io_loop(void *arg)
+{
+    struct pfs_spdk_thread *thread = pfs_current_spdk_thread();
+    struct pfs_bdev_worker *worker = (struct pfs_bdev_worker *)arg;
+    pfs_spdk_dev_t *dkdev = worker->dkdev;
+    pfs_dev_t *dev = &dkdev->dk_base;
+    char thread_name[64];
+    int err = 0;
+
+    snprintf(thread_name, sizeof(thread_name), "pfs-devio-%s", dev->d_devname);
+    pthread_setname_np(pthread_self(), thread_name);
+    worker->rc = 0;
+    if (0) {
+err_exit:
+        worker->rc = err;
+        sem_post(&worker->start_sem);
+        return NULL;
+    }
+    worker->ch = pfs_get_spdk_io_channel(dkdev->dk_desc);
+    if (worker->ch == NULL) {
+        pfs_etrace("can nnot get io channel of spdk device: %s\n",
+                  dev->d_devname);
+        err = ENOMEM;
+        goto err_exit;
+    }
+    worker->rc = 0;
+    worker->thread = thread;
+    sem_post(&worker->start_sem);
+
+    struct spdk_thread *spdk_thread = thread->spdk_thread;
+    while (!worker->stop) {
+        while (__atomic_load_n(&worker->jobs, __ATOMIC_RELAXED)) {
+            spdk_thread_poll(spdk_thread, 0, spdk_get_ticks());
+        }
+ 
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += 1;
+        sem_timedwait(&worker->sem, &ts);
+    }
+ 
+    pfs_put_spdk_io_channel(worker->ch);
 
     while (spdk_thread_poll(spdk_thread, 0, 0))
         {}
@@ -252,18 +306,11 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
     param.rc = 0;
  
     dkdev->dk_stop = 0;
-    dkdev->dk_jobs = 0;
     sem_init(&dkdev->dk_sem, 0, 0);
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
-    pthread_mutex_init(&dkdev->dk_msg_mutex, &attr);
-    pthread_mutexattr_destroy(&attr);
     err = pthread_create(&dkdev->dk_pthread, NULL, bdev_thread_msg_loop,
                          &param);
     if (err) {
         sem_destroy(&dkdev->dk_sem);
-        pthread_mutex_destroy(&dkdev->dk_msg_mutex);
         pfs_etrace("can not create device msg thread %s, %s\n", dev->d_devname,
                    strerror(err));
         return -err;
@@ -274,6 +321,28 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
     if (param.rc) {
         pthread_join(dkdev->dk_pthread, NULL);
     }
+
+    for (int i = 0; i < NWORKER; ++i) {
+        struct pfs_bdev_worker *w = &dkdev->dk_workers[i];
+        memset(w, 0, sizeof(pfs_bdev_worker));
+        w->dkdev = dkdev;
+        w->idx = i;
+        sem_init(&w->start_sem, 0, 0);
+        sem_init(&w->sem, 0, 0);
+
+        pthread_mutexattr_t attr;
+        pthread_mutexattr_init(&attr);
+        pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
+        pthread_mutex_init(&w->msg_mutex, &attr);
+        pthread_mutexattr_destroy(&attr);
+
+        err = pthread_create(&w->pthread, NULL, bdev_thread_io_loop, w);
+        sem_wait(&w->start_sem);
+        if (w->rc) {
+            pfs_etrace("can not start worker %d", i);
+        }
+    }
+ 
     return -param.rc;
 }
 
@@ -289,7 +358,6 @@ pfs_spdk_dev_close(pfs_dev_t *dev)
     sem_post(&dkdev->dk_sem);
     pthread_join(dkdev->dk_pthread, NULL);
     sem_destroy(&dkdev->dk_sem);
-    pthread_mutex_destroy(&dkdev->dk_msg_mutex);
     return 0;
 }
 
@@ -373,7 +441,7 @@ pfs_spdk_dev_io_done(struct spdk_bdev_io *bdev_io,
     io->io_error = success ? 0 : -EIO;
     io->io_private = nullptr;
 
-    __atomic_sub_fetch(&iocb->dev->dk_jobs, 1, __ATOMIC_RELAXED);
+    __atomic_sub_fetch(&iocb->worker->jobs, 1, __ATOMIC_RELAXED);
     buf_ring_enqueue(dkioq->dkq_done_q, iocb);
     sem_post(&dkioq->dkq_done_sem);
     spdk_bdev_free_io(bdev_io);
@@ -398,19 +466,21 @@ static void
 pfs_spdk_dev_io_pread(void *arg)
 {
     pfs_spdk_iocb_t *iocb = (pfs_spdk_iocb_t *)arg;
+    pfs_bdev_worker *worker = iocb->worker;
+    spdk_io_channel *ch = worker->ch;
     pfs_spdk_dev_t *dkdev;
     pfs_devio_t *io;
     int rc;
 
     dkdev = iocb->dev;
     io = iocb->pfs_io;
-    rc = spdk_bdev_read(dkdev->dk_desc, dkdev->dk_ch, iocb->dma_buf,
+    rc = spdk_bdev_read(dkdev->dk_desc, ch, iocb->dma_buf,
         io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
     if (rc == ENOMEM) {
         iocb->bdev_io_wait.bdev = dkdev->dk_bdev;
         iocb->bdev_io_wait.cb_fn = pfs_spdk_dev_io_pread;
         iocb->bdev_io_wait.cb_arg = iocb;
-        spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ch,
+        spdk_bdev_queue_io_wait(dkdev->dk_bdev, ch,
                                 &iocb->bdev_io_wait);
     } else if (rc) {
         spdk_dma_free(iocb->dma_buf);
@@ -458,19 +528,21 @@ static void
 pfs_spdk_dev_io_pwrite(void *arg)
 {
     pfs_spdk_iocb_t *iocb = (pfs_spdk_iocb_t *)arg;
+    pfs_bdev_worker *worker = iocb->worker;
+    spdk_io_channel *ch = worker->ch;
     pfs_spdk_dev_t *dkdev;
     pfs_devio_t *io;
     int rc;
 
     dkdev = iocb->dev;
     io = iocb->pfs_io;
-    rc = spdk_bdev_write(dkdev->dk_desc, dkdev->dk_ch, iocb->dma_buf, io->io_bda,
+    rc = spdk_bdev_write(dkdev->dk_desc, ch, iocb->dma_buf, io->io_bda,
               io->io_len, pfs_spdk_dev_io_done, iocb);
     if (rc == ENOMEM) {
         iocb->bdev_io_wait.bdev = dkdev->dk_bdev;
         iocb->bdev_io_wait.cb_fn = pfs_spdk_dev_io_pwrite;
         iocb->bdev_io_wait.cb_arg = iocb;
-        spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ch,
+        spdk_bdev_queue_io_wait(dkdev->dk_bdev, ch,
                                 &iocb->bdev_io_wait);
     } else if (rc) {
         SPDK_ERRLOG("%s error while writting to bdev: %d\n", 
@@ -510,19 +582,21 @@ static void
 pfs_spdk_dev_io_trim(void *arg)
 {
     pfs_spdk_iocb_t *iocb = (pfs_spdk_iocb_t *)arg;
+    pfs_bdev_worker *worker = iocb->worker;
+    spdk_io_channel *ch = worker->ch;
     pfs_spdk_dev_t *dkdev;
     pfs_devio_t *io;
     int rc;
 
     dkdev = iocb->dev;
     io = iocb->pfs_io;
-    rc = spdk_bdev_unmap(dkdev->dk_desc, dkdev->dk_ch, io->io_bda, io->io_len,
+    rc = spdk_bdev_unmap(dkdev->dk_desc, ch, io->io_bda, io->io_len,
             pfs_spdk_dev_io_done, iocb);                 
      if (rc == ENOMEM) {
         iocb->bdev_io_wait.bdev = dkdev->dk_bdev;
         iocb->bdev_io_wait.cb_fn = pfs_spdk_dev_io_trim;
         iocb->bdev_io_wait.cb_arg = iocb;
-        spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ch,
+        spdk_bdev_queue_io_wait(dkdev->dk_bdev, ch,
                                 &iocb->bdev_io_wait);
     } else if (rc) {
         SPDK_ERRLOG("%s error while trimming bdev: %d\n", 
@@ -559,17 +633,19 @@ static void
 pfs_spdk_dev_io_flush(void *arg)
 {
     pfs_spdk_iocb_t *iocb = (pfs_spdk_iocb_t *)arg;
+    pfs_bdev_worker *worker = iocb->worker;
+    spdk_io_channel *ch = worker->ch;
     pfs_spdk_dev_t *dkdev;
     int rc;
 
     dkdev = iocb->dev;
-    rc = spdk_bdev_flush(dkdev->dk_desc, dkdev->dk_ch, 0, dkdev->dk_size,
+    rc = spdk_bdev_flush(dkdev->dk_desc, ch, 0, dkdev->dk_size,
             pfs_spdk_dev_io_done, iocb);
     if (rc == ENOMEM) {
         iocb->bdev_io_wait.bdev = dkdev->dk_bdev;
         iocb->bdev_io_wait.cb_fn = pfs_spdk_dev_io_flush;
         iocb->bdev_io_wait.cb_arg = iocb;
-        spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ch,
+        spdk_bdev_queue_io_wait(dkdev->dk_bdev, ch,
                                 &iocb->bdev_io_wait);
     } else if (rc) {
         SPDK_ERRLOG("%s error while flushing bdev: %d\n", 
@@ -597,11 +673,15 @@ pfs_spdk_dev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
     pfs_spdk_iocb_t *iocb = nullptr;
     spdk_msg_fn fn = nullptr;
     int err = 0, count = 0;
+    pfs_bdev_worker_t *worker;
+
+    worker = &dkdev->dk_workers[dkioq->dkq_id & (NWORKER-1)];
 
     iocb = (pfs_spdk_iocb_t *)calloc(1, sizeof(pfs_spdk_iocb_t));
     iocb->pfs_io = io;
     iocb->ioq = dkioq;
     iocb->dev = dkdev;
+    iocb->worker = worker;
     io->io_private = iocb;
     io->io_error = PFSDEV_IO_DFTERR;
     pfs_spdk_dev_enq_inflight_io(dkioq, io);
@@ -639,21 +719,21 @@ pfs_spdk_dev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
         PFS_ASSERT("unsupported io type" == NULL);
     }
 
-    __atomic_fetch_add(&dkdev->dk_jobs, 1, __ATOMIC_RELAXED);
-    pthread_mutex_lock(&dkdev->dk_msg_mutex);
-    err = spdk_thread_send_msg(dkdev->dk_thread->spdk_thread, fn, iocb);
-    pthread_mutex_unlock(&dkdev->dk_msg_mutex);
+    __atomic_fetch_add(&worker->jobs, 1, __ATOMIC_RELAXED);
+    pthread_mutex_lock(&worker->msg_mutex);
+    err = spdk_thread_send_msg(worker->thread->spdk_thread, fn, iocb);
+    pthread_mutex_unlock(&worker->msg_mutex);
     while (err == -ENOMEM) {
         pfs_etrace("%s spdk_thread_send_msg failed, retrying\n", __func__);
         usleep(1000);
-   	pthread_mutex_lock(&dkdev->dk_msg_mutex);
-        err = spdk_thread_send_msg(dkdev->dk_thread->spdk_thread, fn, iocb);
-    	pthread_mutex_unlock(&dkdev->dk_msg_mutex);
+        pthread_mutex_lock(&worker->msg_mutex);
+        err = spdk_thread_send_msg(worker->thread->spdk_thread, fn, iocb);
+    	pthread_mutex_unlock(&worker->msg_mutex);
     }
     __atomic_thread_fence(__ATOMIC_ACQ_REL);
-    sem_getvalue(&dkdev->dk_sem, &count);
+    sem_getvalue(&worker->sem, &count);
     if (!count)
-        sem_post(&dkdev->dk_sem);
+        sem_post(&worker->sem);
 
     if (err) {
 fail:
