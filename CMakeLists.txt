@@ -138,7 +138,7 @@ set(CURVE_LIBS -lcbd -lcurve_client -lcurve_common -lcurve_auth -lcurve_concurre
 set(COMMON_FLAGS
   -fno-strict-aliasing
   #-fstack-protector
-  -fsanitize=address
+  #-fsanitize=address
   #-DEV_STANDALONE
   -Wall
   -Werror
