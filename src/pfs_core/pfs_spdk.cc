@@ -3,6 +3,7 @@
 #include "pfs_spdk.h"
 #include "pfs_trace.h"
 #include "pfs_memory.h"
+#include "pfs_impl.h"
 
 #include <semaphore.h>
 #include <memory>
@@ -659,6 +660,7 @@ pfs_spdk_thread_scope::pfs_spdk_thread_scope(const char *name)
 {
     if (!(origin_ = spdk_get_thread())) {
         thread_ = spdk_thread_create(name, NULL);
+        PFS_ASSERT(thread_ != NULL);
         spdk_set_thread(thread_);
     } else {
         thread_ = origin_;
