@@ -113,6 +113,8 @@ DEFINE_int32(pfs_spdk_driver_poll_delay, 10,
   "pfs spdk driver busy poll delay time(us)");
 DEFINE_bool(pfs_spdk_driver_auto_cpu_bind, false,
   "pfs spdk driver auto bind thread to cpus which are nearest to pci device");
+DEFINE_string(pfs_spdk_driver_cpu_bind, "", 
+  "pfs spdk driver should bind to this cpu set");
 
 #define PFS_MAX_CACHED_SPDK_IOCB        128
 static __thread SLIST_HEAD(, pfs_spdk_iocb) tls_free_iocb = {NULL};
@@ -214,6 +216,60 @@ bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
     return;
 }
 
+static int
+bdev_thread_bind_cpuset(const char *thread_name, pfs_spdk_dev_t *dkdev)
+{
+    pfs_dev_t *dev = &dkdev->dk_base;
+    cpu_set_t cpuset;
+    int err = 0;
+
+    if (FLAGS_pfs_spdk_driver_auto_cpu_bind) {
+        if (pfs_get_dev_local_cpus(dkdev->dk_bdev, &cpuset) == 0) {
+set_it:
+            std::string cpuset_str = pfs_cpuset_to_string(&cpuset);
+            err = rte_thread_set_affinity(&cpuset);
+            if (err == 0) {
+                pfs_itrace("bind thread %s to cpuset : %s", thread_name,
+                        cpuset_str.c_str());
+            } else {
+                pfs_etrace("cannot bind thread %s to cpuset: %s", thread_name,
+                        cpuset_str.c_str());
+                err = -1;
+            }
+        } else {
+            pfs_etrace("cannot get device %s's local cpu set", dev->d_devname);
+        }
+    } else if (!FLAGS_pfs_spdk_driver_cpu_bind.empty()) {
+        std::string &s = FLAGS_pfs_spdk_driver_cpu_bind;
+        auto pos = s.find(dev->d_devname);
+        if (pos != std::string::npos) {
+            pos += strlen(dev->d_devname);
+            if (s[pos] != '@') {
+                pfs_etrace("%s cannot find ':' for %s in %s", __func__,
+                     dev->d_devname, s.c_str());
+                err = -1;
+            } else {
+                pos++;
+                auto pos2 = s.find(';', pos);
+                std::string substr;
+                if (pos2 != std::string::npos)
+                    substr = s.substr(pos2-pos);
+                else
+                    substr = s.substr(pos);
+
+                if (pfs_parse_set(substr.c_str(), &cpuset) == substr.length())
+                    goto set_it;
+                else {
+                    pfs_etrace("%s, can not parse %s", __func__, substr.c_str());
+                    err = -1;
+                }
+            }
+        }
+    }
+
+    return err;
+}
+
 static void *
 bdev_thread_msg_loop(void *arg)
 {
@@ -221,7 +277,6 @@ bdev_thread_msg_loop(void *arg)
     struct bdev_open_param *param = (struct bdev_open_param *)arg;
     pfs_spdk_dev_t *dkdev = param->dkdev;
     pfs_dev_t *dev = &dkdev->dk_base;
-    cpu_set_t cpuset;
     char thread_name[64];
     int err;
 
@@ -260,21 +315,7 @@ err_exit:
                dev->d_devname, dkdev->dk_block_num, dkdev->dk_block_size,
                dkdev->dk_unit_size, dkdev->dk_has_cache);
 
-    if (FLAGS_pfs_spdk_driver_auto_cpu_bind &&
-        pfs_get_dev_local_cpus(dkdev->dk_bdev, &cpuset) == 0) {
-        std::string cpuset_str = pfs_cpuset_to_string(&cpuset);
-        err = rte_thread_set_affinity(&cpuset);
-        if (err == 0) {
-            pfs_itrace("bind %s thread to cpuset : %s", thread_name,
-                cpuset_str.c_str());
-        } else {
-            pfs_etrace("can not bind %s thread to cpuset: %s", thread_name,
-                cpuset_str.c_str());
-        }
-    } else {
-        pfs_etrace("can not get device %s's thread local cpuset",
-            dev->d_devname);
-    }
+    bdev_thread_bind_cpuset(thread_name, dkdev);
 
     param->rc = 0;
     sem_post(&param->sem);
