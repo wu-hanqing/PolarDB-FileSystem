@@ -1,3 +1,5 @@
+/* vim: set ts=4 sw=4 expandtab: */
+
 #include "pfs_spdk.h"
 #include "pfs_trace.h"
 #include "pfs_memory.h"
@@ -8,7 +10,12 @@
 #include <vector>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <gflags/gflags.h>
+#include <dpdk/rte_config.h>
+#include <dpdk/rte_os.h>
+#include <dpdk/rte_common.h>
+
 #include <spdk/init.h>
 #include <spdk/env.h>
 #include <spdk/string.h>
@@ -37,26 +44,17 @@ DEFINE_string(spdk_log_flags, "", "spdk log flags");
 DEFINE_int32(spdk_log_level, SPDK_LOG_INFO, "spdk log level");
 DEFINE_int32(spdk_log_print_level, SPDK_LOG_INFO, "spdk log level");
 
-static pthread_mutex_t g_pfs_mtx = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t g_init_mtx = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t g_init_cond;
-static bool g_poll_loop = true;
+static bool g_poll_stop = false;
+static sem_t g_sem;
 static pthread_t g_init_thread_id;
 static int g_spdk_env_initialized;
 
 struct init_param {
     sem_t sem;
-    int rc;
+    int   rc;
 };
 
 #define POLLING_TIMEOUT 1000000000ULL
-static __thread bool g_pfs_thread = false;
-static TAILQ_HEAD(, pfs_spdk_thread) g_gc_threads =
-    TAILQ_HEAD_INITIALIZER(g_gc_threads);
-static TAILQ_HEAD(, pfs_spdk_thread) g_pfs_threads =
-    TAILQ_HEAD_INITIALIZER(g_pfs_threads);
-
-static void pfs_spdk_bdev_close_targets(void *arg);
 
 static void
 bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
@@ -64,19 +62,6 @@ bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 {
     pfs_etrace("Unsupported bdev event: type %d\n", type);
     return;
-}
-
-static void init_target(struct pfs_spdk_target *t)
-{
-    t->desc = nullptr;
-    t->channel = nullptr;
-    t->ref = 0;
-    t->closed = 0;
-}
-
-static void fini_thread(struct pfs_spdk_thread *t)
-{
-    pthread_mutex_destroy(&t->mtx);
 }
 
 static void
@@ -160,176 +145,19 @@ pfs_spdk_bdev_init_start(void *arg)
 static int
 pfs_spdk_schedule_thread(struct spdk_thread *spdk_thread)
 {
-    struct pfs_spdk_thread *thread;
-
-    thread = (struct pfs_spdk_thread *) spdk_thread_get_ctx(spdk_thread);
-    memset(thread, 0, sizeof(*thread));
-    TAILQ_INIT(&thread->targets);
-    pthread_mutex_init(&thread->mtx, NULL);
-
-    if (!g_pfs_thread) {
-        /* Do nothing. */
-        return 0;
-    }
-
-    pthread_mutex_lock(&g_pfs_mtx);
-    thread->on_pfs_list = 1;
-    TAILQ_INSERT_TAIL(&g_pfs_threads, thread, link);
-    pthread_mutex_unlock(&g_pfs_mtx);
-
-    return 0;
-}
-
-static int
-pfs_spdk_init_thread(struct pfs_spdk_thread **td, bool pfs)
-{
-    struct pfs_spdk_thread *thread;
-    struct spdk_thread *spdk_thread;
-
-    g_pfs_thread = pfs; 
-    spdk_thread = spdk_thread_create(pfs? "pfs_thread" : "", NULL);
-    g_pfs_thread = false;
-    if (!spdk_thread) {
-        SPDK_ERRLOG("failed to allocate thread\n");
-        return -1;
-    }
-
-    thread = (pfs_spdk_thread *)spdk_thread_get_ctx(spdk_thread);
-    /* thread is already initialized by pfs_spdk_schedule_thread */
-    thread->spdk_thread = spdk_thread;
-
-    spdk_set_thread(spdk_thread);
-    *td = thread;
     return 0;
 }
 
 static void
-pfs_spdk_cleanup_thread(struct pfs_spdk_thread *thread)
-{
-    pthread_mutex_lock(&g_pfs_mtx);
-    if (thread->on_pfs_list) {
-        TAILQ_REMOVE(&g_pfs_threads, thread, link);
-        thread->on_pfs_list = 0;
-    }
-    pthread_mutex_unlock(&g_pfs_mtx);
-    
-    spdk_thread_send_msg(thread->spdk_thread, pfs_spdk_bdev_close_targets,
-        thread);
-
-    pthread_mutex_lock(&g_init_mtx);
-    TAILQ_INSERT_TAIL(&g_gc_threads, thread, link);
-    pthread_mutex_unlock(&g_init_mtx);
-}
-
-struct pfs_spdk_thread *pfs_current_spdk_thread(void)
-{
-    struct spdk_thread *spdk_td = spdk_get_thread();
-    struct pfs_spdk_thread *pfs_td;
-
-    if (spdk_td == NULL) {
-        if (pfs_spdk_init_thread(&pfs_td, true)) {
-            return NULL;
-        }
-    } else {
-        pfs_td = (pfs_spdk_thread *)spdk_thread_get_ctx(spdk_td);
-    }
-    return pfs_td;
-}
-
-struct spdk_io_channel* pfs_get_spdk_io_channel(struct spdk_bdev_desc *desc)
-{
-    struct pfs_spdk_thread *thread = pfs_current_spdk_thread();
-    struct pfs_spdk_target *target;
-
-    pthread_mutex_lock(&thread->mtx);
-    TAILQ_FOREACH(target, &thread->targets, link) {
-        if (target->desc == desc) {
-            target->ref++;
-            pthread_mutex_unlock(&thread->mtx);
-            return target->channel;
-        }
-    }
-
-    target = (struct pfs_spdk_target *)
-        pfs_mem_malloc(sizeof(*target), M_SPDK_TARGET);
-    if (target == NULL) {
-        pthread_mutex_unlock(&thread->mtx);
-        return NULL;
-    }
-    init_target(target);
-
-    struct spdk_io_channel* ch = spdk_bdev_get_io_channel(desc);
-    if (ch == NULL) {
-        pthread_mutex_unlock(&thread->mtx);
-        SPDK_ERRLOG("can not get io channel\n");
-        pfs_mem_free(target, M_SPDK_TARGET);
-        return NULL;
-    }
-
-    target->desc = desc;
-    target->channel = ch;
-    target->ref = 1;
-    TAILQ_INSERT_HEAD(&thread->targets, target, link);
-    pthread_mutex_unlock(&thread->mtx);
-    return ch;
-}
-
-int pfs_put_spdk_io_channel(struct spdk_io_channel *ch)
-{
-    struct pfs_spdk_thread *thread = pfs_current_spdk_thread();
-    struct pfs_spdk_target *target, *tmp;
-    int rc = -EINVAL;
-
-    pthread_mutex_lock(&thread->mtx);
-    TAILQ_FOREACH_SAFE(target, &thread->targets, link, tmp) {
-        if (target->channel == ch) {
-            target->ref--;
-            if (target->ref == 0 && target->closed) {
-                spdk_put_io_channel(target->channel);
-                TAILQ_REMOVE(&thread->targets, target, link);
-                pfs_mem_free(target, M_SPDK_TARGET);
-            }
-            rc = 0;
-            break;
-        }
-    }
-    pthread_mutex_unlock(&thread->mtx);
-    return rc;
-}
-
-size_t
-pfs_spdk_poll_thread(struct pfs_spdk_thread *thread)
-{
-    return spdk_thread_poll(thread->spdk_thread, 0, 0);
-}
-
-static void
-pfs_spdk_bdev_close_targets(void *arg)
-{
-    struct pfs_spdk_thread *thread = (struct pfs_spdk_thread *)arg;
-    struct pfs_spdk_target *target, *tmp;
-
-    TAILQ_FOREACH_SAFE(target, &thread->targets, link, tmp) {
-        if (target->ref != 0) {
-            pfs_etrace("target ref is not zero, should put io channel before thread exiting\n");
-        }
-
-        TAILQ_REMOVE(&thread->targets, target, link);
-        spdk_put_io_channel(target->channel);
-        pfs_mem_free(target, M_SPDK_TARGET);
-    }
-}
-
-static void
-pfs_spdk_calc_timeout(struct pfs_spdk_thread *thread, struct timespec *ts)
+pfs_spdk_calc_timeout(struct spdk_thread *thread, struct timespec *ts)
 {
     uint64_t timeout, now;
 
-    if (spdk_thread_has_active_pollers(thread->spdk_thread)) {
+    if (spdk_thread_has_active_pollers(thread)) {
         return;
     }
 
-    timeout = spdk_thread_next_poller_expiration(thread->spdk_thread);
+    timeout = spdk_thread_next_poller_expiration(thread);
     now = spdk_get_ticks();
 
     if (timeout == 0) {
@@ -359,95 +187,48 @@ pfs_spdk_bdev_fini_start(void *arg)
     spdk_subsystem_fini(pfs_spdk_bdev_fini_done, done);
 }
 
-static void *thread_poll_loop(void *arg)
+static void *
+subsys_thread_poll_loop(void *arg)
 {
-    struct pfs_spdk_thread *mytd = (struct pfs_spdk_thread *)arg;
-    struct pfs_spdk_thread *thread, *tmp;
+    pfs_spdk_thread_scope spdk_scope((struct spdk_thread *)arg);
+    struct spdk_thread *spdk_thread = spdk_scope.thread();
     struct timespec ts;
     int rc;
     bool done;
 
     pthread_setname_np(pthread_self(), "pfs_spdk_gc");
 
-    spdk_set_thread(mytd->spdk_thread);
-    while (g_poll_loop) {
-        pfs_spdk_poll_thread(mytd);
-
-        pthread_mutex_lock(&g_init_mtx);
-        if (!TAILQ_EMPTY(&g_gc_threads)) {
-            TAILQ_FOREACH_SAFE(thread, &g_gc_threads, link, tmp) {
-                if (spdk_thread_is_exited(thread->spdk_thread)) {
-                    TAILQ_REMOVE(&g_gc_threads, thread, link);
-                    fini_thread(thread);
-                    spdk_thread_destroy(thread->spdk_thread);
-                } else {
-                    pfs_spdk_poll_thread(thread);
-                }
-            }
-
-            /* If there are exiting threads to poll, don't sleep. */
-            pthread_mutex_unlock(&g_init_mtx);
-            continue;
-        }
+    while (!g_poll_stop) {
+        spdk_thread_poll(spdk_thread, 0, 0);
 
         /* Figure out how long to sleep. */
         clock_gettime(CLOCK_REALTIME, &ts);
-        pfs_spdk_calc_timeout(mytd, &ts);
+ 
+        pfs_spdk_calc_timeout(spdk_thread, &ts);
 
-        rc = pthread_cond_timedwait(&g_init_cond, &g_init_mtx, &ts);
-        pthread_mutex_unlock(&g_init_mtx);
-
-        if (rc != ETIMEDOUT) {
-            break;
-        }
+        sem_timedwait(&g_sem, &ts);
     }
-
-    pfs_spdk_cleanup_thread(mytd);
 
     /* Finalize the bdev layer */
     done = false;
-    spdk_thread_send_msg(mytd->spdk_thread, pfs_spdk_bdev_fini_start, &done);
+    spdk_thread_send_msg(spdk_thread, pfs_spdk_bdev_fini_start, &done);
 
     do {
-        TAILQ_FOREACH_SAFE(thread, &g_gc_threads, link, tmp) {
-            pfs_spdk_poll_thread(thread);
-        }
+        spdk_thread_poll(spdk_thread, 0, 0);
     } while (!done);
 
     pfs_itrace("spdk bdev subsystem is shutdown now");
-
-    /* Now exit all the threads */
-    TAILQ_FOREACH(thread, &g_gc_threads, link) {
-        spdk_set_thread(thread->spdk_thread);
-        spdk_thread_exit(thread->spdk_thread);
-        spdk_set_thread(NULL);
-    }
-
-    /* And wait for them to gracefully exit */
-    while (!TAILQ_EMPTY(&g_gc_threads)) {
-        TAILQ_FOREACH_SAFE(thread, &g_gc_threads, link, tmp) {
-            if (spdk_thread_is_exited(thread->spdk_thread)) {
-                TAILQ_REMOVE(&g_gc_threads, thread, link);
-                fini_thread(thread);
-                spdk_thread_destroy(thread->spdk_thread);
-            } else {
-                spdk_thread_poll(thread->spdk_thread, 0, 0);
-            }
-        }
-    }
-
-    pthread_exit(NULL);
+    return NULL;
 }
 
 static int
 pfs_spdk_init_env(void)
 {
     struct spdk_env_opts    opts;
-    struct pfs_spdk_thread  *mytd, *thread, *tmp;
-    struct spdk_thread  *spdk_thread;
-    bool                done;
-    int                 rc;
-    struct timespec     ts;
+    struct spdk_thread      *spdk_thread;
+    bool                    done;
+    int                     rc;
+    struct timespec         ts;
 
     memset(&opts, 0, sizeof(opts));
     spdk_env_opts_init(&opts);
@@ -458,10 +239,7 @@ pfs_spdk_init_env(void)
         return -1;
     }
 
-    spdk_unaffinitize_thread();
-
     if (!FLAGS_spdk_log_flags.empty()) {
-        // duplicate string
         std::unique_ptr<char, decltype(free)*>
             store(strdup(FLAGS_spdk_log_flags.c_str()), free);
         char *log_flags = store.get();
@@ -473,38 +251,26 @@ pfs_spdk_init_env(void)
                 return -1;
             }
         } while ((tok = strtok(NULL, ",")) != NULL);
-#ifdef DEBUG
-        spdk_log_set_print_level(SPDK_LOG_DEBUG);
-#endif
     }
 
     spdk_thread_lib_init(pfs_spdk_schedule_thread,
         sizeof(struct pfs_spdk_thread));
 
-    /* Create an SPDK thread temporarily */
-    rc = pfs_spdk_init_thread(&mytd, false);
-    if (rc < 0) {
-        pfs_etrace("Failed to create initialization thread\n");
-        return rc;
-    }
+    pfs_spdk_thread_scope spdk_scope;
 
-    spdk_thread = mytd->spdk_thread;
+    spdk_thread = spdk_scope.thread();
     /* Initialize the bdev layer */
     done = false;
     spdk_thread_send_msg(spdk_thread, pfs_spdk_bdev_init_start, &done);
 
     do {
-        pfs_spdk_poll_thread(mytd);
+        spdk_thread_poll(spdk_thread, 0, 0);
     } while (!done);
 
-    /*
-     * Continue polling until there are no more events.
-     * This handles any final events posted by pollers.
-     */
-    while (pfs_spdk_poll_thread(mytd) > 0) {}
+    spdk_scope.detach();
 
-    spdk_set_thread(NULL);
-    rc = pthread_create(&g_init_thread_id, NULL, thread_poll_loop, mytd);
+    rc = pthread_create(&g_init_thread_id, NULL, subsys_thread_poll_loop,
+            spdk_thread);
     if (rc) {
         fprintf(stderr, "can not create spdk thread poll thread\n");
         abort();
@@ -517,31 +283,34 @@ int
 pfs_spdk_setup(void)
 {
     static pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
+    int err = 0;
 
     spdk_log_set_level((spdk_log_level)FLAGS_spdk_log_level);
     spdk_log_set_print_level((spdk_log_level)FLAGS_spdk_log_print_level);
 
     pthread_mutex_lock(&init_mutex);
     if (!g_spdk_env_initialized) {
+        sem_init(&g_sem, 0, 0);
         if (pfs_spdk_init_env()) {
-            SPDK_ERRLOG("failed to initialize\n");
+            pfs_etrace("failed to initialize\n");
             pthread_mutex_unlock(&init_mutex);
             return -1;
+        } else {
+            g_spdk_env_initialized = true;
+            err = 0;
         }
-
-        g_spdk_env_initialized = true;
-	    atexit(pfs_spdk_cleanup);
     }
     pthread_mutex_unlock(&init_mutex);
 
     pfs_itrace("found devices:\n");
     struct spdk_bdev *bdev;
     for (bdev = spdk_bdev_first(); bdev; bdev = spdk_bdev_next(bdev)) {
-         pfs_itrace("\t name: %s, size: %ld",
-	     spdk_bdev_get_name(bdev),
-             spdk_bdev_get_num_blocks(bdev) * spdk_bdev_get_block_size(bdev));
+        pfs_itrace("\t name: %s, size: %ld",
+                spdk_bdev_get_name(bdev),
+                spdk_bdev_get_num_blocks(bdev) * spdk_bdev_get_block_size(bdev));
     }
-    return 0;
+
+    return err;
 }
 
 void
@@ -550,55 +319,18 @@ pfs_spdk_cleanup(void)
     struct timespec ts;
     int rc;
 
-    g_poll_loop = false;
-    pfs_exit_spdk_thread();
-
+    g_poll_stop = true;
+    sem_post(&g_sem);
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_sec += 5;
     rc = pthread_timedjoin_np(g_init_thread_id, NULL, &ts);
     if (rc) {
-	    printf("can not join spdk polling thread, %s\n", strerror(rc));
+        printf("can not join spdk polling thread, %s\n", strerror(rc));
     } else {
+        g_spdk_env_initialized = false;
         spdk_env_fini();
         spdk_log_close();
     }
-}
-
-static void
-pfs_recycle_thread_io_channels(struct pfs_spdk_thread *thread,
-    struct spdk_bdev_desc *desc)
-{
-    struct pfs_spdk_target *target, *tmp;
-    struct spdk_thread *origin = spdk_get_thread();
-
-    spdk_set_thread(thread->spdk_thread);
-    pthread_mutex_lock(&thread->mtx);
-    TAILQ_FOREACH_SAFE(target, &thread->targets, link, tmp) {
-        if (target->desc == desc) {
-            if (!thread->exited && target->ref != 0) {
-                target->closed = 1;
-            } else {
-                TAILQ_REMOVE(&thread->targets, target, link);
-                spdk_put_io_channel(target->channel);
-                pfs_mem_free(target, M_SPDK_TARGET);
-            }
-        }
-    }
-    pthread_mutex_unlock(&thread->mtx);
-    spdk_set_thread(origin);
-}
-
-void pfs_exit_spdk_thread(void)
-{
-    struct spdk_thread *spdk_td = spdk_get_thread();
-    struct pfs_spdk_thread *pfs_td;
-
-    if (spdk_td == NULL)
-        return;
-    pfs_td = (pfs_spdk_thread *)spdk_thread_get_ctx(spdk_td);
-    pfs_td->exited = 1;
-    spdk_set_thread(NULL);
-    pfs_spdk_cleanup_thread(pfs_td);
 }
 
 /* functions for mkfs */
@@ -641,11 +373,11 @@ pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *set)
 static int
 json_write_cb(void *cb_ctx, const void *data, size_t size)
 {
-	FILE *f = (FILE*) cb_ctx;
-	size_t rc;
+    FILE *f = (FILE*) cb_ctx;
+    size_t rc;
 
-	rc = fwrite(data, 1, size, f);
-	return rc == size ? 0 : -1;
+    rc = fwrite(data, 1, size, f);
+    return rc == size ? 0 : -1;
 }
 
 std::string 
@@ -800,3 +532,159 @@ pfs_cpuset_to_string(const cpu_set_t *mask)
     return s;
 }
 
+/*
+ * Parse elem, the elem could be single number/range or '(' ')' group
+ * 1) A single number elem, it's just a simple digit. e.g. 9
+ * 2) A single range elem, two digits with a '-' between. e.g. 2-6
+ * 3) A group elem, combines multiple 1) or 2) with '( )'. e.g (0,2-4,6)
+ *    Within group elem, '-' used for a range separator;
+ *                       ',' used for a single number.
+ */
+int
+pfs_parse_set(const char *input, rte_cpuset_t *set)
+{
+    unsigned idx;
+    const char *str = input;
+    char *end = NULL;
+    unsigned min, max;
+
+    CPU_ZERO(set);
+
+    while (isblank(*str))
+        str++;
+
+    /* only digit or left bracket is qualify for start point */
+    if ((!isdigit(*str) && *str != '(') || *str == '\0')
+        return -1;
+
+    /* process single number or single range of number */
+    if (*str != '(') {
+        errno = 0;
+        idx = strtoul(str, &end, 10);
+        if (errno || end == NULL || idx >= CPU_SETSIZE)
+            return -1;
+        else {
+            while (isblank(*end))
+                end++;
+
+            min = idx;
+            max = idx;
+            if (*end == '-') {
+                /* process single <number>-<number> */
+                end++;
+                while (isblank(*end))
+                    end++;
+                if (!isdigit(*end))
+                    return -1;
+
+                errno = 0;
+                idx = strtoul(end, &end, 10);
+                if (errno || end == NULL || idx >= CPU_SETSIZE)
+                    return -1;
+                max = idx;
+                while (isblank(*end))
+                    end++;
+                if (*end != ',' && *end != '\0')
+                    return -1;
+            }
+
+            if (*end != ',' && *end != '\0' &&
+                    *end != '@')
+                return -1;
+
+            for (idx = RTE_MIN(min, max);
+                    idx <= RTE_MAX(min, max); idx++)
+                CPU_SET(idx, set);
+
+            return end - input;
+        }
+    }
+
+    /* process set within bracket */
+    str++;
+    while (isblank(*str))
+        str++;
+    if (*str == '\0')
+        return -1;
+
+    min = RTE_MAX_LCORE;
+    do {
+
+        /* go ahead to the first digit */
+        while (isblank(*str))
+            str++;
+        if (!isdigit(*str))
+            return -1;
+
+        /* get the digit value */
+        errno = 0;
+        idx = strtoul(str, &end, 10);
+        if (errno || end == NULL || idx >= CPU_SETSIZE)
+            return -1;
+
+        /* go ahead to separator '-',',' and ')' */
+        while (isblank(*end))
+            end++;
+        if (*end == '-') {
+            if (min == RTE_MAX_LCORE)
+                min = idx;
+            else /* avoid continuous '-' */
+                return -1;
+        } else if ((*end == ',') || (*end == ')')) {
+            max = idx;
+            if (min == RTE_MAX_LCORE)
+                min = idx;
+            for (idx = RTE_MIN(min, max);
+                    idx <= RTE_MAX(min, max); idx++)
+                CPU_SET(idx, set);
+
+            min = RTE_MAX_LCORE;
+        } else
+            return -1;
+
+        str = end + 1;
+    } while (*end != '\0' && *end != ')');
+
+    /*
+     * to avoid failure that tail blank makes end character check fail
+     * in eal_parse_lcores( )
+     */
+    while (isblank(*str))
+        str++;
+
+    return str - input;
+}
+
+pfs_spdk_thread_scope::pfs_spdk_thread_scope(const char *name)
+{
+    if (!(origin_ = spdk_get_thread())) {
+        thread_ = spdk_thread_create(name, NULL);
+        spdk_set_thread(thread_);
+    } else {
+        thread_ = origin_;
+    }
+}
+
+pfs_spdk_thread_scope::pfs_spdk_thread_scope(struct spdk_thread *thread)
+{
+    origin_ = spdk_get_thread();
+    thread_ = thread;
+    spdk_set_thread(thread_);
+}
+
+pfs_spdk_thread_scope::~pfs_spdk_thread_scope()
+{
+    if (origin_ != thread_) {
+        spdk_thread_exit(thread_);
+        while (!spdk_thread_is_exited(thread_))
+            spdk_thread_poll(thread_, 0, 0);
+        spdk_thread_destroy(thread_);
+        spdk_set_thread(origin_);
+    }
+}
+
+void
+pfs_spdk_thread_scope::detach()
+{
+    origin_ = thread_;
+}

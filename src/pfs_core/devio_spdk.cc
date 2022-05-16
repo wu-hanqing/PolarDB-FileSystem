@@ -66,7 +66,7 @@ typedef struct pfs_spdk_dev {
     uint32_t    dk_unit_size;
     int         dk_has_cache;
     pthread_t   dk_pthread;
-    struct pfs_spdk_thread *dk_thread;
+    struct spdk_thread     *dk_thread;
     struct spdk_io_channel *dk_ioch;
     int         dk_stop;
     sem_t       dk_sem;
@@ -273,7 +273,8 @@ set_it:
 static void *
 bdev_thread_msg_loop(void *arg)
 {
-    struct pfs_spdk_thread *thread = pfs_current_spdk_thread();
+    pfs_spdk_thread_scope spdk_scope;
+    struct spdk_thread *spdk_thread = spdk_scope.thread();
     struct bdev_open_param *param = (struct bdev_open_param *)arg;
     pfs_spdk_dev_t *dkdev = param->dkdev;
     pfs_dev_t *dev = &dkdev->dk_base;
@@ -293,7 +294,7 @@ err_exit:
         return NULL;
     }
     dkdev->dk_bdev = spdk_bdev_desc_get_bdev(dkdev->dk_desc);
-    dkdev->dk_ioch = pfs_get_spdk_io_channel(dkdev->dk_desc);
+    dkdev->dk_ioch = spdk_bdev_get_io_channel(dkdev->dk_desc);
     if (dkdev->dk_ioch == NULL) {
         pfs_etrace("can not get io channel of spdk device: %s\n",
             dev->d_devname);
@@ -306,7 +307,7 @@ err_exit:
     dkdev->dk_block_num = spdk_bdev_get_num_blocks(dkdev->dk_bdev);
     dkdev->dk_block_size = spdk_bdev_get_block_size(dkdev->dk_bdev);
     dkdev->dk_unit_size = spdk_bdev_get_write_unit_size(dkdev->dk_bdev);
-    dkdev->dk_thread = thread;
+    dkdev->dk_thread = spdk_thread;
     dkdev->dk_sectsz = dkdev->dk_unit_size * dkdev->dk_block_size;
     dkdev->dk_has_cache = spdk_bdev_has_write_cache(dkdev->dk_bdev);
     dkdev->dk_size = dkdev->dk_block_num * dkdev->dk_block_size;
@@ -320,7 +321,6 @@ err_exit:
     param->rc = 0;
     sem_post(&param->sem);
 
-    struct spdk_thread *spdk_thread = thread->spdk_thread;
     struct timespec timeout = {0, FLAGS_pfs_spdk_driver_poll_delay * 1000};
     while (!dkdev->dk_stop) {
         pfs_spdk_dev_pull_iocb(dkdev);
@@ -339,11 +339,9 @@ err_exit:
         }
     }
  
-    pfs_put_spdk_io_channel(dkdev->dk_ioch);
+    spdk_put_io_channel(dkdev->dk_ioch);
     spdk_bdev_close(dkdev->dk_desc);
 
-    while (spdk_thread_poll(spdk_thread, 0, 0))
-        {}
     return NULL;
 }
 
@@ -709,7 +707,7 @@ pfs_spdk_dev_send_iocb(pfs_spdk_dev_t *dkdev,
     pfs_spdk_iocb_t *iocb)
 {
     pfs_spdk_iocb_t *head;
-    int count;
+    int count = 0;
 
     iocb->cb_io_op = fn;
     head = __atomic_load_n(&dkdev->dk_incoming, __ATOMIC_RELAXED);

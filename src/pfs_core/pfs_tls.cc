@@ -77,10 +77,8 @@ pfs_tls_destroy(void *data)
 	pfs_tls_t *tls = (pfs_tls_t *)data;
 	pfs_ioq_t *ioq;
 
-	if (tls == NULL) {
-		pfs_exit_spdk_thread();
+	if (tls == NULL)
 		return;
-	}
 	/*
 	 * NOTE: never call get_current_tls() in this func!
 	 * or we will get a new tls, rather than the "tls" refered to
@@ -95,7 +93,6 @@ pfs_tls_destroy(void *data)
 	}
 	pfs_mem_free(tls, M_TLS);
 	pfs_mntstat_nthreads_change(-1);
-	pfs_exit_spdk_thread();
 	pfsdev_exit_thread();
 }
 
