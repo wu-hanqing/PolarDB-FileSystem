@@ -144,14 +144,14 @@ pfsdev_type(const char *cluster, const char *devname)
 	/* local disk */
 	if (strcmp(cluster, CL_DISK) == 0)
 		return PFS_DEV_DISK;
-    if (strcmp(cluster, CL_CURVE) == 0)
-        return PFS_DEV_CURVE;
-    if (strcmp(cluster, CL_CURVE2) == 0)
-        return PFS_DEV_CURVE2;
-    if (strcmp(cluster, CL_CURVE2) == 0)
-        return PFS_DEV_CURVE2;
-    if (strcmp(cluster, CL_SPDK) == 0)
-        return PFS_DEV_SPDK;
+	if (strcmp(cluster, CL_CURVE) == 0)
+		return PFS_DEV_CURVE;
+	if (strcmp(cluster, CL_CURVE2) == 0)
+		return PFS_DEV_CURVE2;
+	if (strcmp(cluster, CL_CURVE2) == 0)
+		return PFS_DEV_CURVE2;
+	if (strcmp(cluster, CL_SPDK) == 0)
+		return PFS_DEV_SPDK;
 
 #ifndef PFS_DISK_IO_ONLY
 	/* polarstore PBD */
