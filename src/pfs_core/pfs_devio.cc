@@ -28,9 +28,14 @@
 #include "pfs_stat.h"
 #include "pfs_config.h"
 
+#define PFS_MAX_CACHED_DEVIO 128
+
 uint64_t		pfs_devs_epoch;
 pfs_dev_t		*pfs_devs[PFS_MAX_NCHD];
 pthread_mutex_t		pfs_devs_mtx;
+
+static __thread SLIST_HEAD(, pfs_devio) tls_free_devio = {NULL};
+static int __thread tls_free_devio_num = 0;
 
 /* disable iostat by default */
 static int64_t		devstat_enable = PFS_OPT_DISABLE;
@@ -47,11 +52,12 @@ static struct pfs_devops *pfs_dev_ops[] = {
 #endif
 	//&pfs_pangudev_ops,
 	&pfs_diskdev_ops,
-    &pfs_spdk_dev_ops,
+	&pfs_spdk_dev_ops,
 	NULL,
 };
 
-static void 	pfs_io_destroy(pfs_devio_t *io);
+static pfs_devio_t *pfs_io_alloc(void);
+static void pfs_io_destroy(pfs_devio_t *io);
 
 static inline int
 pfs_dev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
@@ -396,10 +402,7 @@ pfs_io_create(pfs_dev_t *dev, int op, void *buf, size_t len, uint64_t bda,
 {
 	pfs_devio_t *io;
 
-	io = (pfs_devio_t *)pfs_mem_malloc(sizeof(*io), M_DEV_IO);
-	PFS_VERIFY(io != NULL);
-
-	memset(io, 0, sizeof(*io));
+	io = pfs_io_alloc();
 	io->io_dev = dev;
 	io->io_buf = buf;
 	io->io_len = len;
@@ -416,14 +419,35 @@ pfs_io_create(pfs_dev_t *dev, int op, void *buf, size_t len, uint64_t bda,
 	return io;
 }
 
+static pfs_devio_t *
+pfs_io_alloc(void)
+{
+	pfs_devio_t *io;
+
+	io = SLIST_FIRST(&tls_free_devio);
+	if (io) {
+		SLIST_REMOVE_HEAD(&tls_free_devio, io_free);
+		tls_free_devio_num--;
+		memset(io, 0, sizeof(*io));
+		return io;
+	}
+	io = (pfs_devio_t *)pfs_mem_malloc(sizeof(*io), M_DEV_IO);
+	PFS_VERIFY(io != NULL);
+	return io;
+}
+
 static void
 pfs_io_destroy(pfs_devio_t *io)
 {
 	PFS_ASSERT(io->io_private == NULL);	/* no held private info */
 	PFS_ASSERT(io->io_queue != NULL);	/* each io must be submitted */
 
-	io->io_queue = NULL;
-	pfs_mem_free(io, M_DEV_IO);
+	if (tls_free_devio_num < PFS_MAX_CACHED_DEVIO) {
+		SLIST_INSERT_HEAD(&tls_free_devio, io, io_free);
+		tls_free_devio_num++;
+	} else {
+		pfs_mem_free(io, M_DEV_IO);
+	}
 }
 
 int
@@ -653,4 +677,17 @@ pfsdev_trace_pbdname(const char *cluster, const char *pbdname)
 	default:
 		return NULL;
 	}
+}
+
+void
+pfsdev_exit_thread(void)
+{
+	pfs_devio_t *io;
+
+	while ((io = SLIST_FIRST(&tls_free_devio))) {
+		SLIST_REMOVE_HEAD(&tls_free_devio, io_free);
+		pfs_mem_free(io, M_DEV_IO);
+	}
+	tls_free_devio_num = 0;
+	pfsdev_exit_thread_spdk_drv();
 }

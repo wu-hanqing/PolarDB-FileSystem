@@ -1,3 +1,4 @@
+/* vim: set ts=4 sw=4 expandtab: */
 /*
  *  Copyright (c) 2022 NetEase Inc.
  *
@@ -31,7 +32,8 @@
 #include <spdk/log.h>
 #include <spdk/string.h>
 #include <dpdk/rte_memcpy.h>
-#include <common/buf_ring.h>
+#include <dpdk/rte_thread.h>
+#include <dpdk/rte_pause.h>
 
 #include "pfs_trace.h"
 #include "pfs_devio.h"
@@ -40,15 +42,17 @@
 #include "pfs_impl.h"
 #include "pfs_spdk.h"
 
-#define timespecadd(tsp, usp, vsp)                                      \
-    do {                                                            \
+#define timespecadd(tsp, usp, vsp)                              \
+    do {                                                        \
         (vsp)->tv_sec = (tsp)->tv_sec + (usp)->tv_sec;          \
         (vsp)->tv_nsec = (tsp)->tv_nsec + (usp)->tv_nsec;       \
         if ((vsp)->tv_nsec >= 1000000000L) {                    \
-            (vsp)->tv_sec++;                                \
-            (vsp)->tv_nsec -= 1000000000L;                  \
+            (vsp)->tv_sec++;                                    \
+            (vsp)->tv_nsec -= 1000000000L;                      \
         }                                                       \
     } while (0)
+
+typedef struct pfs_spdk_iocb pfs_spdk_iocb_t;
 
 typedef struct pfs_spdk_dev {
     /* must be first member */
@@ -63,23 +67,27 @@ typedef struct pfs_spdk_dev {
     int         dk_has_cache;
     pthread_t   dk_pthread;
     struct pfs_spdk_thread *dk_thread;
-    struct spdk_io_channel *dk_ch;
+    struct spdk_io_channel *dk_ioch;
     int         dk_stop;
-    char        dk_path[128];
     sem_t       dk_sem;
     int         dk_jobs;
-    pthread_mutex_t dk_msg_mutex;
+    pfs_spdk_iocb_t *dk_incoming;
+    char        dk_path[128];
 } pfs_spdk_dev_t;
 
-typedef struct pfs_spdk_iocb {
-    pfs_devio_t            *pfs_io;
-    void                   *dma_buf;
-    pfs_spdk_dev_t         *dev;
-    struct pfs_spdk_thread *src_thread;
-    struct spdk_bdev_io_wait_entry bdev_io_wait;
-    spdk_msg_fn io_done;
-    struct pfs_spdk_ioq *ioq;
-} pfs_spdk_iocb_t;
+struct pfs_spdk_iocb {
+    pfs_devio_t             *cb_pfs_io;
+    void                    *cb_dma_buf;
+    pfs_spdk_dev_t          *cb_dev;
+    struct pfs_spdk_ioq     *cb_ioq;
+    spdk_msg_fn             cb_io_op;
+    spdk_msg_fn             cb_io_done;
+    union {
+        SLIST_ENTRY(pfs_spdk_iocb) cb_free;
+        pfs_spdk_iocb_t *cb_next;
+    };
+    struct spdk_bdev_io_wait_entry cb_bdev_io_wait;
+};
 
 typedef struct pfs_spdk_ioq {
     /* must be first member */
@@ -90,7 +98,7 @@ typedef struct pfs_spdk_ioq {
     int         dkq_complete_count;
     TAILQ_HEAD(, pfs_devio) dkq_inflight_queue;
     TAILQ_HEAD(, pfs_devio) dkq_complete_queue;
-    struct buf_ring *dkq_done_q;
+    pfs_spdk_iocb_t *dkq_done_q;
     sem_t       dkq_done_sem;
 } pfs_spdk_ioq_t;
 
@@ -101,12 +109,56 @@ struct bdev_open_param {
 };
 
 static const int64_t g_iodepth = 128;
-DEFINE_int32(pfs_spdk_driver_poll_delay, 10, "pfs spdk driver busy poll delay time(us)");
+DEFINE_int32(pfs_spdk_driver_poll_delay, 10,
+  "pfs spdk driver busy poll delay time(us)");
+DEFINE_bool(pfs_spdk_driver_auto_cpu_bind, false,
+  "pfs spdk driver auto bind thread to cpus which are nearest to pci device");
+
+#define PFS_MAX_CACHED_SPDK_IOCB        128
+static __thread SLIST_HEAD(, pfs_spdk_iocb) tls_free_iocb = {NULL};
+static __thread int tls_free_iocb_num = 0;
 
 static void pfs_spdk_dev_io_fini_pread(void *iocb);
 static void pfs_spdk_dev_io_fini_pwrite(void *iocb);
 static void pfs_spdk_dev_io_fini_trim(void *iocb);
 static void pfs_spdk_dev_io_fini_flush(void *iocb);
+static void pfs_spdk_dev_pull_iocb(pfs_spdk_dev_t *dkdev);
+
+static pfs_spdk_iocb_t *
+pfs_spdk_dev_alloc_iocb(void)
+{
+    pfs_spdk_iocb_t *iocb = NULL;
+    void *p = NULL;
+    int err = -1;
+
+    /* try to get it from local cache */
+    iocb = SLIST_FIRST(&tls_free_iocb);
+    if (iocb != NULL) {
+        SLIST_REMOVE_HEAD(&tls_free_iocb, cb_free);
+        tls_free_iocb_num--;
+    } else {
+        /* allocate it by malloc from global heap */
+        err = pfs_mem_memalign(&p, 64, sizeof(*iocb), M_SPDK_IOCB);
+        if (err) {
+            pfs_etrace("%s: create iocb failed, %s\n", __func__, strerror(err));
+            return NULL;
+        }
+        iocb = (pfs_spdk_iocb_t *)p;
+    }
+    memset(iocb, 0, sizeof(*iocb));
+    return iocb;
+}
+
+static void
+pfs_spdk_dev_free_iocb(pfs_spdk_iocb_t *iocb)
+{
+    if (tls_free_iocb_num < PFS_MAX_CACHED_SPDK_IOCB) {
+        SLIST_INSERT_HEAD(&tls_free_iocb, iocb, cb_free);
+        tls_free_iocb_num++;
+    } else {
+        pfs_mem_free(iocb, M_SPDK_IOCB);
+    }
+}
 
 static void
 pfs_spdk_dev_destroy_ioq(pfs_ioq_t *ioq)
@@ -120,7 +172,6 @@ pfs_spdk_dev_destroy_ioq(pfs_ioq_t *ioq)
     PFS_ASSERT(dkioq->dkq_complete_count == 0);
     PFS_ASSERT(TAILQ_EMPTY(&dkioq->dkq_complete_queue));
 
-    buf_ring_free(dkioq->dkq_done_q);
     sem_destroy(&dkioq->dkq_done_sem);
     pfs_mem_free(dkioq, M_SPDK_DEV_IOQ);
 }
@@ -128,8 +179,8 @@ pfs_spdk_dev_destroy_ioq(pfs_ioq_t *ioq)
 static pfs_ioq_t *
 pfs_spdk_dev_create_ioq(pfs_dev_t *dev)
 {
-    pfs_spdk_ioq_t *dkioq;
-    void *p;
+    pfs_spdk_ioq_t *dkioq = NULL;
+    void *p = NULL;
     int err;
 
     err = pfs_mem_memalign(&p, 64, sizeof(*dkioq), M_SPDK_DEV_IOQ);
@@ -137,18 +188,13 @@ pfs_spdk_dev_create_ioq(pfs_dev_t *dev)
         pfs_etrace("create disk ioq failed: %d, %s\n", strerror(err));
         return NULL;
     }
+    memset(p, 0, sizeof(*dkioq));
     dkioq = (pfs_spdk_ioq_t *)p;
     dkioq->dkq_destroy = pfs_spdk_dev_destroy_ioq;
     dkioq->dkq_inflight_count = 0;
     dkioq->dkq_complete_count = 0;
     TAILQ_INIT(&dkioq->dkq_inflight_queue);
     TAILQ_INIT(&dkioq->dkq_complete_queue);
-    dkioq->dkq_done_q = buf_ring_alloc(g_iodepth);
-    if (dkioq->dkq_done_q == NULL) {
-        pfs_etrace("create buf_ring failed, ENOMEM\n");
-	    pfs_mem_free(p, M_SPDK_DEV_IOQ);
-	    return NULL;
-    }
     sem_init(&dkioq->dkq_done_sem, 0, 0);
     return (pfs_ioq_t *)dkioq;
 }
@@ -157,7 +203,7 @@ static bool
 pfs_spdk_dev_need_throttle(pfs_dev_t *dev, pfs_ioq_t *ioq)
 {
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)ioq;
-    return (dkioq->dkq_inflight_count >= g_iodepth-10);
+    return (dkioq->dkq_inflight_count >= g_iodepth);
 }
 
 static void
@@ -192,10 +238,10 @@ err_exit:
         return NULL;
     }
     dkdev->dk_bdev = spdk_bdev_desc_get_bdev(dkdev->dk_desc);
-    dkdev->dk_ch = pfs_get_spdk_io_channel(dkdev->dk_desc);
-    if (dkdev->dk_ch == NULL) {
-        pfs_etrace("can nnot get io channel of spdk device: %s\n",
-                  dev->d_devname);
+    dkdev->dk_ioch = pfs_get_spdk_io_channel(dkdev->dk_desc);
+    if (dkdev->dk_ioch == NULL) {
+        pfs_etrace("can not get io channel of spdk device: %s\n",
+            dev->d_devname);
         spdk_bdev_close(dkdev->dk_desc);
         err = ENOMEM;
         goto err_exit;
@@ -209,22 +255,25 @@ err_exit:
     dkdev->dk_sectsz = dkdev->dk_unit_size * dkdev->dk_block_size;
     dkdev->dk_has_cache = spdk_bdev_has_write_cache(dkdev->dk_bdev);
     dkdev->dk_size = dkdev->dk_block_num * dkdev->dk_block_size;
-    pfs_itrace("spdk device: '%s', block_num:%ld, "
+    pfs_itrace("open spdk device: '%s', block_num:%ld, "
                "block_size: %d, write_unit_size: %d, has_cache: %d\n",
                dev->d_devname, dkdev->dk_block_num, dkdev->dk_block_size,
                dkdev->dk_unit_size, dkdev->dk_has_cache);
 
-    if (pfs_get_dev_local_cpus(dkdev->dk_bdev, &cpuset) == 0) {
-        std::string tmp = pfs_cpuset_to_string(&cpuset);
-        err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t),
-            &cpuset);
+    if (FLAGS_pfs_spdk_driver_auto_cpu_bind &&
+        pfs_get_dev_local_cpus(dkdev->dk_bdev, &cpuset) == 0) {
+        std::string cpuset_str = pfs_cpuset_to_string(&cpuset);
+        err = rte_thread_set_affinity(&cpuset);
         if (err == 0) {
-            pfs_itrace("bind %s thread to cpuset : %s", thread_name, tmp.c_str());
+            pfs_itrace("bind %s thread to cpuset : %s", thread_name,
+                cpuset_str.c_str());
         } else {
-            pfs_etrace("can not bind %s thread to cpuset: %s", thread_name, tmp.c_str());
+            pfs_etrace("can not bind %s thread to cpuset: %s", thread_name,
+                cpuset_str.c_str());
         }
     } else {
-        pfs_etrace("can not get device %s's thread local cpuset", dev->d_devname);
+        pfs_etrace("can not get device %s's thread local cpuset",
+            dev->d_devname);
     }
 
     param->rc = 0;
@@ -233,17 +282,23 @@ err_exit:
     struct spdk_thread *spdk_thread = thread->spdk_thread;
     struct timespec timeout = {0, FLAGS_pfs_spdk_driver_poll_delay * 1000};
     while (!dkdev->dk_stop) {
-        while (__atomic_load_n(&dkdev->dk_jobs, __ATOMIC_RELAXED)) {
+        pfs_spdk_dev_pull_iocb(dkdev);
+        while (dkdev->dk_jobs != 0) {
             spdk_thread_poll(spdk_thread, 0, spdk_get_ticks());
+            pfs_spdk_dev_pull_iocb(dkdev);
         }
  
-        struct timespec ts;
-        clock_gettime(CLOCK_REALTIME, &ts);
-        timespecadd(&ts, &timeout, &ts);
-        sem_timedwait(&dkdev->dk_sem, &ts);
+        if (timeout.tv_nsec == 0) {
+            sem_trywait(&dkdev->dk_sem);
+        } else {
+            struct timespec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            timespecadd(&ts, &timeout, &ts);
+            sem_timedwait(&dkdev->dk_sem, &ts);
+        }
     }
  
-    pfs_put_spdk_io_channel(dkdev->dk_ch);
+    pfs_put_spdk_io_channel(dkdev->dk_ioch);
     spdk_bdev_close(dkdev->dk_desc);
 
     while (spdk_thread_poll(spdk_thread, 0, 0))
@@ -266,16 +321,10 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
     dkdev->dk_stop = 0;
     dkdev->dk_jobs = 0;
     sem_init(&dkdev->dk_sem, 0, 0);
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
-    pthread_mutex_init(&dkdev->dk_msg_mutex, &attr);
-    pthread_mutexattr_destroy(&attr);
     err = pthread_create(&dkdev->dk_pthread, NULL, bdev_thread_msg_loop,
                          &param);
     if (err) {
         sem_destroy(&dkdev->dk_sem);
-        pthread_mutex_destroy(&dkdev->dk_msg_mutex);
         pfs_etrace("can not create device msg thread %s, %s\n", dev->d_devname,
                    strerror(err));
         return -err;
@@ -301,7 +350,6 @@ pfs_spdk_dev_close(pfs_dev_t *dev)
     sem_post(&dkdev->dk_sem);
     pthread_join(dkdev->dk_pthread, NULL);
     sem_destroy(&dkdev->dk_sem);
-    pthread_mutex_destroy(&dkdev->dk_msg_mutex);
     return 0;
 }
 
@@ -344,28 +392,28 @@ pfs_spdk_dev_dio_aligned(pfs_spdk_dev_t *dkdev, uint64_t val)
     return (val & (dkdev->dk_sectsz-1)) == 0;
 }
 
-static void
+static inline void
 pfs_spdk_dev_enq_inflight_io(pfs_spdk_ioq_t *dkioq, pfs_devio_t *io)
 {
     TAILQ_INSERT_TAIL(&dkioq->dkq_inflight_queue, io, io_next);
     dkioq->dkq_inflight_count++;
 }
 
-static void
+static inline void
 pfs_spdk_dev_deq_inflight_io(pfs_spdk_ioq_t *dkioq, pfs_devio_t *io)
 {
     TAILQ_REMOVE(&dkioq->dkq_inflight_queue, io, io_next);
     dkioq->dkq_inflight_count--;
 }
 
-static void
+static inline void
 pfs_spdk_dev_enq_complete_io(pfs_spdk_ioq_t *dkioq, pfs_devio_t *io)
 {
     TAILQ_INSERT_TAIL(&dkioq->dkq_complete_queue, io, io_next);
     dkioq->dkq_complete_count++;
 }
 
-static void
+static inline void
 pfs_spdk_dev_deq_complete_io(pfs_spdk_ioq_t *dkioq, pfs_devio_t *io)
 {
     TAILQ_REMOVE(&dkioq->dkq_complete_queue, io, io_next);
@@ -377,17 +425,30 @@ pfs_spdk_dev_io_done(struct spdk_bdev_io *bdev_io,
     bool success, void *cb_arg)                                                  
 {
     pfs_spdk_iocb_t *iocb = (pfs_spdk_iocb_t *)cb_arg;
-    pfs_devio_t *io = iocb->pfs_io;
-    pfs_spdk_ioq_t *dkioq = iocb->ioq;
-    int err;
+    pfs_spdk_iocb_t *tmp = NULL;
+    pfs_devio_t *io = iocb->cb_pfs_io;
+    pfs_spdk_ioq_t *dkioq = iocb->cb_ioq;
+    int count;
 
     PFS_ASSERT(io->io_error == PFSDEV_IO_DFTERR);
     io->io_error = success ? 0 : -EIO;
     io->io_private = nullptr;
 
-    __atomic_sub_fetch(&iocb->dev->dk_jobs, 1, __ATOMIC_RELAXED);
-    buf_ring_enqueue(dkioq->dkq_done_q, iocb);
-    sem_post(&dkioq->dkq_done_sem);
+    iocb->cb_dev->dk_jobs--;
+    tmp = __atomic_load_n(&dkioq->dkq_done_q, __ATOMIC_RELAXED);
+    for (;;) {
+        iocb->cb_next = tmp;
+        if (__atomic_compare_exchange_n(&dkioq->dkq_done_q, &tmp, iocb,
+                false, __ATOMIC_RELEASE, __ATOMIC_RELAXED)) {
+            break;
+        }
+        rte_pause();
+    }
+
+    /* This works like WIN32 event, we don't repeatly set semaphore */
+    sem_getvalue(&dkioq->dkq_done_sem, &count);
+    if (count == 0)
+        sem_post(&dkioq->dkq_done_sem);
     spdk_bdev_free_io(bdev_io);
 }
 
@@ -398,11 +459,11 @@ pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
-    iocb->dma_buf = spdk_dma_malloc(io->io_len, 4096, NULL);
-    if (iocb->dma_buf == NULL) {
+    iocb->cb_dma_buf = spdk_dma_malloc(io->io_len, 4096, NULL);
+    if (iocb->cb_dma_buf == NULL) {
         return -ENOMEM;
     }
-    iocb->io_done = pfs_spdk_dev_io_fini_pread;
+    iocb->cb_io_done = pfs_spdk_dev_io_fini_pread;
     return 0;
 }
 
@@ -414,19 +475,19 @@ pfs_spdk_dev_io_pread(void *arg)
     pfs_devio_t *io;
     int rc;
 
-    dkdev = iocb->dev;
-    io = iocb->pfs_io;
-    rc = spdk_bdev_read(dkdev->dk_desc, dkdev->dk_ch, iocb->dma_buf,
+    dkdev = iocb->cb_dev;
+    io = iocb->cb_pfs_io;
+    rc = spdk_bdev_read(dkdev->dk_desc, dkdev->dk_ioch, iocb->cb_dma_buf,
         io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
     if (rc == ENOMEM) {
-        iocb->bdev_io_wait.bdev = dkdev->dk_bdev;
-        iocb->bdev_io_wait.cb_fn = pfs_spdk_dev_io_pread;
-        iocb->bdev_io_wait.cb_arg = iocb;
-        spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ch,
-                                &iocb->bdev_io_wait);
+        iocb->cb_bdev_io_wait.bdev = dkdev->dk_bdev;
+        iocb->cb_bdev_io_wait.cb_fn = pfs_spdk_dev_io_pread;
+        iocb->cb_bdev_io_wait.cb_arg = iocb;
+        spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ioch,
+                                &iocb->cb_bdev_io_wait);
     } else if (rc) {
-        spdk_dma_free(iocb->dma_buf);
-        SPDK_ERRLOG("%s error while reading from bdev: %d\n", 
+        spdk_dma_free(iocb->cb_dma_buf);
+        pfs_etrace("%s error while reading from bdev: %d\n",
             spdk_strerror(-rc), rc);
         abort();
     }
@@ -436,16 +497,16 @@ static void
 pfs_spdk_dev_io_fini_pread(void *arg)
 {
     pfs_spdk_iocb_t *iocb = (pfs_spdk_iocb_t *)arg;
-    pfs_devio_t *io = iocb->pfs_io;
+    pfs_devio_t *io = iocb->cb_pfs_io;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)io->io_queue;
     if (io->io_error == 0) {
-            rte_memcpy(io->io_buf, iocb->dma_buf, io->io_len);
+            rte_memcpy(io->io_buf, iocb->cb_dma_buf, io->io_len);
     }
     pfs_spdk_dev_deq_inflight_io(dkioq, io);
     pfs_spdk_dev_enq_complete_io(dkioq, io);
 
-    spdk_dma_free(iocb->dma_buf);
-    free(iocb);
+    spdk_dma_free(iocb->cb_dma_buf);
+    pfs_spdk_dev_free_iocb(iocb);
 }
 
 static int
@@ -457,12 +518,12 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
-    iocb->dma_buf = spdk_dma_malloc(io->io_len, 4096, NULL);
-    if (iocb->dma_buf == NULL) {
+    iocb->cb_dma_buf = spdk_dma_malloc(io->io_len, 4096, NULL);
+    if (iocb->cb_dma_buf == NULL) {
         return -ENOMEM;
     }
-    rte_memcpy(iocb->dma_buf, io->io_buf, io->io_len);
-    iocb->io_done = pfs_spdk_dev_io_fini_pwrite;
+    rte_memcpy(iocb->cb_dma_buf, io->io_buf, io->io_len);
+    iocb->cb_io_done = pfs_spdk_dev_io_fini_pwrite;
     return 0;
 }
 
@@ -474,20 +535,20 @@ pfs_spdk_dev_io_pwrite(void *arg)
     pfs_devio_t *io;
     int rc;
 
-    dkdev = iocb->dev;
-    io = iocb->pfs_io;
-    rc = spdk_bdev_write(dkdev->dk_desc, dkdev->dk_ch, iocb->dma_buf, io->io_bda,
-              io->io_len, pfs_spdk_dev_io_done, iocb);
+    dkdev = iocb->cb_dev;
+    io = iocb->cb_pfs_io;
+    rc = spdk_bdev_write(dkdev->dk_desc, dkdev->dk_ioch, iocb->cb_dma_buf,
+        io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
     if (rc == ENOMEM) {
-        iocb->bdev_io_wait.bdev = dkdev->dk_bdev;
-        iocb->bdev_io_wait.cb_fn = pfs_spdk_dev_io_pwrite;
-        iocb->bdev_io_wait.cb_arg = iocb;
-        spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ch,
-                                &iocb->bdev_io_wait);
+        iocb->cb_bdev_io_wait.bdev = dkdev->dk_bdev;
+        iocb->cb_bdev_io_wait.cb_fn = pfs_spdk_dev_io_pwrite;
+        iocb->cb_bdev_io_wait.cb_arg = iocb;
+        spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ioch,
+                                &iocb->cb_bdev_io_wait);
     } else if (rc) {
-        SPDK_ERRLOG("%s error while writting to bdev: %d\n", 
+        pfs_etrace("%s error while writting to bdev: %d\n",
             spdk_strerror(-rc), rc);
-        spdk_dma_free(iocb->dma_buf);
+        spdk_dma_free(iocb->cb_dma_buf);
         abort();
     }
 }
@@ -496,13 +557,13 @@ static void
 pfs_spdk_dev_io_fini_pwrite(void *arg)
 {
     pfs_spdk_iocb_t *iocb = (pfs_spdk_iocb_t *)arg;
-    pfs_devio_t *io = iocb->pfs_io;
+    pfs_devio_t *io = iocb->cb_pfs_io;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)io->io_queue;
     pfs_spdk_dev_deq_inflight_io(dkioq, io);
     pfs_spdk_dev_enq_complete_io(dkioq, io);
 
-    spdk_dma_free(iocb->dma_buf);
-    free(iocb);
+    spdk_dma_free(iocb->cb_dma_buf);
+    pfs_spdk_dev_free_iocb(iocb);
 }
 
 static int
@@ -514,7 +575,7 @@ pfs_spdk_dev_io_prep_trim(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
-    iocb->io_done = pfs_spdk_dev_io_fini_trim;
+    iocb->cb_io_done = pfs_spdk_dev_io_fini_trim;
     return 0;
 }
 
@@ -526,18 +587,18 @@ pfs_spdk_dev_io_trim(void *arg)
     pfs_devio_t *io;
     int rc;
 
-    dkdev = iocb->dev;
-    io = iocb->pfs_io;
-    rc = spdk_bdev_unmap(dkdev->dk_desc, dkdev->dk_ch, io->io_bda, io->io_len,
-            pfs_spdk_dev_io_done, iocb);                 
+    dkdev = iocb->cb_dev;
+    io = iocb->cb_pfs_io;
+    rc = spdk_bdev_unmap(dkdev->dk_desc, dkdev->dk_ioch, io->io_bda,
+            io->io_len, pfs_spdk_dev_io_done, iocb);
      if (rc == ENOMEM) {
-        iocb->bdev_io_wait.bdev = dkdev->dk_bdev;
-        iocb->bdev_io_wait.cb_fn = pfs_spdk_dev_io_trim;
-        iocb->bdev_io_wait.cb_arg = iocb;
-        spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ch,
-                                &iocb->bdev_io_wait);
+        iocb->cb_bdev_io_wait.bdev = dkdev->dk_bdev;
+        iocb->cb_bdev_io_wait.cb_fn = pfs_spdk_dev_io_trim;
+        iocb->cb_bdev_io_wait.cb_arg = iocb;
+        spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ioch,
+                                &iocb->cb_bdev_io_wait);
     } else if (rc) {
-        SPDK_ERRLOG("%s error while trimming bdev: %d\n", 
+        pfs_etrace("%s error while trimming bdev: %d\n",
             spdk_strerror(-rc), rc);
         abort();
     }
@@ -547,11 +608,11 @@ static void
 pfs_spdk_dev_io_fini_trim(void *arg)
 {
     pfs_spdk_iocb_t *iocb = (pfs_spdk_iocb_t *)arg;
-    pfs_devio_t *io = iocb->pfs_io;
+    pfs_devio_t *io = iocb->cb_pfs_io;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)io->io_queue;
     pfs_spdk_dev_deq_inflight_io(dkioq, io);
     pfs_spdk_dev_enq_complete_io(dkioq, io);
-    free(iocb);
+    pfs_spdk_dev_free_iocb(iocb);
 }
 
 static int
@@ -563,7 +624,7 @@ pfs_spdk_dev_io_prep_flush(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
-    iocb->io_done = pfs_spdk_dev_io_fini_flush;
+    iocb->cb_io_done = pfs_spdk_dev_io_fini_flush;
     return 0;
 }
 
@@ -574,17 +635,17 @@ pfs_spdk_dev_io_flush(void *arg)
     pfs_spdk_dev_t *dkdev;
     int rc;
 
-    dkdev = iocb->dev;
-    rc = spdk_bdev_flush(dkdev->dk_desc, dkdev->dk_ch, 0, dkdev->dk_size,
+    dkdev = iocb->cb_dev;
+    rc = spdk_bdev_flush(dkdev->dk_desc, dkdev->dk_ioch, 0, dkdev->dk_size,
             pfs_spdk_dev_io_done, iocb);
     if (rc == ENOMEM) {
-        iocb->bdev_io_wait.bdev = dkdev->dk_bdev;
-        iocb->bdev_io_wait.cb_fn = pfs_spdk_dev_io_flush;
-        iocb->bdev_io_wait.cb_arg = iocb;
-        spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ch,
-                                &iocb->bdev_io_wait);
+        iocb->cb_bdev_io_wait.bdev = dkdev->dk_bdev;
+        iocb->cb_bdev_io_wait.cb_fn = pfs_spdk_dev_io_flush;
+        iocb->cb_bdev_io_wait.cb_arg = iocb;
+        spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ioch,
+                                &iocb->cb_bdev_io_wait);
     } else if (rc) {
-        SPDK_ERRLOG("%s error while flushing bdev: %d\n", 
+        pfs_etrace("%s error while flushing bdev: %d\n", 
             spdk_strerror(-rc), rc);
         abort();
     }
@@ -594,11 +655,64 @@ static void
 pfs_spdk_dev_io_fini_flush(void *arg)
 {
     pfs_spdk_iocb_t *iocb = (pfs_spdk_iocb_t *)arg;
-    pfs_devio_t *io = iocb->pfs_io;
+    pfs_devio_t *io = iocb->cb_pfs_io;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)io->io_queue;
     pfs_spdk_dev_deq_inflight_io(dkioq, io);
     pfs_spdk_dev_enq_complete_io(dkioq, io);
-    free(iocb);
+    pfs_spdk_dev_free_iocb(iocb);
+}
+
+static void
+pfs_spdk_dev_send_iocb(pfs_spdk_dev_t *dkdev,
+    spdk_msg_fn fn,
+    pfs_spdk_iocb_t *iocb)
+{
+    pfs_spdk_iocb_t *head;
+    int count;
+
+    iocb->cb_io_op = fn;
+    head = __atomic_load_n(&dkdev->dk_incoming, __ATOMIC_RELAXED);
+    for (;;) {
+        iocb->cb_next = head;
+        if (__atomic_compare_exchange_n(&dkdev->dk_incoming, &head, iocb,
+                true, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED)) {
+            break;
+        }
+        rte_pause();
+    }
+
+    sem_getvalue(&dkdev->dk_sem, &count);
+    if (!count)
+        sem_post(&dkdev->dk_sem);
+}
+
+static void
+pfs_spdk_dev_pull_iocb(pfs_spdk_dev_t *dkdev)
+{
+    pfs_spdk_iocb_t *prev, *curr, *next = NULL;
+
+    curr = __atomic_load_n(&dkdev->dk_incoming, __ATOMIC_RELAXED);
+    if (curr == NULL)
+        return;
+    curr = __atomic_exchange_n(&dkdev->dk_incoming, NULL, __ATOMIC_ACQUIRE);
+    /* reverse the list */
+    if (curr != NULL) {
+        for (;;) {
+            prev = curr->cb_next; 
+            curr->cb_next = next;
+            if (prev == NULL)
+                break;
+            next = curr;
+            curr = prev;
+        }
+    }
+
+    while (curr != NULL) {
+        dkdev->dk_jobs++;
+        next = curr->cb_next;
+        curr->cb_io_op(curr);
+        curr = next;
+    }
 }
 
 static int
@@ -610,10 +724,10 @@ pfs_spdk_dev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
     spdk_msg_fn fn = nullptr;
     int err = 0, count = 0;
 
-    iocb = (pfs_spdk_iocb_t *)calloc(1, sizeof(pfs_spdk_iocb_t));
-    iocb->pfs_io = io;
-    iocb->ioq = dkioq;
-    iocb->dev = dkdev;
+    iocb = pfs_spdk_dev_alloc_iocb();
+    iocb->cb_pfs_io = io;
+    iocb->cb_ioq = dkioq;
+    iocb->cb_dev = dkdev;
     io->io_private = iocb;
     io->io_error = PFSDEV_IO_DFTERR;
     pfs_spdk_dev_enq_inflight_io(dkioq, io);
@@ -651,29 +765,14 @@ pfs_spdk_dev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
         PFS_ASSERT("unsupported io type" == NULL);
     }
 
-    __atomic_fetch_add(&dkdev->dk_jobs, 1, __ATOMIC_RELAXED);
-    pthread_mutex_lock(&dkdev->dk_msg_mutex);
-    err = spdk_thread_send_msg(dkdev->dk_thread->spdk_thread, fn, iocb);
-    pthread_mutex_unlock(&dkdev->dk_msg_mutex);
-    while (err == -ENOMEM) {
-        pfs_etrace("%s spdk_thread_send_msg failed, retrying\n", __func__);
-        usleep(1000);
-   	pthread_mutex_lock(&dkdev->dk_msg_mutex);
-        err = spdk_thread_send_msg(dkdev->dk_thread->spdk_thread, fn, iocb);
-    	pthread_mutex_unlock(&dkdev->dk_msg_mutex);
-    }
-    __atomic_thread_fence(__ATOMIC_ACQ_REL);
-    sem_getvalue(&dkdev->dk_sem, &count);
-    if (!count)
-        sem_post(&dkdev->dk_sem);
-
+    pfs_spdk_dev_send_iocb(dkdev, fn, iocb);
     if (err) {
 fail:
         /* io submit failure */
         pfs_spdk_dev_deq_inflight_io(dkioq, io);
         io->io_private = nullptr;
         io->io_error = err;
-        free(iocb);
+        pfs_spdk_dev_free_iocb(iocb);
 
         pfs_etrace("failed to prep iocb\n");
         return err;
@@ -685,25 +784,29 @@ fail:
 static pfs_devio_t *
 pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
 {
-    struct pfs_spdk_iocb *iocb;
+    struct pfs_spdk_iocb *iocb, *next;
     pfs_spdk_dev_t *dkdev = (pfs_spdk_dev_t *)dev;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)ioq;
     pfs_devio_t *nio = nullptr;
 
-    while (!TAILQ_EMPTY(&dkioq->dkq_inflight_queue) ||
-           !TAILQ_EMPTY(&dkioq->dkq_complete_queue)) {
+    while ((dkioq->dkq_inflight_count | dkioq->dkq_complete_count)) {
         TAILQ_FOREACH(nio, &dkioq->dkq_complete_queue, io_next) {
             if (io == nullptr || nio == io)
                 break;
         }
         if (nio == nullptr) {
-            if (TAILQ_EMPTY(&dkioq->dkq_inflight_queue)) {
+            if (!dkioq->dkq_inflight_count) {
                 pfs_etrace("inflight is empty\n");
                 break;
             }
+
             while (-1 == sem_wait(&dkioq->dkq_done_sem) && errno == EINTR) {}
-            iocb = (struct pfs_spdk_iocb *)buf_ring_dequeue_sc(dkioq->dkq_done_q);
-            iocb->io_done(iocb);
+
+            for (iocb = __atomic_exchange_n(&dkioq->dkq_done_q, NULL,
+                    __ATOMIC_ACQUIRE); iocb; iocb = next) {
+                next = iocb->cb_next;
+                iocb->cb_io_done(iocb);
+            }
         } else {
             pfs_spdk_dev_deq_complete_io(dkioq, nio);
             break;
@@ -717,6 +820,17 @@ pfs_spdk_dev_has_cache(pfs_dev_t *dev)
 {
     pfs_spdk_dev_t *dkdev = (pfs_spdk_dev_t *)dev;
     return dkdev->dk_has_cache;
+}
+
+void
+pfsdev_exit_thread_spdk_drv(void)
+{
+    pfs_spdk_iocb *iocb;
+
+    while ((iocb = SLIST_FIRST(&tls_free_iocb))) {
+        SLIST_REMOVE_HEAD(&tls_free_iocb, cb_free);
+        pfs_mem_free(iocb, M_SPDK_IOCB);
+    }
 }
 
 struct pfs_devops pfs_spdk_dev_ops = {
@@ -735,4 +849,3 @@ struct pfs_devops pfs_spdk_dev_ops = {
     .dop_wait_io        = pfs_spdk_dev_wait_io,
     .dop_has_cache      = pfs_spdk_dev_has_cache
 };
-

@@ -84,7 +84,10 @@ typedef struct pfs_ioq pfs_ioq_t;
 
 /* io task */
 typedef struct pfs_devio {
-	TAILQ_ENTRY(pfs_devio) io_next;
+	union {
+		TAILQ_ENTRY(pfs_devio) io_next;
+		SLIST_ENTRY(pfs_devio) io_free;
+	};
 	pfs_dev_t 	*io_dev;
 	pfs_ioq_t	*io_queue;
 	void		*io_buf;
@@ -174,5 +177,8 @@ dev_writable(pfs_dev_t *dev)
 {
 	return (dev->d_flags & DEVFLG_WR) != 0;
 }
+
+void pfsdev_exit_thread(void);
+void pfsdev_exit_thread_spdk_drv(void);
 
 #endif	/* _PFS_DEVIO_H_ */

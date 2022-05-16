@@ -91,6 +91,7 @@ static pfs_memtype_t	pfs_mem_type[M_NTYPE] = {
 	MEMTYPE_ENTRY(M_SPDK_TARGET),
 	MEMTYPE_ENTRY(M_SPDK_DEV_IOQ),
 	MEMTYPE_ENTRY(M_SPDK_DEV),
+	MEMTYPE_ENTRY(M_SPDK_IOCB),
 };
 
 static inline const char *
