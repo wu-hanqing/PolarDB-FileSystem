@@ -23,8 +23,8 @@
 typedef struct pfs_mount pfs_mount_t;
 
 ssize_t	pfs_blkio_read(pfs_mount_t *mnt, char *data,
-	    pfs_blkno_t blkno, off_t off, ssize_t len);
+	    pfs_blkno_t blkno, off_t off, ssize_t len, int is_dma = 0);
 ssize_t	pfs_blkio_write(pfs_mount_t *mnt, char *data,
-	    pfs_blkno_t blkno, off_t off, ssize_t len);
+	    pfs_blkno_t blkno, off_t off, ssize_t len, int is_dma = 0);
 
 #endif

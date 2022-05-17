@@ -1,3 +1,4 @@
+/* vim: set ts=4 sw=4 expandtab: */
 #include "pfs_spdk.h"
 #include "pfs_trace.h"
 #include "pfs_memory.h"
@@ -15,6 +16,7 @@
 
 #include <dpdk/rte_config.h>
 #include <dpdk/rte_common.h>
+#include <dpdk/rte_memory.h>
 
 #include <spdk/init.h>
 #include <spdk/env.h>
@@ -142,7 +144,7 @@ set_spdk_opts_from_gflags(struct spdk_env_opts *opts)
     if (!FLAGS_spdk_iova_mode.empty()) {
         opts->iova_mode = FLAGS_spdk_iova_mode.c_str();
     }
-    
+
     opts->base_virtaddr = FLAGS_spdk_base_virtaddr;
     parse_pci_address(opts);
 }
@@ -193,7 +195,7 @@ pfs_spdk_init_thread(struct pfs_spdk_thread **td, bool pfs)
     struct pfs_spdk_thread *thread;
     struct spdk_thread *spdk_thread;
 
-    g_pfs_thread = pfs; 
+    g_pfs_thread = pfs;
     spdk_thread = spdk_thread_create(pfs? "pfs_thread" : "", NULL);
     g_pfs_thread = false;
     if (!spdk_thread) {
@@ -219,7 +221,7 @@ pfs_spdk_cleanup_thread(struct pfs_spdk_thread *thread)
         thread->on_pfs_list = 0;
     }
     pthread_mutex_unlock(&g_pfs_mtx);
-    
+
     spdk_thread_exit(thread->spdk_thread);
     spdk_thread_send_msg(thread->spdk_thread, pfs_spdk_bdev_close_targets,
         thread);
@@ -630,7 +632,7 @@ json_write_cb(void *cb_ctx, const void *data, size_t size)
 	return rc == size ? 0 : -1;
 }
 
-std::string 
+std::string
 pfs_get_dev_pci_address(struct spdk_bdev *bdev)
 {
     std::string address;
@@ -673,7 +675,7 @@ err:
         goto err;
     }
 
-    rc = spdk_json_find_array(values.data(), "nvme", NULL, &nvme); 
+    rc = spdk_json_find_array(values.data(), "nvme", NULL, &nvme);
     if (rc) {
         pfs_etrace("No 'nvme' key in JSON.\n");
         goto err;
@@ -699,7 +701,7 @@ int
 pfs_get_pci_local_cpus(const std::string& pci_addr, cpu_set_t *set)
 {
     size_t size = 0;
-    char *line = NULL; 
+    char *line = NULL;
     std::stack<uint32_t> local_cpus;
     uint32_t mask;
     int widx;
@@ -709,11 +711,11 @@ pfs_get_pci_local_cpus(const std::string& pci_addr, cpu_set_t *set)
         return -1;
 
     std::string sys_path=std::string("/sys/bus/pci/devices/") + pci_addr +
-        "/local_cpus"; 
+        "/local_cpus";
     FILE *fp = fopen(sys_path.c_str(), "r");
     if (fp == NULL) {
         return -1;
-    } 
+    }
 
     if (getline(&line, &size, fp) == -1) {
         fclose(fp);
@@ -897,3 +899,47 @@ pfs_parse_set(const char *input, cpu_set_t *set)
 	return str - input;
 }
 
+static unsigned
+pfs_cpu_socket_id(unsigned lcore_id)
+{
+#define NUMA_NODE_PATH "/sys/devices/system/node" 
+    unsigned socket;
+
+    for (socket = 0; socket < RTE_MAX_NUMA_NODES; socket++) {
+        char path[PATH_MAX];
+
+        snprintf(path, sizeof(path), "%s/node%u/cpu%u", NUMA_NODE_PATH,
+                socket, lcore_id);
+        if (access(path, F_OK) == 0)
+            return socket;
+    }
+    return 0;
+}
+
+int
+pfs_cpuset_socket_id(cpu_set_t *cpusetp)
+{
+    unsigned cpu = 0;
+    int socket_id = SOCKET_ID_ANY;
+    int sid;
+
+    if (cpusetp == NULL)
+        return SOCKET_ID_ANY;
+
+    do {
+        if (!CPU_ISSET(cpu, cpusetp))
+            continue;
+
+        if (socket_id == SOCKET_ID_ANY)
+            socket_id = pfs_cpu_socket_id(cpu);
+
+        sid = pfs_cpu_socket_id(cpu);
+        if (socket_id != sid) {
+            socket_id = SOCKET_ID_ANY;
+            break;
+        }
+
+    } while (++cpu < CPU_SETSIZE);
+
+    return socket_id;
+}

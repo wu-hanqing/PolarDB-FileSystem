@@ -45,10 +45,11 @@ void pfs_spdk_conf_set_env_context(const char *s);
 int pfs_spdk_setup(void);
 void pfs_spdk_cleanup(void);
 
-int pfs_get_pci_local_cpus(const std::string &pci_addr, cpu_set_t *set);
+int pfs_get_pci_local_cpus(const std::string &pci_addr, cpu_set_t *setp);
 std::string pfs_get_dev_pci_address(struct spdk_bdev *dev);
-int pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *set);
+int pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *setp);
 std::string pfs_cpuset_to_string(const cpu_set_t *mask);
-int pfs_parse_set(const char *input, cpu_set_t *set);
+int pfs_parse_set(const char *input, cpu_set_t *setp);
+int pfs_cpuset_socket_id(cpu_set_t *setp);
 
 #endif

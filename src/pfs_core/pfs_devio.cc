@@ -18,6 +18,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <dpdk/rte_memory.h>
+
 #include "pfs_admin.h"
 #include "pfs_devio.h"
 #include "pfs_devstat.h"
@@ -260,6 +262,7 @@ pfs_dev_create(const char *cluster, const char *devname, int flags)
 	}
 	/* epoch increment only when device open */
 	dev->d_epoch = __sync_add_and_fetch(&pfs_devs_epoch, 1);
+	dev->d_mem_socket_id = SOCKET_ID_ANY;
 	pfs_devstat_init(&dev->d_ds);
 	return dev;
 }
@@ -412,7 +415,6 @@ pfs_io_create(pfs_dev_t *dev, int op, void *buf, size_t len, uint64_t bda,
 	io->io_error = PFSDEV_IO_DFTERR;
 	io->io_private = NULL;
 	io->io_queue = NULL;
-
 	if (devstat_enable == PFS_OPT_ENABLE)
 		io->io_flags |= IO_STAT;
 
@@ -690,4 +692,13 @@ pfsdev_exit_thread(void)
 	}
 	tls_free_devio_num = 0;
 	pfsdev_exit_thread_spdk_drv();
+}
+
+int
+pfsdev_get_socket_id(int devi)
+{
+	PFS_ASSERT(0 <= devi && devi < PFS_MAX_NCHD);
+	auto dev = pfs_devs[devi];
+	PFS_ASSERT(dev != NULL);
+	return dev->d_mem_socket_id;
 }

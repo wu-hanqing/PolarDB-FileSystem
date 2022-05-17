@@ -87,5 +87,8 @@ void 	pfs_mem_free(void *ptr, int type);
 void * 	pfs_mem_realloc(void *ptr, size_t newsize, int type);
 int 	pfs_mem_memalign(void **pp, size_t alignment, size_t size, int type);
 int	pfs_mem_stat(admin_buf_t *dbuf);
+void *  pfs_dma_malloc(const char *type, size_t align, size_t size, int socket);
+void *  pfs_dma_zalloc(const char *type, size_t align, size_t size, int socket);
+void	pfs_dma_free(void *p);
 
 #endif	/* _PFS_MEMORY_H_ */

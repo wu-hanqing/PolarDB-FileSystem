@@ -76,6 +76,7 @@ enum {
 	IO_WAIT		= 0x0000,
 	IO_NOWAIT	= 0x0001,
 	IO_STAT		= 0x0010,
+	IO_DMABUF	= 0x0020,
 };
 
 typedef struct pfs_dev pfs_dev_t;
@@ -137,6 +138,7 @@ typedef struct pfs_dev {
 	int		d_flags;	/* dev rw permission & require_safe */
 	char		d_cluster[PFS_MAX_CLUSTERLEN];
 	char		d_devname[PFS_MAX_PBDLEN];	/* alias pbdname */
+	int		d_mem_socket_id;
 
 	pfs_devstat_t	d_ds;		/* statistics */
 } pfs_dev_t;
@@ -156,6 +158,7 @@ int	pfsdev_pread_flags(int devi, void *buf, size_t len, uint64_t bda,
 int	pfsdev_pwrite_flags(int devi, void *buf, size_t len, uint64_t bda,
 	    int flags);
 int	pfsdev_wait_io(int devi);
+int	pfsdev_get_socket_id(int devi);
 
 const char *pfsdev_trace_pbdname(const char *cluster, const char *pbdname);
 

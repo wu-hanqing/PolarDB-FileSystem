@@ -223,8 +223,15 @@ bdev_thread_bind_cpuset(const char *thread_name, pfs_spdk_dev_t *dkdev)
     cpu_set_t cpuset;
     int err = 0;
 
+    err = pfs_get_dev_local_cpus(dkdev->dk_bdev, &cpuset);
+    if (err == 0) {
+        dev->d_mem_socket_id = pfs_cpuset_socket_id(&cpuset);
+    } else {
+        pfs_etrace("cannot get device %s's local cpu set", dev->d_devname);
+    }
+
     if (FLAGS_pfs_spdk_driver_auto_cpu_bind) {
-        if (pfs_get_dev_local_cpus(dkdev->dk_bdev, &cpuset) == 0) {
+        if (err == 0) {
 set_it:
             std::string cpuset_str = pfs_cpuset_to_string(&cpuset);
             err = rte_thread_set_affinity(&cpuset);
@@ -236,9 +243,7 @@ set_it:
                         cpuset_str.c_str());
                 err = -1;
             }
-        } else {
-            pfs_etrace("cannot get device %s's local cpu set", dev->d_devname);
-        }
+        } 
     } else if (!FLAGS_pfs_spdk_driver_cpu_bind.empty()) {
         std::string &s = FLAGS_pfs_spdk_driver_cpu_bind;
         auto pos = s.find(dev->d_devname);
@@ -500,9 +505,14 @@ pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
-    iocb->cb_dma_buf = spdk_dma_malloc(io->io_len, 4096, NULL);
-    if (iocb->cb_dma_buf == NULL) {
-        return -ENOMEM;
+    if (!(io->io_flags & IO_DMABUF)) {
+        iocb->cb_dma_buf = spdk_dma_malloc(io->io_len, 64, NULL);
+        if (iocb->cb_dma_buf == NULL) {
+            pfs_etrace("can not allocate dma mem:%s", __func__);
+            return -ENOMEM;
+        }
+    } else {
+        iocb->cb_dma_buf = io->io_buf;
     }
     iocb->cb_io_done = pfs_spdk_dev_io_fini_pread;
     return 0;
@@ -527,7 +537,8 @@ pfs_spdk_dev_io_pread(void *arg)
         spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ioch,
                                 &iocb->cb_bdev_io_wait);
     } else if (rc) {
-        spdk_dma_free(iocb->cb_dma_buf);
+        if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf)
+            spdk_dma_free(iocb->cb_dma_buf);
         pfs_etrace("%s error while reading from bdev: %d\n",
             spdk_strerror(-rc), rc);
         abort();
@@ -540,13 +551,14 @@ pfs_spdk_dev_io_fini_pread(void *arg)
     pfs_spdk_iocb_t *iocb = (pfs_spdk_iocb_t *)arg;
     pfs_devio_t *io = iocb->cb_pfs_io;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)io->io_queue;
-    if (io->io_error == 0) {
-            rte_memcpy(io->io_buf, iocb->cb_dma_buf, io->io_len);
+    if (io->io_error == 0 && !(io->io_flags & IO_DMABUF)) {
+        rte_memcpy(io->io_buf, iocb->cb_dma_buf, io->io_len);
     }
     pfs_spdk_dev_deq_inflight_io(dkioq, io);
     pfs_spdk_dev_enq_complete_io(dkioq, io);
 
-    spdk_dma_free(iocb->cb_dma_buf);
+    if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf)
+        spdk_dma_free(iocb->cb_dma_buf);
     pfs_spdk_dev_free_iocb(iocb);
 }
 
@@ -559,11 +571,16 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
-    iocb->cb_dma_buf = spdk_dma_malloc(io->io_len, 4096, NULL);
-    if (iocb->cb_dma_buf == NULL) {
-        return -ENOMEM;
+    if (!(io->io_flags & IO_DMABUF)) {
+        iocb->cb_dma_buf = spdk_dma_malloc(io->io_len, 64, NULL);
+        if (iocb->cb_dma_buf == NULL) {
+            pfs_etrace("can not allocate dma mem:%s", __func__);
+            return -ENOMEM;
+        }
+        rte_memcpy(iocb->cb_dma_buf, io->io_buf, io->io_len);
+    } else {
+        iocb->cb_dma_buf = io->io_buf;
     }
-    rte_memcpy(iocb->cb_dma_buf, io->io_buf, io->io_len);
     iocb->cb_io_done = pfs_spdk_dev_io_fini_pwrite;
     return 0;
 }
@@ -589,7 +606,8 @@ pfs_spdk_dev_io_pwrite(void *arg)
     } else if (rc) {
         pfs_etrace("%s error while writting to bdev: %d\n",
             spdk_strerror(-rc), rc);
-        spdk_dma_free(iocb->cb_dma_buf);
+        if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf)
+            spdk_dma_free(iocb->cb_dma_buf);
         abort();
     }
 }
@@ -603,7 +621,8 @@ pfs_spdk_dev_io_fini_pwrite(void *arg)
     pfs_spdk_dev_deq_inflight_io(dkioq, io);
     pfs_spdk_dev_enq_complete_io(dkioq, io);
 
-    spdk_dma_free(iocb->cb_dma_buf);
+    if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf)
+        spdk_dma_free(iocb->cb_dma_buf);
     pfs_spdk_dev_free_iocb(iocb);
 }
 

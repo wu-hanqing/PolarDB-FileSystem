@@ -17,6 +17,7 @@
 
 #include <malloc.h>
 #include <stdlib.h>
+#include <dpdk/rte_malloc.h>
 
 #include "pfs_impl.h"
 #include "pfs_admin.h"
@@ -222,4 +223,32 @@ pfs_mem_stat(admin_buf_t *ab)
 		return n;
 
 	return 0;
+}
+
+void *
+pfs_dma_malloc(const char *type, size_t align, size_t size, int socket)
+{
+	void *p;
+
+	p = rte_malloc_socket(type, size, align, socket);
+	if (p == NULL && socket != SOCKET_ID_ANY)
+		p = rte_malloc_socket(type, size, align, SOCKET_ID_ANY);
+	return p;
+}
+
+void *
+pfs_dma_zalloc(const char *type, size_t align, size_t size, int socket)
+{
+	void *p;
+
+	p = rte_zmalloc_socket(type, size, align, socket);
+	if (p == NULL && socket != SOCKET_ID_ANY)
+		p = rte_zmalloc_socket(type, size, align, SOCKET_ID_ANY);
+	return p;
+}
+
+void
+pfs_dma_free(void *p)
+{
+	rte_free(p);
 }

@@ -15,6 +15,10 @@
 
 #include <sys/param.h>
 
+#include <dpdk/rte_memory.h>
+#include <dpdk/rte_memcpy.h>
+#include <dpdk/rte_malloc.h>
+
 #include "pfs_blkio.h"
 #include "pfs_devio.h"
 #include "pfs_mount.h"
@@ -104,10 +108,10 @@ pfs_blkio_read_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 	if (allen != len) {
 		PFS_ASSERT(albuf != NULL);
 		PFS_INC_COUNTER(STAT_PFS_UnAligned_R_4K);
-		err = pfsdev_pread(iodesc, albuf, allen, albda);
+		err = pfsdev_pread_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
 		if (err < 0)
 			return err;
-		memcpy(buf, &albuf[bda - albda], len);
+		rte_memcpy(buf, &albuf[bda - albda], len);
 		return 0;
 	}
 
@@ -125,11 +129,11 @@ pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 	if (allen != len) {
 		PFS_ASSERT(albuf != NULL);
 		PFS_INC_COUNTER(STAT_PFS_UnAligned_W_4K);
-		err = pfsdev_pread(iodesc, albuf, allen, albda);
+		err = pfsdev_pread_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
 		if (err < 0)
 			return err;
-		memcpy(&albuf[bda - albda], buf, len);
-		err = pfsdev_pwrite(iodesc, albuf, allen, albda);
+		rte_memcpy(&albuf[bda - albda], buf, len);
+		err = pfsdev_pwrite_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
 		return err;
 	}
 
@@ -148,15 +152,18 @@ pfs_blkio_done(int iodesc, int nowait)
 
 static ssize_t
 pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
-    off_t off, ssize_t len, pfs_blkio_fn_t *iofunc)
+    off_t off, ssize_t len, pfs_blkio_fn_t *iofunc, int is_dma)
 {
 	char *albuf = NULL;
 	int err, err1, nowait;
 	pfs_bda_t bda, albda;
 	size_t allen, iolen, left;
+	int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 
 	err = 0;
 	nowait = (len >= 2*PFS_FRAG_SIZE) ? IO_NOWAIT : 0;
+	if (is_dma)
+		nowait |= IO_DMABUF;
 	left = len;
 	while (left > 0) {
 		allen = iolen = 0;
@@ -164,8 +171,8 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 		albda = pfs_blkio_align(mnt, bda, left, &allen, &iolen);
 
 		if (allen != iolen && albuf == NULL) {
-			albuf = (char *)pfs_mem_malloc(PFS_FRAG_SIZE,
-			    M_IO_TMPBUF);
+			albuf = (char *)pfs_dma_malloc("alignbuf", 64,
+				PFS_FRAG_SIZE, socket);
 			PFS_VERIFY(albuf != NULL);
 		}
 
@@ -184,7 +191,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 	 * so free it before wait_io() is safe.
 	 */
 	if (albuf) {
-		pfs_mem_free(albuf, M_IO_TMPBUF);
+		pfs_dma_free(albuf);
 		albuf = NULL;
 	}
 
@@ -201,35 +208,36 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 
 ssize_t
 pfs_blkio_read(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
-    off_t off, ssize_t len)
+    off_t off, ssize_t len, int is_dma)
 {
 	ssize_t iolen = 0;
 
 	PFS_ASSERT(off + len <= mnt->mnt_blksize);
 	iolen = pfs_blkio_execute(mnt, data, blkno, off, len,
-	    pfs_blkio_read_segment);
+	    pfs_blkio_read_segment, is_dma);
 	return iolen;
 }
 
 ssize_t
 pfs_blkio_write(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
-    off_t off, ssize_t len)
+    off_t off, ssize_t len, int is_dma)
 {
 	ssize_t iolen = 0;
 	void *zerobuf = NULL;
+	int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 
 	PFS_ASSERT(off + len <= mnt->mnt_blksize);
 	if (data == NULL) {
-		zerobuf = pfs_mem_malloc(len, M_ZERO_BUF);
+		zerobuf = pfs_dma_zalloc("M_ZERO_BUF", 64, len, socket);
 		PFS_VERIFY(zerobuf != NULL);
-		memset(zerobuf, 0, len);
 		data = (char *)zerobuf;
+		is_dma = 1;
 	}
 	iolen = pfs_blkio_execute(mnt, data, blkno, off, len,
-	    pfs_blkio_write_segment);
+	    pfs_blkio_write_segment, is_dma);
 
 	if (zerobuf) {
-		pfs_mem_free(zerobuf, M_ZERO_BUF);
+		pfs_dma_free(zerobuf);
 		zerobuf = NULL;
 	}
 	return iolen;
