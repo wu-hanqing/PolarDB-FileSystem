@@ -25,8 +25,6 @@ struct pfs_spdk_thread {
     TAILQ_HEAD(, pfs_spdk_target) targets;
     TAILQ_ENTRY(pfs_spdk_thread) link;
     int on_pfs_list;
-    int get_count;
-    int exited;
     pthread_mutex_t mtx;
 };
 
@@ -52,27 +50,5 @@ std::string pfs_get_dev_pci_address(struct spdk_bdev *dev);
 int pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *set);
 std::string pfs_cpuset_to_string(const cpu_set_t *mask);
 int pfs_parse_set(const char *input, cpu_set_t *set);
-
-class pfs_spdk_io_channel_guard {
-public:
-    pfs_spdk_io_channel_guard(struct spdk_bdev_desc *desc) {
-        desc_ = desc;
-        ch_ = pfs_get_spdk_io_channel(desc);
-    }
-    ~pfs_spdk_io_channel_guard()
-    {
-        pfs_put_spdk_io_channel(ch_);
-    }
-
-    struct spdk_bdev_desc *desc() const { return desc_; }
-    struct spdk_io_channel *channel() const { return ch_; };
-
-private:
-    pfs_spdk_io_channel_guard(const pfs_spdk_io_channel_guard &);
-    void operator=(const pfs_spdk_io_channel_guard &);
-
-    struct spdk_bdev_desc *desc_;
-    struct spdk_io_channel *ch_;
-};
 
 #endif

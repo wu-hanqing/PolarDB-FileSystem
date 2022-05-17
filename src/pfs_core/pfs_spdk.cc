@@ -220,12 +220,14 @@ pfs_spdk_cleanup_thread(struct pfs_spdk_thread *thread)
     }
     pthread_mutex_unlock(&g_pfs_mtx);
     
+    spdk_thread_exit(thread->spdk_thread);
     spdk_thread_send_msg(thread->spdk_thread, pfs_spdk_bdev_close_targets,
         thread);
 
     pthread_mutex_lock(&g_init_mtx);
     TAILQ_INSERT_TAIL(&g_gc_threads, thread, link);
     pthread_mutex_unlock(&g_init_mtx);
+    spdk_set_thread(NULL);
 }
 
 struct pfs_spdk_thread *pfs_current_spdk_thread(void)
@@ -465,6 +467,7 @@ pfs_spdk_init_env(void)
         return -1;
     }
 
+    /* don't remove it, it is very important */
     spdk_unaffinitize_thread();
 
     if (!FLAGS_spdk_log_flags.empty()) {
@@ -537,7 +540,6 @@ pfs_spdk_setup(void)
         }
 
         g_spdk_env_initialized = true;
-	    atexit(pfs_spdk_cleanup);
     }
     pthread_mutex_unlock(&init_mutex);
 
@@ -557,42 +559,17 @@ pfs_spdk_cleanup(void)
     struct timespec ts;
     int rc;
 
-    g_poll_loop = false;
     pfs_exit_spdk_thread();
-
+    g_poll_loop = false;
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_sec += 5;
     rc = pthread_timedjoin_np(g_init_thread_id, NULL, &ts);
     if (rc) {
-	    printf("can not join spdk polling thread, %s\n", strerror(rc));
+	pfs_etrace("can not join spdk polling thread, %s\n", strerror(rc));
     } else {
         spdk_env_fini();
         spdk_log_close();
     }
-}
-
-static void
-pfs_recycle_thread_io_channels(struct pfs_spdk_thread *thread,
-    struct spdk_bdev_desc *desc)
-{
-    struct pfs_spdk_target *target, *tmp;
-    struct spdk_thread *origin = spdk_get_thread();
-
-    spdk_set_thread(thread->spdk_thread);
-    pthread_mutex_lock(&thread->mtx);
-    TAILQ_FOREACH_SAFE(target, &thread->targets, link, tmp) {
-        if (target->desc == desc) {
-            if (!thread->exited && target->ref != 0) {
-                target->closed = 1;
-            } else {
-                TAILQ_REMOVE(&thread->targets, target, link);
-                spdk_put_io_channel(target->channel);
-                pfs_mem_free(target, M_SPDK_TARGET);
-            }
-        }
-    }
-    pthread_mutex_unlock(&thread->mtx);
-    spdk_set_thread(origin);
 }
 
 void pfs_exit_spdk_thread(void)
@@ -603,8 +580,6 @@ void pfs_exit_spdk_thread(void)
     if (spdk_td == NULL)
         return;
     pfs_td = (pfs_spdk_thread *)spdk_thread_get_ctx(spdk_td);
-    pfs_td->exited = 1;
-    spdk_set_thread(NULL);
     pfs_spdk_cleanup_thread(pfs_td);
 }
 
