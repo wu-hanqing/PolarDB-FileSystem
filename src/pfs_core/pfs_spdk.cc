@@ -231,6 +231,7 @@ pfs_spdk_init_env(void)
     int                     rc;
     struct timespec         ts;
 
+
     memset(&opts, 0, sizeof(opts));
     spdk_env_opts_init(&opts);
     set_spdk_opts_from_gflags(&opts);
@@ -254,6 +255,7 @@ pfs_spdk_init_env(void)
         } while ((tok = strtok(NULL, ",")) != NULL);
     }
 
+    spdk_unaffinitize_thread();
     spdk_thread_lib_init(pfs_spdk_schedule_thread,
         sizeof(struct pfs_spdk_thread));
 
@@ -288,7 +290,7 @@ pfs_spdk_setup(void)
 
     spdk_log_set_level((spdk_log_level)FLAGS_spdk_log_level);
     spdk_log_set_print_level((spdk_log_level)FLAGS_spdk_log_print_level);
-
+    
     pthread_mutex_lock(&init_mutex);
     if (!g_spdk_env_initialized) {
         sem_init(&g_sem, 0, 0);
