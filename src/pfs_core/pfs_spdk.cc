@@ -2,13 +2,20 @@
 #include "pfs_trace.h"
 #include "pfs_memory.h"
 
+#include <ctype.h>
 #include <semaphore.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <memory>
 #include <stack>
 #include <vector>
-#include <stdlib.h>
-#include <string.h>
+
 #include <gflags/gflags.h>
+
+#include <dpdk/rte_config.h>
+#include <dpdk/rte_common.h>
+
 #include <spdk/init.h>
 #include <spdk/env.h>
 #include <spdk/string.h>
@@ -798,5 +805,120 @@ pfs_cpuset_to_string(const cpu_set_t *mask)
         s.pop_back(); // remove last ','
     }
     return s;
+}
+
+int
+pfs_parse_set(const char *input, cpu_set_t *set)
+{
+	unsigned idx;
+	const char *str = input;
+	char *end = NULL;
+	unsigned min, max;
+
+	CPU_ZERO(set);
+
+	while (isblank(*str))
+		str++;
+
+	/* only digit or left bracket is qualify for start point */
+	if ((!isdigit(*str) && *str != '(') || *str == '\0')
+		return -1;
+
+	/* process single number or single range of number */
+	if (*str != '(') {
+		errno = 0;
+		idx = strtoul(str, &end, 10);
+		if (errno || end == NULL || idx >= CPU_SETSIZE)
+			return -1;
+		else {
+			while (isblank(*end))
+				end++;
+
+			min = idx;
+			max = idx;
+			if (*end == '-') {
+				/* process single <number>-<number> */
+				end++;
+				while (isblank(*end))
+					end++;
+				if (!isdigit(*end))
+					return -1;
+
+				errno = 0;
+				idx = strtoul(end, &end, 10);
+				if (errno || end == NULL || idx >= CPU_SETSIZE)
+					return -1;
+				max = idx;
+				while (isblank(*end))
+					end++;
+				if (*end != ',' && *end != '\0')
+					return -1;
+			}
+
+			if (*end != ',' && *end != '\0' &&
+			    *end != '@')
+				return -1;
+
+			for (idx = RTE_MIN(min, max);
+			     idx <= RTE_MAX(min, max); idx++)
+				CPU_SET(idx, set);
+
+			return end - input;
+		}
+	}
+
+	/* process set within bracket */
+	str++;
+	while (isblank(*str))
+		str++;
+	if (*str == '\0')
+		return -1;
+
+	min = RTE_MAX_LCORE;
+	do {
+
+		/* go ahead to the first digit */
+		while (isblank(*str))
+			str++;
+		if (!isdigit(*str))
+			return -1;
+
+		/* get the digit value */
+		errno = 0;
+		idx = strtoul(str, &end, 10);
+		if (errno || end == NULL || idx >= CPU_SETSIZE)
+			return -1;
+
+		/* go ahead to separator '-',',' and ')' */
+		while (isblank(*end))
+			end++;
+		if (*end == '-') {
+			if (min == RTE_MAX_LCORE)
+				min = idx;
+			else /* avoid continuous '-' */
+				return -1;
+		} else if ((*end == ',') || (*end == ')')) {
+			max = idx;
+			if (min == RTE_MAX_LCORE)
+				min = idx;
+			for (idx = RTE_MIN(min, max);
+			     idx <= RTE_MAX(min, max); idx++)
+				CPU_SET(idx, set);
+
+			min = RTE_MAX_LCORE;
+		} else
+			return -1;
+
+		str = end + 1;
+	} while (*end != '\0' && *end != ')');
+
+	/*
+	 * to avoid failure that tail blank makes end character check fail
+	 * in eal_parse_lcores( )
+	 */
+	while (isblank(*str))
+		str++;
+
+	return str - input;
 }
 

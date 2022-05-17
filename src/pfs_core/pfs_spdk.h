@@ -51,6 +51,7 @@ int pfs_get_pci_local_cpus(const std::string &pci_addr, cpu_set_t *set);
 std::string pfs_get_dev_pci_address(struct spdk_bdev *dev);
 int pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *set);
 std::string pfs_cpuset_to_string(const cpu_set_t *mask);
+int pfs_parse_set(const char *input, cpu_set_t *set);
 
 class pfs_spdk_io_channel_guard {
 public:
