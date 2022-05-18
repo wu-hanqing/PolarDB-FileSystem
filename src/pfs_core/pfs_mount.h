@@ -106,6 +106,7 @@ typedef struct pfs_mount {
 	uint32_t	mnt_num_hosts;		/* host info */
 	uint32_t	mnt_host_id;
 	uint64_t	mnt_host_generation;
+	void*		mnt_paxos_buf;
 
 	/* admin thread info */
 	admin_info_t    *mnt_admin;
