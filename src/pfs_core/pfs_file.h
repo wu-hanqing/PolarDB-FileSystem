@@ -62,6 +62,9 @@ typedef struct pfs_file {
 
 #define FALLOC_PFSFL_FIXED_OFFSET	0x0100	/* lower bits defined in falloc.h */
 
+#define PFS_DMA_OFF 	0
+#define	PFS_DMA_ON	1
+
 pfs_file_t *
 	pfs_file_get(int fd, int lockflag);
 void	pfs_file_put(pfs_file_t *file);
@@ -71,16 +74,17 @@ int 	pfs_file_open_impl(pfs_mount_t *mnt, pfs_ino_t ino, int flags,
 int	pfs_file_close(pfs_file_t *file);
 int	pfs_file_close_locked(pfs_file_t *file);
 int	pfs_file_xstat(pfs_file_t *file, struct stat *st);
-ssize_t	pfs_file_xpread(pfs_file_t *file, void *buf, size_t len, off_t offset);
+ssize_t	pfs_file_xpread(pfs_file_t *file, void *buf, size_t len, off_t offset,
+	int is_dma);
 ssize_t	pfs_file_xpwrite(pfs_file_t *file, const void *buf, size_t len,
-	    off_t offset);
+	off_t offset, int is_dma);
 int	pfs_file_xftruncate(pfs_file_t *file, off_t len);
 int	pfs_file_xfallocate(pfs_file_t *file, off_t offset, size_t len, int mode);
 off_t	pfs_file_xlseek(pfs_file_t *file, off_t offset, int whence);
 int	pfs_file_xmap(pfs_file_t *file, fmap_entry_t *fmapv, int count);
 ssize_t	pfs_file_size(pfs_file_t *file, uint64_t btime);
-ssize_t pfs_file_pread(pfs_file_t *file, void *buf, size_t len, off_t offset);
-ssize_t pfs_file_pwrite(pfs_file_t *file, const void *buf, size_t len, off_t offset);
+ssize_t pfs_file_pread(pfs_file_t *file, void *buf, size_t len, off_t offset, int is_dma);
+ssize_t pfs_file_pwrite(pfs_file_t *file, const void *buf, size_t len, off_t offset, int is_dma);
 int	pfs_file_release(pfs_mount_t *mnt, pfs_ino_t ino, uint64_t btime);
 int	pfs_file_xsetxattr(pfs_file_t *file, const char *name, const void *value, size_t size);
 

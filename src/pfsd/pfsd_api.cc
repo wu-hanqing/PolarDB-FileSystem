@@ -296,7 +296,7 @@ _pfsd_pread_svr(pfs_mount_t *mnt, pfs_inode_t *in, void *buf, size_t len,
 	int err;
 	tls_read_begin(mnt);
 	pfs_inode_lock(in);
-	rlen = pfs_file_read(in, buf, len, offset, true, btime);
+	rlen = pfs_file_read(in, buf, len, offset, true, btime, PFS_DMA_OFF);
 	err = rlen < 0 ? rlen : 0;
 	pfs_inode_unlock(in);
 	tls_read_end(err);
@@ -366,7 +366,7 @@ pfsd_file_xpwrite(pfs_mount_t *mnt, pfs_inode_t *in, int flags, const void *buf,
 
 	MNT_STAT_BEGIN();
 	pfs_inode_lock(in);
-	wlen = pfs_file_write(in, buf, len, &off2, true, btime);
+	wlen = pfs_file_write(in, buf, len, &off2, true, btime, PFS_DMA_OFF);
 	err = wlen < 0 ? wlen : 0;
 	pfs_inode_unlock(in);
 

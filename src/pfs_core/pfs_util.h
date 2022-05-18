@@ -75,4 +75,6 @@ typedef struct pfs_printer {
 } pfs_printer_t;
 int	pfs_printf(pfs_printer_t *pr, const char *fmt, ...);
 
+int pfs_ratecheck(struct timeval *lasttime, const struct timeval *mininterval);
+
 #endif

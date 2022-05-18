@@ -41,6 +41,9 @@
 #include "pfs_option.h"
 #include "pfs_impl.h"
 #include "pfs_spdk.h"
+#include "pfs_util.h"
+
+#define BUF_TYPE "pfs_iobuf"
 
 #define timespecadd(tsp, usp, vsp)                              \
     do {                                                        \
@@ -115,10 +118,16 @@ DEFINE_bool(pfs_spdk_driver_auto_cpu_bind, false,
   "pfs spdk driver auto bind thread to cpus which are nearest to pci device");
 DEFINE_string(pfs_spdk_driver_cpu_bind, "", 
   "pfs spdk driver should bind to this cpu set");
+DEFINE_int32(pfs_spdk_driver_error_interval, 1,
+  "pfs spdk driver DMA buffer allocation failure report interval (seconds)");
 
 #define PFS_MAX_CACHED_SPDK_IOCB        128
 static __thread SLIST_HEAD(, pfs_spdk_iocb) tls_free_iocb = {NULL};
 static __thread int tls_free_iocb_num = 0;
+
+#define error_time_interval {FLAGS_pfs_spdk_driver_error_interval, 0}
+
+static struct timeval err_time_interval={1,0};
 
 static void pfs_spdk_dev_io_fini_pread(void *iocb);
 static void pfs_spdk_dev_io_fini_pwrite(void *iocb);
@@ -143,7 +152,8 @@ pfs_spdk_dev_alloc_iocb(void)
         err = pfs_mem_memalign(&p, 64, sizeof(*iocb), M_SPDK_IOCB);
         if (err) {
             pfs_etrace("%s: create iocb failed, %s\n", __func__, strerror(err));
-            return NULL;
+            abort();
+//          return NULL;
         }
         iocb = (pfs_spdk_iocb_t *)p;
     }
@@ -488,7 +498,6 @@ pfs_spdk_dev_io_done(struct spdk_bdev_io *bdev_io,
                 false, __ATOMIC_RELEASE, __ATOMIC_RELAXED)) {
             break;
         }
-        rte_pause();
     }
 
     /* This works like WIN32 event, we don't repeatly set semaphore */
@@ -502,14 +511,20 @@ static int
 pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     pfs_spdk_iocb_t *iocb)
 {
+    static struct timeval last;
+
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
     if (!(io->io_flags & IO_DMABUF)) {
-        iocb->cb_dma_buf = spdk_dma_malloc(io->io_len, 64, NULL);
+        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, 64, io->io_len,
+            SOCKET_ID_ANY);
         if (iocb->cb_dma_buf == NULL) {
-            pfs_etrace("can not allocate dma mem:%s", __func__);
-            return -ENOMEM;
+            struct timeval tv = error_time_interval;
+            if (pfs_ratecheck(&last, &tv)) {
+                pfs_etrace("can not allocate dma mem:%s", __func__);
+            }
+            return -ENOBUFS;
         }
     } else {
         iocb->cb_dma_buf = io->io_buf;
@@ -537,10 +552,11 @@ pfs_spdk_dev_io_pread(void *arg)
         spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ioch,
                                 &iocb->cb_bdev_io_wait);
     } else if (rc) {
-        if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf)
-            spdk_dma_free(iocb->cb_dma_buf);
         pfs_etrace("%s error while reading from bdev: %d\n",
             spdk_strerror(-rc), rc);
+        if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf) {
+            pfs_dma_free(iocb->cb_dma_buf);
+        }
         abort();
     }
 }
@@ -558,7 +574,7 @@ pfs_spdk_dev_io_fini_pread(void *arg)
     pfs_spdk_dev_enq_complete_io(dkioq, io);
 
     if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf)
-        spdk_dma_free(iocb->cb_dma_buf);
+        pfs_dma_free(iocb->cb_dma_buf);
     pfs_spdk_dev_free_iocb(iocb);
 }
 
@@ -566,16 +582,21 @@ static int
 pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     pfs_spdk_iocb_t *iocb)
 {
+    static struct timeval last;
     int rc;
 
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
     if (!(io->io_flags & IO_DMABUF)) {
-        iocb->cb_dma_buf = spdk_dma_malloc(io->io_len, 64, NULL);
+        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, 64, io->io_len,
+            SOCKET_ID_ANY);
         if (iocb->cb_dma_buf == NULL) {
-            pfs_etrace("can not allocate dma mem:%s", __func__);
-            return -ENOMEM;
+            struct timeval tv = error_time_interval;
+            if (pfs_ratecheck(&last, &tv)) {
+                pfs_etrace("can not allocate dma mem:%s", __func__);
+            }
+            return -ENOBUFS;
         }
         rte_memcpy(iocb->cb_dma_buf, io->io_buf, io->io_len);
     } else {
@@ -607,7 +628,7 @@ pfs_spdk_dev_io_pwrite(void *arg)
         pfs_etrace("%s error while writting to bdev: %d\n",
             spdk_strerror(-rc), rc);
         if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf)
-            spdk_dma_free(iocb->cb_dma_buf);
+            pfs_dma_free(iocb->cb_dma_buf);
         abort();
     }
 }
@@ -622,7 +643,7 @@ pfs_spdk_dev_io_fini_pwrite(void *arg)
     pfs_spdk_dev_enq_complete_io(dkioq, io);
 
     if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf)
-        spdk_dma_free(iocb->cb_dma_buf);
+        pfs_dma_free(iocb->cb_dma_buf);
     pfs_spdk_dev_free_iocb(iocb);
 }
 
@@ -785,6 +806,9 @@ pfs_spdk_dev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
     int err = 0, count = 0;
 
     iocb = pfs_spdk_dev_alloc_iocb();
+    if (iocb == NULL) {
+        return -ENOBUFS;
+    }
     iocb->cb_pfs_io = io;
     iocb->cb_ioq = dkioq;
     iocb->cb_dev = dkdev;
@@ -833,8 +857,6 @@ fail:
         io->io_private = nullptr;
         io->io_error = err;
         pfs_spdk_dev_free_iocb(iocb);
-
-        pfs_etrace("failed to prep iocb\n");
         return err;
     }
 

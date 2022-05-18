@@ -559,7 +559,7 @@ out:
 
 static ssize_t
 pfs_file_read(pfs_inode_t *in, void *buf, size_t len, off_t offset,
-    bool locked, uint64_t btime)
+    bool locked, uint64_t btime, int is_dma)
 {
 	char		*data = (char *)buf;
 	pfs_mount_t	*mnt = in->in_mnt;
@@ -620,7 +620,7 @@ pfs_file_read(pfs_inode_t *in, void *buf, size_t len, off_t offset,
 		} else {
 			rlen = MIN(MIN(dbhoff, blksize) - blkoff, left);
 			rlen = pfs_blkio_read(mnt, data+rsum, dblkno,
-			    blkoff, rlen);
+			    blkoff, rlen, is_dma);
 		}
 
 		if (locked)
@@ -653,7 +653,7 @@ pfs_file_read(pfs_inode_t *in, void *buf, size_t len, off_t offset,
  */
 static ssize_t
 pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
-    bool locked, uint64_t btime)
+    bool locked, uint64_t btime, int is_dma)
 {
 	char		*data = (char *)buf, *pdata;
 	pfs_mount_t	*mnt = in->in_mnt;
@@ -732,7 +732,7 @@ pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 		if (locked)
 			pfs_inode_unlock(in);
 
-		wlen = pfs_blkio_write(mnt, pdata, dblkno, woff, wlen);
+		wlen = pfs_blkio_write(mnt, pdata, dblkno, woff, wlen, is_dma);
 
 		if (locked)
 			pfs_inode_lock(in);
@@ -992,7 +992,7 @@ pfs_file_xftruncate(pfs_file_t *file, off_t len)
 }
 
 ssize_t
-pfs_file_xpread(pfs_file_t *file, void *buf, size_t len, off_t off)
+pfs_file_xpread(pfs_file_t *file, void *buf, size_t len, off_t off, int is_dma)
 {
 	pfs_inode_t *in = file->f_inode;
 	pfs_mount_t *mnt = in->in_mnt;
@@ -1009,7 +1009,7 @@ pfs_file_xpread(pfs_file_t *file, void *buf, size_t len, off_t off)
 	rlen = -1;
 	tls_read_begin(mnt);
 	pfs_inode_lock(in);
-	rlen = pfs_file_read(in, buf, len, off2, true, file->f_btime);
+	rlen = pfs_file_read(in, buf, len, off2, true, file->f_btime, is_dma);
 	err = rlen < 0 ? rlen : 0;
 	pfs_inode_unlock(in);
 	tls_read_end(err);
@@ -1021,7 +1021,8 @@ pfs_file_xpread(pfs_file_t *file, void *buf, size_t len, off_t off)
 }
 
 ssize_t
-pfs_file_xpwrite(pfs_file_t *file, const void *buf, size_t len, off_t off)
+pfs_file_xpwrite(pfs_file_t *file, const void *buf, size_t len, off_t off,
+	int is_dma)
 {
 	pfs_inode_t *in = file->f_inode;
 	pfs_mount_t *mnt = in->in_mnt;
@@ -1051,7 +1052,7 @@ pfs_file_xpwrite(pfs_file_t *file, const void *buf, size_t len, off_t off)
 	 */
 	// tls_read_begin(mnt);
 	pfs_inode_lock(in);
-	wlen = pfs_file_write(in, buf, len, &off2, true, file->f_btime);
+	wlen = pfs_file_write(in, buf, len, &off2, true, file->f_btime, is_dma);
 	err = wlen < 0 ? wlen : 0;
 	pfs_inode_unlock(in);
 	// tls_read_end(mnt);
@@ -1179,26 +1180,27 @@ pfs_file_xlseek(pfs_file_t *file, off_t offset, int whence)
  * - the log thread tries to get the inode lock of .pfs-journal.
  */
 ssize_t
-pfs_file_pread(pfs_file_t *file, void *buf, size_t len, off_t off)
+pfs_file_pread(pfs_file_t *file, void *buf, size_t len, off_t off, int is_dma)
 {
 	pfs_inode_t *in = file->f_inode;
 	ssize_t n;
 	MNT_STAT_BEGIN();
 	pfs_tls_set_stat_file_type(file->f_type);
-	n = pfs_file_read(in, buf, len, off, false, INNER_FILE_BTIME);
+	n = pfs_file_read(in, buf, len, off, false, INNER_FILE_BTIME, is_dma);
 	MNT_STAT_END(MNT_STAT_FILE_READ);
 	MNT_STAT_API_END_BANDWIDTH(MNT_STAT_API_PREAD, len);
 	return n;
 }
 
 ssize_t
-pfs_file_pwrite(pfs_file_t *file, const void *buf, size_t len, off_t off)
+pfs_file_pwrite(pfs_file_t *file, const void *buf, size_t len, off_t off,
+	int is_dma)
 {
 	pfs_inode_t *in = file->f_inode;
 	ssize_t n;
 	MNT_STAT_BEGIN();
 	pfs_tls_set_stat_file_type(file->f_type);
-	n = pfs_file_write(in, buf, len, &off, false, INNER_FILE_BTIME);
+	n = pfs_file_write(in, buf, len, &off, false, INNER_FILE_BTIME, is_dma);
 	MNT_STAT_END(MNT_STAT_FILE_WRITE);
 	MNT_STAT_API_END_BANDWIDTH(MNT_STAT_API_PWRITE, len);
 	return n;

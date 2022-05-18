@@ -100,13 +100,13 @@ roundup_power_of_two(uint32_t val)
 }
 
 static int
-pfs_write_paxos_sector(pfs_mount_t *mnt, int sector, void *buf)
+pfs_write_paxos_sector(pfs_mount_t *mnt, int sector, void *buf, int is_dma)
 {
 	pfs_file_t *file = mnt->mnt_paxos_file;
 	off_t offset = sector * mnt->mnt_sectsize;
 	int rv;
 
-	rv = pfs_file_pwrite(file, buf, mnt->mnt_sectsize, offset);
+	rv = pfs_file_pwrite(file, buf, mnt->mnt_sectsize, offset, is_dma);
 	if (rv < 0) {
 		pfs_etrace("paxos writes from offset %lld failed, rv=%d\n",
 		    (long long)offset, rv);
@@ -117,14 +117,16 @@ pfs_write_paxos_sector(pfs_mount_t *mnt, int sector, void *buf)
 }
 
 static int
-pfs_read_paxos_sectors(pfs_mount_t *mnt, int start_sector, int nsector, void *buf)
+pfs_read_paxos_sectors(pfs_mount_t *mnt, int start_sector, int nsector, void *buf,
+	int is_dma)
 {
 	pfs_file_t *file = mnt->mnt_paxos_file;
 	off_t offset = start_sector * mnt->mnt_sectsize;
 	int rv;
 
 	/* read IO doesn't have any time limited */
-	rv = pfs_file_pread(file, buf, nsector * mnt->mnt_sectsize, offset);
+	rv = pfs_file_pread(file, buf, nsector * mnt->mnt_sectsize, offset,
+		is_dma);
 	if (rv < 0) {
 		pfs_etrace("paxos reads from offset %lld failed, rv=%d\n",
 		    (long long)offset, rv);
@@ -140,10 +142,9 @@ write_leader(pfs_mount_t *mnt, struct pfs_leader_record *lr)
 	uint32_t checksum = 0;
 	int rv;
 
-	rv = pfs_mem_memalign((void **)&lr_end, sector_size, sector_size,
-	    M_PAXOS_SECTOR);
-	if (rv)
-		return -rv;
+	lr_end = (struct pfs_leader_record *)mnt->mnt_paxos_buf;
+	if (lr_end == NULL)
+		return -ENOMEM;
 	memset(lr_end, 0, sector_size);
 
 	leader_record_out(lr, lr_end);
@@ -155,10 +156,9 @@ write_leader(pfs_mount_t *mnt, struct pfs_leader_record *lr)
 	lr->checksum = checksum;
 	lr_end->checksum = cpu_to_le32(checksum);
 
-	rv = pfs_write_paxos_sector(mnt, 0, lr_end);
+	rv = pfs_write_paxos_sector(mnt, 0, lr_end, PFS_DMA_ON);
 	if (rv == 0)
 		rv = pfsdev_flush(mnt->mnt_ioch_desc);
-	pfs_mem_free(lr_end, M_PAXOS_SECTOR);
 	return rv;
 }
 
@@ -169,19 +169,17 @@ read_leader(pfs_mount_t *mnt, struct pfs_leader_record *lr, uint32_t *checksum)
 	struct pfs_leader_record *lr_end;
 	int rv;
 
-	rv = pfs_mem_memalign((void **)&lr_end, sector_size, sector_size,
-	    M_PAXOS_SECTOR);
-	if (rv)
-		return -rv;
+	lr_end = (struct pfs_leader_record *)mnt->mnt_paxos_buf;
+	if (lr_end == NULL)
+		return -ENOMEM;
 	memset(lr_end, 0, sector_size);
 
 	/* 0 = leader record is first sector */
-	rv = pfs_read_paxos_sectors(mnt, 0, 1, lr_end);
+	rv = pfs_read_paxos_sectors(mnt, 0, 1, lr_end, PFS_DMA_ON);
 	/* N.B. checksum is computed while the data is in ondisk format. */
 	if (checksum)
 		*checksum = leader_checksum(lr_end);
 	leader_record_in(lr_end, lr);
-	pfs_mem_free(lr_end, M_PAXOS_SECTOR);
 	return rv;
 }
 
@@ -327,10 +325,10 @@ pfs_leader_init(pfs_mount_t *mnt, int num_hosts, int max_hosts, int write_clear,
 		return -E2BIG;
 
 	iobuf_len = align_size;
-	rv = pfs_mem_memalign((void **)&iobuf, getpagesize(), iobuf_len,
-	    M_PAXOS_SECTOR);
-	if (rv)
-		return -rv;
+	iobuf = (char *)pfs_dma_malloc("paxos_sector", 64, iobuf_len,
+		SOCKET_ID_ANY);
+	if (iobuf == NULL)
+		return -ENOMEM;
 	memset(iobuf, 0, iobuf_len);
 
 	memset(&leader, 0, sizeof(leader));
@@ -369,7 +367,8 @@ pfs_leader_init(pfs_mount_t *mnt, int num_hosts, int max_hosts, int write_clear,
 
 	rv = 0;
 	for (num_disks = 1, d = 0; d < num_disks; d++) {
-		rv |= pfs_file_pwrite(mnt->mnt_paxos_file, iobuf, iobuf_len, 0);
+		rv |= pfs_file_pwrite(mnt->mnt_paxos_file, iobuf, iobuf_len, 0,
+			PFS_DMA_ON);
 		if (rv < 0)
 			goto out;
 	}
@@ -383,7 +382,7 @@ out:
 	}
 
 	if (iobuf) {
-		pfs_mem_free(iobuf, M_PAXOS_SECTOR);
+		pfs_dma_free(iobuf);
 		iobuf = NULL;
 	}
 	return (rv < 0) ? rv : 0;
@@ -395,6 +394,7 @@ pfs_leader_load(pfs_mount_t *mnt)
 	struct pfs_leader_record lr;
 	int error, fd;
 	uint32_t checksum = 0;
+	int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 
 	fd = pfs_file_open_impl(mnt, PAXOS_FILE_MONO, 0,
 	    &mnt->mnt_paxos_file, INNER_FILE_BTIME);
@@ -402,6 +402,13 @@ pfs_leader_load(pfs_mount_t *mnt)
 	if (error < 0)
 		return error;
 
+	mnt->mnt_paxos_buf = pfs_dma_malloc("paxos_sector", 64,
+		mnt->mnt_sectsize, socket);
+	if (mnt->mnt_paxos_buf == NULL) {
+		pfs_etrace("can not allocate paxos_sector buffer");
+		error = -ENOMEM;
+		return error;
+	}
 	error = read_leader(mnt, &lr, &checksum);
 	if (error < 0)
 		return error;
@@ -441,6 +448,10 @@ pfs_leader_unload(pfs_mount_t *mnt)
 	if (mnt->mnt_paxos_file) {
 		pfs_file_close(mnt->mnt_paxos_file);
 		mnt->mnt_paxos_file = NULL;
+	} 
+	if (mnt->mnt_paxos_buf) {
+		pfs_dma_free(mnt->mnt_paxos_buf);
+		mnt->mnt_paxos_buf = NULL;
 	}
 }
 

@@ -23,6 +23,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <dpdk/rte_memcpy.h>
+
 #include "pfs_devio.h"
 #include "pfs_dir.h"
 #include "pfs_file.h"
@@ -690,7 +692,7 @@ pfs_log_read(pfs_log_t *log, char *buf, int len, size_t offset)
 		readlen = len;
 	PFS_ASSERT((size_t)readlen >= sizeof(pfs_logentry_phy_t));
 
-	rv = pfs_file_pread(logf, buf, readlen, offset);
+	rv = pfs_file_pread(logf, buf, readlen, offset, PFS_DMA_ON);
 	if (rv > 0) {
 		PFS_ASSERT(rv % sizeof(pfs_logentry_phy_t) == 0);
 		pfs_log_check((pfs_logentry_phy_t *)buf,
@@ -915,7 +917,7 @@ static int pfs_log_writebuf_flush(pfs_log_t *log)
 
 	if (log->log_writebuf_dirty) {
 		wlen = pfs_file_pwrite(logf, log->log_writebuf, log->log_writebuf_sz,
-				log->log_writebuf_off);
+				log->log_writebuf_off, PFS_DMA_ON);
 		if (wlen != log->log_writebuf_sz)
 			return -EIO;
 		log->log_writebuf_dirty = 0;
@@ -938,7 +940,7 @@ static char *pfs_log_writebuf_get(pfs_log_t *log, uint64_t offset, size_t len,
 		if (!(offset == align_off && len >= log->log_writebuf_sz)) {
 			/* if the buffer will not be fully overwritten */
 			rlen = pfs_file_pread(logf, log->log_writebuf, log->log_writebuf_sz,
-					align_off);
+					align_off, PFS_DMA_ON);
 			if (rlen <= 0) {
 				return NULL;
 			}
@@ -959,7 +961,7 @@ static ssize_t pfs_log_writebuf_fill(pfs_log_t *log, char *buf, size_t len,
 	size_t out_len = -1LL;
 	char *out_buf = pfs_log_writebuf_get(log, offset, len, &out_len);
 	if (out_buf) {
-		memcpy(out_buf, buf, out_len);
+		rte_memcpy(out_buf, buf, out_len);
 		log->log_writebuf_dirty = 1;
 	}
 	return out_len;
@@ -1809,9 +1811,12 @@ pfs_log_resume(pfs_log_t *log)
 int
 pfs_log_start(pfs_log_t *log)
 {
-	int err, fd;
+	pfs_mount_t *mnt;
+	int err, fd, socket;
 	char *buf;
 
+	mnt = log->log_mount;
+	socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 	pfs_itrace("log trim group's sector threshold=%ld, tx threshold=%ld\n",
 	    trimgroup_nsect_threshold, trimgroup_ntx_threshold);
 	fd = pfs_file_open_impl(log->log_mount, JOURNAL_FILE_MONO, 0,
@@ -1831,7 +1836,7 @@ pfs_log_start(pfs_log_t *log)
 	mutex_init(&log->log_trimreq.r_mtx);
 	cond_init(&log->log_trimreq.r_cond, NULL);
 
-	buf = (char *)pfs_mem_malloc(PFS_FRAG_SIZE, M_FRAG);
+	buf = (char *)pfs_dma_malloc("logworkbuf", 64, PFS_FRAG_SIZE, socket);
 	if (buf == NULL)
 		ERR_RETVAL(ENOMEM);
 	log->log_workbuf = buf;
@@ -1841,9 +1846,10 @@ pfs_log_start(pfs_log_t *log)
 	log->log_writebuf_off = -1LL;
 	log->log_writebuf_dirty = 0;
 	log->log_writebuf_sz = PBD_SECTOR_SIZE;
-	log->log_writebuf = (char *)pfs_mem_malloc(log->log_writebuf_sz, M_FRAG);
+	log->log_writebuf = (char *)pfs_dma_malloc("logbuf", 64,
+		log->log_writebuf_sz, socket);
 	if (log->log_writebuf == NULL) {
-		pfs_mem_free(log->log_workbuf, M_FRAG);
+		pfs_dma_free(log->log_workbuf);
 		log->log_workbuf = NULL;
 		ERR_RETVAL(ENOMEM);
 	}
@@ -1884,13 +1890,13 @@ pfs_log_stop(pfs_log_t *log)
 	}
 
 	if (log->log_workbuf) {
-		pfs_mem_free(log->log_workbuf, M_FRAG);
+		pfs_dma_free(log->log_workbuf);
 		log->log_workbuf = NULL;
 		log->log_workbufsz = 0;
 	}
 
 	if (log->log_writebuf) {
-		pfs_mem_free(log->log_writebuf, M_FRAG);
+		pfs_dma_free(log->log_writebuf);
 		log->log_writebuf = NULL;
 		log->log_writebuf_sz = 0;
 	}

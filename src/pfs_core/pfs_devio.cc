@@ -380,9 +380,11 @@ pfs_io_submit(pfs_devio_t *io)
 				MNT_STAT_END(MNT_STAT_DEV_NOBUF);
 			else
 				MNT_STAT_END(MNT_STAT_DEV_THROTTLE);
-			PFS_VERIFY(nio != NULL);
-			err = nio->io_error;
-			pfs_io_destroy(nio);
+			if (nio) {
+				PFS_VERIFY(nio != NULL);
+				err = nio->io_error;
+				pfs_io_destroy(nio);
+			}
 			waitio = false;
 		}
 		if (err < 0)
