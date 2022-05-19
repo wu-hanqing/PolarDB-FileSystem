@@ -25,6 +25,9 @@ mkdir -p ${INSTALL_BASE_DIR}/pfsd/lib
 
 #check install
 if [ -f "${INSTALL_BASE_DIR}/pfsd/include/pfsd_sdk.h" ] || \
+[ -f "${INSTALL_BASE_DIR}/pfsd/include/pfsd_sdk_log.h" ] || \
+[ -f "${INSTALL_BASE_DIR}/pfsd/include/pfs_api.h" ] || \
+[ -f "${INSTALL_BASE_DIR}/pfsd/include/pfs_trace_func.h" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/lib/libpfsd.a" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_test.so" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/bin/pfsdaemon" ] || \
@@ -42,6 +45,9 @@ if [ -f "${INSTALL_BASE_DIR}/pfsd/include/pfsd_sdk.h" ] || \
 fi
 
 if [ ! -f "src/pfs_sdk/pfsd_sdk.h" ] || \
+[ ! -f "src/pfs_sdk/pfsd_sdk_log.h" ] || \
+[ ! -f "src/pfs_core/pfs_api.h" ] || \
+[ ! -f "src/pfs_core/pfs_trace_func.h" ] || \
 [ ! -f "lib/libpfsd.a" ] || \
 [ ! -f "lib/libpfsd_test.so" ] || \
 [ ! -f "bin/pfsdaemon" ] || \
@@ -65,6 +71,9 @@ fi
 
 #install
 install -m 0644 src/pfs_sdk/pfsd_sdk.h			${INSTALL_BASE_DIR}/pfsd/include/pfsd_sdk.h
+install -m 0644 src/pfs_sdk/pfsd_sdk_log.h		${INSTALL_BASE_DIR}/pfsd/include/pfsd_sdk_log.h
+install -m 0644 src/pfs_core/pfs_api.h			${INSTALL_BASE_DIR}/pfsd/include/pfs_api.h
+install -m 0644 src/pfs_core/pfs_trace_func.h		${INSTALL_BASE_DIR}/pfsd/include/pfs_trace_func.h
 install -m 0755 lib/libpfsd.a				${INSTALL_BASE_DIR}/pfsd/lib/libpfsd.a
 install -m 0755 lib/libpfsd_test.so			${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_test.so
 install -m 0755 bin/pfsdaemon				${INSTALL_BASE_DIR}/pfsd/bin/pfsdaemon
