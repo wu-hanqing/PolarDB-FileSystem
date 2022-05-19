@@ -17,8 +17,11 @@
 #define _PFSD_SDK_SHM_H_
 
 #include <dirent.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <sys/types.h>
+
+#include "pfsd_sdk_log.h"
 
 /* copy from pfs_impl.h, just for lib user */
 #define	PFS_OBJDATA_SIZE	(128 - 40)
