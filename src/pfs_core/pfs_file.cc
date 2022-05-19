@@ -162,7 +162,7 @@
  *
  */
 
-#define MAX_NFD_LIMIT 2048000L
+#define MAX_NFD_LIMIT 20480000L
 #define MAX_SHRINK_SIZE 10737418240L
 
 static bool
