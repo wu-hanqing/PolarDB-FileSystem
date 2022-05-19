@@ -687,7 +687,8 @@ remount:
 	}
 
 	/* For pfsd, paxos_hostid_local_lock is moved up to SDK side */
-	if (!pfs_ispfsd(mnt) && !pfs_istool(mnt) && pfs_writable(mnt)) {
+	if ((!pfs_ispfsd(mnt) || pfs_ispfsd_internal(mnt)) &&
+		!pfs_istool(mnt) && pfs_writable(mnt)) {
 		fd = paxos_hostid_local_lock(pbdname, DEFAULT_MAX_HOSTS + 1,
 		    __func__);
 		if (fd < 0) {
@@ -2051,7 +2052,7 @@ pfs_host_incref(int host_id, int flags)
 {
 	int *hostid_ref_count = &pfsd_mount_shared_infos[host_id].ms_ref_count;
 	if ((flags & MNTFLG_WR) != 0) {
-		if(*hostid_ref_count != 0) {
+		if (*hostid_ref_count != 0) {
 			pfs_etrace("Repeat rw mount with same hostid: "
 	                    "host_id:%d, flags:%d, refcnt: %d\n", host_id,
 	                    flags, *hostid_ref_count);

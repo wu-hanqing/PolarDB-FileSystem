@@ -61,6 +61,9 @@ extern "C" {
 int	pfs_mount(const char *cluster, const char *pbdname, int host_id, int flags);
 int	pfs_umount(const char *pbdname);
 int	pfs_mount_growfs(const char *pbdname);
+int	pfs_mount_acquire(const char *cluster, const char *pbdname,
+		int host_id, int flags);
+int	pfs_mount_release(const char *pbdname, int host_id);
 
 /* functions both for file and directory */
 int	pfs_rename(const char *oldpbdpath, const char *newpbdpath);
@@ -337,6 +340,10 @@ int	pfs_chunkstream_isfinish(pfs_chunkstream_t *stream);
  */
 void	pfs_chunkstream_get_nchunk(const pfs_chunkstream_desc_t *desc, 
 	    int *nchunk);
+
+typedef void (*pfs_log_func_t)(int level, const char *fmt, va_list ap);
+
+void	pfs_set_log_func(pfs_log_func_t func);
 
 #ifdef __cplusplus
 }
