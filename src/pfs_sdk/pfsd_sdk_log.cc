@@ -45,13 +45,14 @@ default_log(const char *filename, const char *func, int line,
 }
                                                                                 
 static pfsd_log_func_t log_func = &default_log;
-void
+
+extern "C" void
 pfsd_sdk_set_log_func(pfsd_log_func_t f)
 {
 	log_func = f;
 }
 
-void
+extern "C" void
 pfsd_sdk_log(const char *filename, const char *func, int line,
         int priority, const char *fmt, ...)
 {
