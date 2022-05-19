@@ -28,13 +28,12 @@ unsigned int server_id = 0; /* db ins id */
 
 DEFINE_bool(daemon, false, "become daemon process");
 DEFINE_int32(server_id, 0, "PFSD server id");
-DEFINE_string(log_cfg, "pfsd_logger.conf", "ZLOG config file");
 DEFINE_string(pbd_name, "", "PBD name");
 DEFINE_string(shm_dir, PFSD_SHM_PATH, "pfsd shared memory dir");
 DEFINE_int32(pollers, 2, "PFSD pollers");
-DEFINE_int32(workers, 256, "PFSD pollers");
+DEFINE_int32(workers, 50, "PFSD pollers");
 
-pfsd_option_t g_option;
+pfsd_option_t g_pfsd_option;
 
 #define PFSD_TRIM_VALUE(v, min_v, max_v) do {\
 	if (v > max_v) \
@@ -46,14 +45,10 @@ pfsd_option_t g_option;
 static bool
 sanity_check()
 {
-	if (strlen(g_option.o_pbdname) == 0) {
-		fprintf(stderr, "pbdname is empty\n");
+	if (strlen(g_pfsd_option.o_pbdname) == 0) {
+		pfsd_error("pbdname is empty\n");
 		return false;
 	}
-
-	fprintf(stderr, "option pbdname %s\n",g_option.o_pbdname);
-	fprintf(stderr, "option server id %u\n", server_id);
-	fprintf(stderr, "option logconf %s\n",g_option.o_log_cfg);
 
 	return true;
 }
@@ -61,23 +56,21 @@ sanity_check()
 static void __attribute__((constructor))
 init_default_value()
 {
-	g_option.o_pollers = 2;
-	g_option.o_workers = 256;
-	strncpy(g_option.o_log_cfg, "pfsd_logger.conf", sizeof g_option.o_log_cfg);
-	strncpy(g_option.o_shm_dir, PFSD_SHM_PATH, sizeof g_option.o_shm_dir);
-	g_option.o_daemon = 0;
+	g_pfsd_option.o_pollers = 2;
+	g_pfsd_option.o_workers = 256;
+	strncpy(g_pfsd_option.o_shm_dir, PFSD_SHM_PATH, sizeof g_pfsd_option.o_shm_dir);
+	g_pfsd_option.o_daemon = 0;
 	server_id = 0;
 }
 
 int
-pfsd_parse_option(int ac, char *av[])
+pfsd_parse_option(void)
 {
-	g_option.o_daemon = FLAGS_daemon;
-	g_option.o_pollers = FLAGS_pollers;
-	g_option.o_workers = FLAGS_workers;
-	strncpy(g_option.o_log_cfg, FLAGS_log_cfg.c_str(), sizeof g_option.o_log_cfg);
-	strncpy(g_option.o_shm_dir, FLAGS_shm_dir.c_str(), sizeof g_option.o_shm_dir);
-	strncpy(g_option.o_pbdname, FLAGS_pbd_name.c_str(), sizeof g_option.o_pbdname);
+	g_pfsd_option.o_daemon = FLAGS_daemon;
+	g_pfsd_option.o_pollers = FLAGS_pollers;
+	g_pfsd_option.o_workers = FLAGS_workers;
+	strncpy(g_pfsd_option.o_shm_dir, FLAGS_shm_dir.c_str(), sizeof g_pfsd_option.o_shm_dir);
+	strncpy(g_pfsd_option.o_pbdname, FLAGS_pbd_name.c_str(), sizeof g_pfsd_option.o_pbdname);
 	server_id = FLAGS_server_id;
 	if (!sanity_check())
 		return -1;

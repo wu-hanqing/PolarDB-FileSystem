@@ -34,7 +34,7 @@
 #include "pfsd_shm.h"
 #include "pfsd_option.h"
 
-#include "pfsd_zlog.h"
+#include "pfsd_log.h"
 #include "pfsd_chnl.h"
 #include "pfsd_chnl_shm.h"
 #include "pfsd_worker.h"
@@ -53,9 +53,9 @@ static void *io_poller(void *arg);
 #define IO_WORKERS 100
 static pthread_t io_worker_h[IO_WORKERS];
 
-worker_t *g_worker;
+worker_t *g_pfsd_worker;
 
-volatile bool g_stop = false;
+volatile bool g_pfsd_stop = false;
 
 /* current processing request's pid */
 __thread pid_t g_currentPid;
@@ -78,7 +78,7 @@ pfsd_create_workers(int nworkers)
 
 	worker->w_nch = 0;
 	worker->w_nworkers = nworkers;
-	worker->w_npollers = g_option.o_pollers;
+	worker->w_npollers = g_pfsd_option.o_pollers;
 	worker->w_io_workers = (pthread_t *)calloc(nworkers, sizeof(pthread_t));
 	worker->w_io_pollers = (pthread_t *)calloc(worker->w_npollers, sizeof(pthread_t));
 	sem_init(&worker->w_sem, 0, 0);
@@ -187,7 +187,7 @@ pfsd_worker_routine(void *arg)
 	}
 
 	if (wk->w_nch == 0) {
-		g_stop = true;
+		g_pfsd_stop = true;
 		pfsd_error("no avail channel for job poller");
 		return NULL;
 	}
@@ -199,7 +199,7 @@ pfsd_worker_routine(void *arg)
 
 	init_io_pollers(wk);
 
-	while (!g_stop)
+	while (!g_pfsd_stop)
 		usleep(1000);
 
 	stop_io_workers(wk);
@@ -212,7 +212,7 @@ static void* io_poller(void *arg)
 {
 	worker_t *wk = (worker_t*)(arg);
 
-	while (!g_stop) {
+	while (!g_pfsd_stop) {
 		for (int i = 0; i < wk->w_nch; ++i) {
 			int index = -1;
 			pfsd_iochannel_t *ch = wk->w_channels[i];

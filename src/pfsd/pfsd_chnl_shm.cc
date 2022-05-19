@@ -37,7 +37,7 @@
 #include "pfsd_shm.h"
 #include "pfsd_common.h"
 #include "pfsd_worker.h"
-#include "pfsd_zlog.h"
+#include "pfsd_log.h"
 
 #ifdef PFSD_SERVER
 #include "pfs_mount.h"
@@ -389,7 +389,7 @@ chnl_connect_socket(chnl_ctx_shm_t *ctx)
 	memset(&sockaddr, 0, sizeof(struct sockaddr_un));
 	sock = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
 	if (sock == -1) {
-		PFSD_C_ELOG("socket() error: %d", errno);
+		pfsd_error("socket() error: %d", errno);
 		return -1;
 	}
 
@@ -423,12 +423,12 @@ chnl_connect_socket(chnl_ctx_shm_t *ctx)
 #endif
 	flags = fcntl(sock, F_GETFL, 0);
 	if (flags == -1) {
-		PFSD_C_ELOG("fcntl(F_GETFL) error: %d", errno);
+		pfsd_error("fcntl(F_GETFL) error: %d", errno);
 		close(sock);
 		return -1;
 	}
 	if (fcntl(sock, F_SETFL, flags | O_NONBLOCK)){
-		PFSD_C_ELOG("fcntl(F_SETFL) error: %d", errno);
+		pfsd_error("fcntl(F_SETFL) error: %d", errno);
 		close(sock);
 		return -1;
 	}
@@ -451,10 +451,10 @@ pfsd_shm_reconnect_socket(chnl_ctx_shm_t *ctx, int gen)
 
 	for (;;) {
 		if (chnl_connect_socket(ctx)) {
-			PFSD_CLIENT_LOG("reconnect io-notify socket failed, retrying");
+			pfsd_info("reconnect io-notify socket failed, retrying");
 			sleep(1);
 		} else {
-			PFSD_CLIENT_LOG("reconnect io-notify socket success");
+			pfsd_info("reconnect io-notify socket success");
 			break;
 		}
 	}
@@ -485,13 +485,13 @@ chnl_listen_shm_thread_entry(void *arg)
 	int nfd = ctx->svr.shm_inotify_fd;
 	struct pollfd pollinf;
 
-	while (!g_stop) {
+	while (!g_pfsd_stop) {
 		do {
 			pollinf.fd = nfd;
 			pollinf.events = POLLIN;			
 			pollinf.revents = 0;
 			poll(&pollinf, 1, 100);
-			if (g_stop)
+			if (g_pfsd_stop)
 				goto out;
 			numRead = TEMP_FAILURE_RETRY(read(nfd, buf,
 			    sizeof(buf)));
@@ -635,7 +635,7 @@ again:
 		return;
 	rc = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
 	if (rc == -1 && errno != EAGAIN) {
-		PFSD_CLIENT_LOG("recv error %d", errno);
+		pfsd_info("recv error %d", errno);
 		return;
 	}
 	if (rc == -1)
@@ -665,7 +665,7 @@ chnl_prepare_shm(void *ctx_ptr, const char *pbdname, int nworkers, void *arg1)
 	int r = pthread_create(&worker->w_tid, NULL, pfsd_worker_routine, worker);
 	PFSD_ASSERT(r == 0);
 
-	g_worker = worker;
+	g_pfsd_worker = worker;
 #endif
 	return 0;
 }
@@ -1052,12 +1052,12 @@ chnl_ctx_create_shm(const char *svr_addr, bool is_svr)
 	/* Check if svr_addr is a directory */
 	err = stat(svr_addr, &dir_info);
 	if (err != 0) {
-		fprintf(stderr, "stat %s fail: %s\n", svr_addr, strerror(errno));
+		pfsd_error("stat %s fail: %s\n", svr_addr, strerror(errno));
 		return NULL;
 	}
 
 	if (!S_ISDIR(dir_info.st_mode)) {
-		fprintf(stderr, "%s is not dir\n", svr_addr);
+		pfsd_error("%s is not dir\n", svr_addr);
 		errno = ENOTDIR;
 		return NULL;
 	}

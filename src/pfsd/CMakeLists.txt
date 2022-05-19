@@ -30,6 +30,7 @@ SET(SRC_LIST_PFSD pfsd_main.cc
                   pfsd_option.cc
                   pfsd_shm.cc
                   pfsd_worker.cc
+		  pfsd.cc
     )
 
 # macro definition
@@ -43,10 +44,6 @@ add_executable(pfsdaemon
     ${SRC_LIST_PFSD}
     )
 
-add_dependencies(pfsdaemon
-    pfs
-    )
-
 if(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "x86_64")
     set(CXXFLAGS ${CXXFLAGS}  -march=native)
 endif()
@@ -54,7 +51,8 @@ endif()
 target_link_libraries(pfsdaemon
     pfs
     ${SPDK_LIBS}
-    libzlog.a
+    glog
+    gflags
     pthread
 )
 

@@ -19,7 +19,7 @@
 #include "pfs_impl.h"
 
 typedef struct {
-    int o_pollers;
+	int o_pollers;
 	/* Worker threads, same as num of channels */
 	int o_workers;
 	/* Worker thread usleep interval in us */
@@ -28,17 +28,15 @@ typedef struct {
 	char o_pbdname[PFS_MAX_PBDLEN];
 	/* shm directory */
 	char o_shm_dir[PFS_MAX_PATHLEN];
-	/* config file */
-	char o_log_cfg[PFS_MAX_PATHLEN];
 	/* daemon mode */
 	int o_daemon;
 	/* if bind cpuset */
 	int o_affinity;
 } pfsd_option_t;
 
-extern pfsd_option_t g_option;
+extern pfsd_option_t g_pfsd_option;
 
-int pfsd_parse_option(int ac, char *av[]);
+int pfsd_parse_option(void);
 void pfsd_usage(const char *prog);
 
 #endif

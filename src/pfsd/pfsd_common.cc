@@ -131,31 +131,45 @@ pfsd_sdk_pbdname(const char *pbdpath, char *pbdname)
 }
 
 int
-pfsd_write_pid(const char *pbdname) {
-	char file[4*1024] = "";
+pfsd_pidfile_open(const char *pbdname)
+{
+	int fd = -1;
+	char file[1024] = "";
+
 	snprintf(file, sizeof(file), "/var/run/pfsd/pfsd_%s.pid", pbdname);
-	int fd = ::open(file, O_RDWR | O_CREAT | O_CLOEXEC, 0644);
-	if (fd < 0)
+	fd = ::open(file, O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+	if (fd < 0) {
+		pfsd_error("can not open/create file: %s, error: %s", file,
+			   strerror(errno));
 		return -errno;
+	}
 
 	if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
+		pfsd_error("can not lock file: %s, error: %s", file,
+			   strerror(errno));
+
 		close(fd);
 		return -errno;
 	}
 
+	return fd;
+}
+
+int
+pfsd_pidfile_write(int fd)
+{
 	char buf[128];
 	size_t size = snprintf(buf, sizeof(buf), "%ld", (long)getpid());
 	int ret = write(fd, buf, size);
 	if (ret != (int)size) {
-		close(fd);
 		return -EIO;
 	}
-
 	return 0;
 }
 
-const char mon_name[][4] = {
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-};
+int
+pfsd_pidfile_close(int fd) 
+{
+	return close(fd);
+}
 

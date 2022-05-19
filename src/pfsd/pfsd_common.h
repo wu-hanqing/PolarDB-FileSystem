@@ -26,6 +26,9 @@
 #include <string.h>
 #include <errno.h>
 #include <execinfo.h>
+#include <syslog.h>
+
+#include <pfsd_log.h>
 
 #define PFSD_SHM_MAGIC (0x0133C96C)
 
@@ -105,7 +108,9 @@ int pfsd_robust_mutex_unlock(pthread_mutex_t* mutex);
 int pfsd_sdk_pbdname(const char* pbdpath, char* pbdname);
 
 /* only one instance running for each pbd */
-int pfsd_write_pid(const char* pbdname);
+int pfsd_pidfile_open(const char* pbdname);
+int pfsd_pidfile_write(int fd);
+int pfsd_pidfile_close(int fd);
 
 #define FILE_MAX_FNAME 512
 
@@ -124,45 +129,16 @@ int pfsd_write_pid(const char* pbdname);
 		} \
 } while(0)
 
-extern const char mon_name[][4];
+#ifndef PFSD_SERVER
 
-inline static
-int FormatTime(char* buf, size_t bufsize)
-{
-		int saved_err = errno;
-
-		struct timeval tv;
-		struct tm tm;
-		gettimeofday(&tv, NULL);
-		localtime_r(&tv.tv_sec, &tm);
-		int len = snprintf(buf, bufsize, "%.3s%3d %.2d:%.2d:%.2d.%06ld ",
-						mon_name[tm.tm_mon], tm.tm_mday,
-						tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
-
-		errno = saved_err;
-		return len;
-}
-
-#define PFSD_CLIENT_LOG(fmt, ...) do { \
-	char _buf_[256]; \
-	int _len_ = FormatTime(_buf_, sizeof(_buf_)); \
-	fprintf(stderr, "[PFSD_SDK INF %.*s][%d]%s %d: " fmt "\n", \
-	    (_len_ > 0 ? _len_-1 : 0), _buf_, getpid(), __func__, __LINE__, ##__VA_ARGS__); \
-} while(0)
-
-#define PFSD_CLIENT_ELOG(fmt, ...) do { \
-	char _buf_[256]; \
-	int _len_ = FormatTime(_buf_, sizeof(_buf_)); \
-	fprintf(stderr, "[PFSD_SDK ERR %.*s][%d]%s %d: " fmt "\n", \
-	    (_len_ > 0 ? _len_-1 : 0), _buf_, getpid(), __func__, __LINE__, ##__VA_ARGS__); \
-} while(0)
-
-#ifdef PFSD_SERVER
-#define PFSD_C_LOG		    pfsd_info
-#define PFSD_C_ELOG		    pfsd_error
+#ifdef NDEBUG
+#define PFSD_CLIENT_LOG		pfsd_debug
 #else
-#define PFSD_C_LOG		    PFSD_CLIENT_LOG
-#define PFSD_C_ELOG		    PFSD_CLIENT_ELOG
+#define PFSD_CLIENT_LOG		pfsd_info
+#endif
+
+#define PFSD_CLIENT_ELOG	pfsd_error
+
 #endif
 
 /* PFSD_CPUSET_FILE must in same volume for all pods */
@@ -219,7 +195,7 @@ int* pfsd_calc_threads_per_cpu(int workers, int* groups)
 	return arr;
 }
 
-inline void
+static inline void
 pfsd_abort(const char *action, const char *cond, const char *func, int line)
 {
 #define	SYMBOL_SIZE	128
@@ -227,11 +203,11 @@ pfsd_abort(const char *action, const char *cond, const char *func, int line)
 	int nsym;
 	char **syms;
 
-	PFSD_CLIENT_ELOG("failed to %s %s at %s: %d\n", action, cond, func, line);
+	pfsd_error("failed to %s %s at %s: %d\n", action, cond, func, line);
 	nsym = backtrace(buf, SYMBOL_SIZE);
 	syms = backtrace_symbols(buf, nsym);
 	for (int i = 0; i < nsym; i++)
-		PFSD_CLIENT_ELOG("%s\n", syms[i]);
+		pfsd_error("%s\n", syms[i]);
 	free(syms);
 
 	abort();

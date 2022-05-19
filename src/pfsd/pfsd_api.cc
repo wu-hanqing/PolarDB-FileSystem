@@ -24,7 +24,7 @@
 #include "pfs_trace.h"
 #include "pfs_api.h"
 #include "pfsd_api.h"
-#include "pfsd_zlog.h"
+#include "pfsd_log.h"
 #include "pfs_file.h"
 
 #include "pfs_file.cc"
@@ -915,11 +915,11 @@ pfsd_fsync_svr(pfs_mount_t *mnt, pfs_inode_t *inode, uint64_t btime)
 
 	API_ENTER(DEBUG, "%ld", inode->in_ino);
 
-    MNT_STAT_API_BEGIN(MNT_STAT_API_FSYNC);   
+	MNT_STAT_API_BEGIN(MNT_STAT_API_FSYNC);
 	while (err == -EAGAIN) {
 		err = pfsd_file_fsync(mnt, inode, btime);
 	}
-    MNT_STAT_API_END(MNT_STAT_API_FSYNC);   
+	MNT_STAT_API_END(MNT_STAT_API_FSYNC);
 
 	API_EXIT(err);
 	if (err < 0)
