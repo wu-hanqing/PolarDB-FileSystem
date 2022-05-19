@@ -198,7 +198,7 @@ pfs_spdk_init_thread(struct pfs_spdk_thread **td, bool pfs)
     spdk_thread = spdk_thread_create(pfs? "pfs_thread" : "", NULL);
     g_pfs_thread = false;
     if (!spdk_thread) {
-        SPDK_ERRLOG("failed to allocate thread\n");
+        pfs_etrace("failed to allocate thread\n");
         return -1;
     }
 
@@ -271,7 +271,7 @@ struct spdk_io_channel* pfs_get_spdk_io_channel(struct spdk_bdev_desc *desc)
     struct spdk_io_channel* ch = spdk_bdev_get_io_channel(desc);
     if (ch == NULL) {
         pthread_mutex_unlock(&thread->mtx);
-        SPDK_ERRLOG("can not get io channel\n");
+        pfs_etrace("can not get io channel\n");
         pfs_mem_free(target, M_SPDK_TARGET);
         return NULL;
     }
@@ -535,7 +535,7 @@ pfs_spdk_setup(void)
     pthread_mutex_lock(&init_mutex);
     if (!g_spdk_env_initialized) {
         if (pfs_spdk_init_env()) {
-            SPDK_ERRLOG("failed to initialize\n");
+            pfs_etrace("failed to initialize\n");
             pthread_mutex_unlock(&init_mutex);
             return -1;
         }
