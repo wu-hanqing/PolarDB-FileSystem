@@ -596,28 +596,51 @@ ssize_t
 pfsd_read(int fd, void *buf, size_t len)
 {
 	pfsd_file_t *file = NULL;
-	ssize_t rc = 0;
+	char *cbuf = (char *)buf;
+	ssize_t rc = 0, total = 0, to_read = 0;
 
 	PFSD_SDK_GET_FILE(fd);
 	pthread_mutex_lock(&file->f_lseek_lock);
-	rc = pfsd_file_pread(file, buf, len, file->f_offset);
-	if (rc > 0)
-		file->f_offset += rc;
+	while (len > 0) {
+		to_read = len;
+		if (to_read > PFSD_MAX_IOSIZE)
+			to_read = PFSD_MAX_IOSIZE;
+		rc = pfsd_file_pread(file, cbuf+total, to_read, file->f_offset);
+		if (rc > 0) {
+			file->f_offset += rc;
+			total += rc;
+			len -= rc;
+		} else {
+			break;
+		}
+	}
 	pthread_mutex_unlock(&file->f_lseek_lock);
 	pfsd_put_file(file);
-	return rc;
+	return total > 0 ? total : rc;
 }
 
 ssize_t
 pfsd_pread(int fd, void *buf, size_t len, off_t off)
 {
 	pfsd_file_t *file = NULL;
-	ssize_t rc = 0;
+	char *cbuf = (char *)buf;
+	ssize_t rc = 0, total = 0, to_read = 0;
 
 	PFSD_SDK_GET_FILE(fd);
-	rc = pfsd_file_pread(file, buf, len, off);
+	while (len > 0) {
+		to_read = len;
+		if (to_read > PFSD_MAX_IOSIZE)
+			to_read = PFSD_MAX_IOSIZE;		
+		rc = pfsd_file_pread(file, cbuf+total, to_read, off+total);
+		if (rc > 0) {
+			total += rc;
+			len -= rc;
+		} else {
+			break;
+		}
+	}
 	pfsd_put_file(file);
-	return rc;
+	return total ? total : rc;
 }
 
 static ssize_t
@@ -683,30 +706,60 @@ ssize_t
 pfsd_write(int fd, const void *buf, size_t len)
 {
 	pfsd_file_t *file = NULL;
-	ssize_t rc = 0;
+	char *cbuf = (char *)buf;
+	ssize_t rc = 0, total = 0, to_write = 0;
 
 	PFSD_SDK_GET_FILE(fd);
 	pthread_mutex_lock(&file->f_lseek_lock);
-	rc = pfsd_file_pwrite(file, buf, len, OFFSET_FILE_POS);
+	while (len > 0) {
+		to_write = len;
+		if (to_write > PFSD_MAX_IOSIZE)
+			to_write = PFSD_MAX_IOSIZE;
+		rc = pfsd_file_pwrite(file, cbuf+total, to_write, OFFSET_FILE_POS);
+		if (rc > 0) {
+			total += rc;
+			len -= rc;
+		} else {
+			break;
+		}
+	}
 	pthread_mutex_unlock(&file->f_lseek_lock);
 	pfsd_put_file(file);
-	return rc;
+	return total ? total : rc;
 }
 
 ssize_t
 pfsd_pwrite(int fd, const void *buf, size_t len, off_t off)
 {
 	pfsd_file_t *file = NULL;
-	ssize_t rc = 0;
+	char *cbuf = (char *)buf;
+	ssize_t rc = 0, total = 0, to_write = 0;
 
 	if (off < 0) {
 		errno = EINVAL;
 		return -1;
 	}
 	PFSD_SDK_GET_FILE(fd);
-	rc = pfsd_file_pwrite(file, buf, len, off);
+	if (file->f_flags & O_APPEND) {
+		pthread_mutex_lock(&file->f_lseek_lock);
+	}
+	while (len > 0) {
+		to_write = len;
+		if (to_write > PFSD_MAX_IOSIZE)
+			to_write = PFSD_MAX_IOSIZE;
+		rc = pfsd_file_pwrite(file, cbuf+total, to_write, off+total);
+		if (rc > 0) {
+			total += rc;
+			len -= rc;
+		} else {
+			break;
+		}
+	}
+	if (file->f_flags & O_APPEND) {
+		pthread_mutex_unlock(&file->f_lseek_lock);
+	}
 	pfsd_put_file(file);
-	return rc;
+	return total ? total : rc;
 }
 
 static ssize_t
