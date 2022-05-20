@@ -23,6 +23,7 @@
 #define UNIT_1G (1024*1024*1024)
 #define UNIT_4K (4*1024)
 #define UNIT_4M (4*1024*1024)
+#define UNIT_8M (8*1024*1024)
 
 #define CHECK_RET(expected, actual) do {\
     EXPECT_EQ(expected, actual);\
