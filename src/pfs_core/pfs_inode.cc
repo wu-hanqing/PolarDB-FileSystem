@@ -319,7 +319,7 @@ pfs_inode_del(pfs_inode_t *in, pfs_dblk_t *dblk)
 {
 	int err = 0;
 	pfs_blktag_phy_t *bt;
-	pfs_inode_phy_t *phyin;
+	pfs_inode_phy_t *phyin = NULL;
 	pfs_txop_t *bttop, *phyintop;
 	pfs_mount_t *mnt = in->in_mnt;
 	pfs_blkno_t blkno = dblk->db_blkno;
@@ -431,7 +431,7 @@ pfs_inode_add(pfs_inode_t *in, pfs_blkid_t blkid)
 {
 	int err;
 	pfs_blktag_phy_t *bt;
-	pfs_inode_phy_t *phyin;
+	pfs_inode_phy_t *phyin = NULL;
 	pfs_txop_t *bttop, *phyintop;
 	pfs_tx_t *tx = pfs_tls_get_tx();
 
@@ -1481,7 +1481,7 @@ int
 pfs_inodephy_stat(pfs_mount_t *mnt, pfs_ino_t ino, pfs_inode_t *in, struct stat *st)
 {
 	int err;
-	pfs_inode_phy_t *phyin;
+	pfs_inode_phy_t *phyin = NULL;
 
 	err = pfs_inode_phy_get(mnt, in, &phyin, ino, NULL);
 	if (err < 0)
@@ -1613,7 +1613,7 @@ pfs_inodephy_setxattr(pfs_mount_t *mnt, pfs_ino_t ino, const char *name,
     const void *value, size_t size)
 {
 	pfs_tx_t *tx = pfs_tls_get_tx();
-	pfs_inode_phy_t *phyin;
+	pfs_inode_phy_t *phyin = NULL;
 	pfs_txop_t *intop;
 	int err;
 
