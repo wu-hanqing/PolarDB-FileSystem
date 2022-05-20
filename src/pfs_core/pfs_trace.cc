@@ -174,7 +174,7 @@ default_pfs_vtrace(int level, const char *filename, const char *func,
 
 }
 
-void
+extern "C" void
 pfs_vtrace(int level, const char *filename, const char *func, int line,
 	const char *fmt, ...)
 {
@@ -286,13 +286,15 @@ pfs_trace_handle(int sock, msg_header_t *mh, msg_trace_t *tr)
 	return err;
 }
 
+extern "C" {
 void
 pfs_set_trace_func(pfs_trace_func_t func)
 {
 	pfs_trace_func = func;
 }
 
-pfs_trace_func_t pfs_get_trace_func()
+pfs_trace_func_t
+pfs_get_trace_func()
 {
 	return pfs_trace_func;
 }
@@ -304,9 +306,10 @@ pfs_set_trace_level(int level)
 	pfs_trace_plevel = level;
 	return old;
 }
+
 int
 pfs_get_trace_level()
 {
 	return pfs_trace_plevel;
 }
-
+}  // extern "C"

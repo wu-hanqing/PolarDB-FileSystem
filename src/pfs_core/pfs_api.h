@@ -344,10 +344,6 @@ int	pfs_chunkstream_isfinish(pfs_chunkstream_t *stream);
 void	pfs_chunkstream_get_nchunk(const pfs_chunkstream_desc_t *desc, 
 	    int *nchunk);
 
-typedef void (*pfs_log_func_t)(int level, const char *fmt, va_list ap);
-
-void	pfs_set_log_func(pfs_log_func_t func);
-
 #ifdef __cplusplus
 }
 #endif

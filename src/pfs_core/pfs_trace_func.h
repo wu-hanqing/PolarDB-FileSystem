@@ -3,6 +3,10 @@
 
 #include <stdarg.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
 	PFS_TRACE_FATAL,
 	PFS_TRACE_ERROR,
@@ -23,5 +27,9 @@ void	pfs_set_trace_func(pfs_trace_func_t func);
 pfs_trace_func_t pfs_get_trace_func();
 int	pfs_set_trace_level(int);
 int	pfs_get_trace_level();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // PFS_TRACE_FUNC_H
