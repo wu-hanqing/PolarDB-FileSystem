@@ -17,9 +17,7 @@
 #define _PFS_DEVSTAT_H_
 
 #include "pfs_impl.h"
-#ifndef PFS_DISK_IO_ONLY
-#include "pfs_iochnl.h"
-#else
+
 enum {
     PFSDEV_REQ_NOP      = 0,
     PFSDEV_REQ_INFO     = 1,
@@ -30,7 +28,6 @@ enum {
 
     PFSDEV_REQ_MAX,
 };
-#endif
 
 typedef struct pfs_devio pfs_devio_t;
 typedef struct admin_buf admin_buf_t;
