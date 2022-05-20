@@ -15,7 +15,7 @@ cmake_minimum_required (VERSION 3.23.1)
 project(pfsd CXX C ASM)
 set(pfsd_VERSION_MAJOR 2)
 set(pfsd_VERSION_MINOR 1)
-set(pfsd_VERSION_PATCH 0)
+set(pfsd_VERSION_PATCH 2)
 set(pfsd_VERSION 
     ${pfsd_VERSION_MAJOR}.${pfsd_VERSION_MINOR}.${pfsd_VERSION_MATCH})
 
