@@ -81,6 +81,12 @@ static int s_remount_timeout_ms = 2000 * 1000;
 	} \
 } while(0)
 
+static ssize_t pfsd_file_pread(pfsd_file_t *file, void *buf, size_t len,
+	off_t off);
+static ssize_t pfsd_file_pwrite(pfsd_file_t *file, const void *buf, size_t len,
+	off_t off);
+static off_t pfsd_file_lseek(pfsd_file_t *file, off_t offset, int whence);
+
 void
 pfsd_set_mode(int mode)
 {
@@ -589,11 +595,33 @@ pfsd_creat(const char *pbdpath, mode_t mode)
 ssize_t
 pfsd_read(int fd, void *buf, size_t len)
 {
-	return pfsd_pread(fd, buf, len, OFFSET_FILE_POS);
+	pfsd_file_t *file = NULL;
+	ssize_t rc = 0;
+
+	PFSD_SDK_GET_FILE(fd);
+	pthread_mutex_lock(&file->f_lseek_lock);
+	rc = pfsd_file_pread(file, buf, len, file->f_offset);
+	if (rc > 0)
+		file->f_offset += rc;
+	pthread_mutex_unlock(&file->f_lseek_lock);
+	pfsd_put_file(file);
+	return rc;
 }
 
 ssize_t
 pfsd_pread(int fd, void *buf, size_t len, off_t off)
+{
+	pfsd_file_t *file = NULL;
+	ssize_t rc = 0;
+
+	PFSD_SDK_GET_FILE(fd);
+	rc = pfsd_file_pread(file, buf, len, off);
+	pfsd_put_file(file);
+	return rc;
+}
+
+static ssize_t
+pfsd_file_pread(pfsd_file_t *file, void *buf, size_t len, off_t off)
 {
 	if (buf == NULL) {
 		errno = EINVAL;
@@ -602,7 +630,7 @@ pfsd_pread(int fd, void *buf, size_t len, off_t off)
 
 	if (len > PFSD_MAX_IOSIZE) {
 		/* may shorten read */
-		PFSD_CLIENT_LOG("pread len %lu is too big for fd %d, cast to 4MB.", len, fd);
+		PFSD_CLIENT_LOG("pread len %lu is too big for fd %d, cast to 4MB.", len, file->f_fd);
 		len = PFSD_MAX_IOSIZE;
 	}
 
@@ -612,17 +640,10 @@ pfsd_pread(int fd, void *buf, size_t len, off_t off)
 	ssize_t ss = -1;
 	pfsd_response_t *rsp = NULL;
 
-	pfsd_file_t *file = NULL;
-
-	PFSD_SDK_GET_FILE(fd);
-
 	off_t off2 = off;
-	if (off == OFFSET_FILE_POS)
-		off2 = file->f_offset;
 
 	if (off2 < 0) {
 		errno = EINVAL;
-		pfsd_put_file(file);
 		return -1;
 	}
 
@@ -630,7 +651,6 @@ retry:
 	if (pfsd_chnl_buffer_alloc(s_connid, 0, (void**)&req, len,
 	    (void**)&rsp, (void**)&rbuf, (long*)(&ch)) != 0) {
 		errno = ENOMEM;
-		pfsd_put_file(file);
 		return -1;
 	}
 
@@ -651,14 +671,10 @@ retry:
 	ss = rsp->r_rsp.r_len;
 	if (ss < 0) {
 		errno = rsp->error;
-		PFSD_CLIENT_ELOG("pread fd %d ino %ld error: %s", fd,
+		PFSD_CLIENT_ELOG("pread fd %d ino %ld error: %s", file->f_fd,
 		    file->f_inode, strerror(errno));
-	} else {
-		if (off == -1)
-			__sync_add_and_fetch(&file->f_offset, ss);
 	}
 
-	pfsd_put_file(file);
 	pfsd_chnl_buffer_free(s_connid, req, rsp, buf, pfsd_tolong(ch));
 	return ss;
 }
@@ -666,11 +682,35 @@ retry:
 ssize_t
 pfsd_write(int fd, const void *buf, size_t len)
 {
-	return pfsd_pwrite(fd, buf, len, OFFSET_FILE_POS);
+	pfsd_file_t *file = NULL;
+	ssize_t rc = 0;
+
+	PFSD_SDK_GET_FILE(fd);
+	pthread_mutex_lock(&file->f_lseek_lock);
+	rc = pfsd_file_pwrite(file, buf, len, OFFSET_FILE_POS);
+	pthread_mutex_unlock(&file->f_lseek_lock);
+	pfsd_put_file(file);
+	return rc;
 }
 
 ssize_t
 pfsd_pwrite(int fd, const void *buf, size_t len, off_t off)
+{
+	pfsd_file_t *file = NULL;
+	ssize_t rc = 0;
+
+	if (off < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+	PFSD_SDK_GET_FILE(fd);
+	rc = pfsd_file_pwrite(file, buf, len, off);
+	pfsd_put_file(file);
+	return rc;
+}
+
+static ssize_t
+pfsd_file_pwrite(pfsd_file_t *file, const void *buf, size_t len, off_t off)
 {
 	if (buf == NULL) {
 		errno = EINVAL;
@@ -683,20 +723,15 @@ pfsd_pwrite(int fd, const void *buf, size_t len, off_t off)
 	pfsd_response_t *rsp = NULL;
 	ssize_t ss = -1;
 
-	pfsd_file_t *file = NULL;
-
 	CHECK_WRITABLE();
-	PFSD_SDK_GET_FILE(fd);
 
 	if (len == 0) {
-		pfsd_put_file(file);
 		return 0;
 	}
 
 	if (len > PFSD_MAX_IOSIZE) {
-		PFSD_CLIENT_ELOG("pwrite len %lu is too big for fd %d.", len, fd);
+		PFSD_CLIENT_ELOG("pwrite len %lu is too big for fd %d.", len, file->f_fd);
 		errno = EFBIG;
-		pfsd_put_file(file);
 		return -1;
 	}
 
@@ -704,11 +739,10 @@ pfsd_pwrite(int fd, const void *buf, size_t len, off_t off)
 	if (file->f_flags & O_APPEND)
 		off2 = OFFSET_FILE_SIZE;
 	else if (off == OFFSET_FILE_POS)
-		off2 = file->f_offset;
+		 off2 = file->f_offset;
 
 	if (off2 < 0 && off2 != OFFSET_FILE_SIZE) {
-		PFSD_CLIENT_ELOG("pwrite wrong off2 %lu for fd %d.", off2, fd);
-		pfsd_put_file(file);
+		PFSD_CLIENT_ELOG("pwrite wrong off2 %lu for fd %d.", off2, file->f_fd);
 		errno = EINVAL;
 		return -1;
 	}
@@ -717,7 +751,6 @@ retry:
 	if (pfsd_chnl_buffer_alloc(s_connid, len, (void**)&req, 0,
 	    (void**)&rsp, (void**)&wbuf, (long*)(&ch)) != 0) {
 		errno = ENOMEM;
-		pfsd_put_file(file);
 		return -1;
 	}
 
@@ -740,7 +773,7 @@ retry:
 	ss = rsp->w_rsp.w_len;
 	if (ss < 0) {
 		errno = rsp->error;
-		PFSD_CLIENT_ELOG("pwrite fd %d ino %ld error: %s", fd,
+		PFSD_CLIENT_ELOG("pwrite fd %d ino %ld error: %s", file->f_fd,
 		    file->f_inode, strerror(errno));
 	} else {
 		if (ss >= 0 && off == -1) {
@@ -750,7 +783,6 @@ retry:
 			file->f_offset = rsp->w_rsp.w_file_size;
 	}
 
-	pfsd_put_file(file);
 	pfsd_chnl_buffer_free(s_connid, req, rsp, wbuf, pfsd_tolong(ch));
 	return ss;
 }
@@ -1116,14 +1148,20 @@ check_file_offset:
 off_t
 pfsd_lseek(int fd, off_t offset, int whence)
 {
-	if (fd < 0) {
-		errno = EINVAL;
-		return -1;
-	}
-
+	off_t rc = -1;
 	pfsd_file_t *file = NULL;
-	PFSD_SDK_GET_FILE_WR(fd);
 
+	PFSD_SDK_GET_FILE(fd);
+	pthread_mutex_lock(&file->f_lseek_lock);
+	rc = pfsd_file_lseek(file, offset, whence);
+	pthread_mutex_unlock(&file->f_lseek_lock);
+	pfsd_put_file(file);
+	return rc;
+}
+
+static off_t
+pfsd_file_lseek(pfsd_file_t *file, off_t offset, int whence)
+{
 	/* for ask pfsd if SEEK_END */
 	pfsd_iochannel_t *ch = NULL;
 	pfsd_request_t *req = NULL;
@@ -1141,7 +1179,6 @@ retry:
 	if (pfsd_chnl_buffer_alloc(s_connid, 0, (void**)&req, 0,
 	    (void**)&rsp, NULL, (long*)(&ch)) != 0) {
 		errno = ENOMEM;
-		pfsd_put_file(file);
 		return -1;
 	}
 
@@ -1169,7 +1206,6 @@ retry:
 	pfsd_chnl_buffer_free(s_connid, req, rsp, NULL, pfsd_tolong(ch));
 
 finish:
-	pfsd_put_file(file);
 	return rv;
 }
 
