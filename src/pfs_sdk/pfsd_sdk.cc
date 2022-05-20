@@ -777,7 +777,7 @@ retry:
 		    file->f_inode, strerror(errno));
 	} else {
 		if (ss >= 0 && off == -1) {
-			__sync_add_and_fetch(&file->f_offset, ss);
+			file->f_offset += ss;
 		}
 		if ((file->f_flags & O_APPEND) != 0 && OFFSET_FILE_POS == off)
 			file->f_offset = rsp->w_rsp.w_file_size;
