@@ -80,6 +80,7 @@ pfsd_alloc_file()
 
 	memset(f, 0, sizeof(pfsd_file_t));
 	pthread_rwlock_init(&f->f_rwlock, NULL);
+	pthread_mutex_init(&f->f_lseek_lock, NULL);
 	f->f_fd = -1;
 	f->f_inode = -1;
 	return f;
@@ -90,6 +91,7 @@ pfsd_free_file(pfsd_file_t *f)
 {
 	if (f) {
 		pthread_rwlock_destroy(&f->f_rwlock);
+		pthread_mutex_destroy(&f->f_lseek_lock);
 		PFSD_FREE(f);
 	}
 }
