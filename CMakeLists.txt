@@ -20,7 +20,6 @@ set(pfsd_VERSION
     ${pfsd_VERSION_MAJOR}.${pfsd_VERSION_MINOR}.${pfsd_VERSION_MATCH})
 
 include(CheckIncludeFile)
-
 include(FindPkgConfig)
 if (NOT PKG_CONFIG_FOUND)
     message(FATAL_ERROR "pkg_config not found")
@@ -35,6 +34,8 @@ pkg_check_modules(spdk_init REQUIRED spdk_init)
 pkg_check_modules(spdk_log REQUIRED spdk_log)
 pkg_check_modules(spdk_bdev REQUIRED spdk_bdev)
 pkg_check_modules(spdk_bdev_nvme REQUIRED spdk_bdev_nvme)
+
+include_directories(${dpdk_INCLUDE_DIRS})
 
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_INSTALL_RPATH ${dpdk_LIBRARY_DIRS} ${spdk_init_LIBRARY_DIRS})
@@ -116,9 +117,8 @@ set(SPDK_LIBS
  -Wl,--no-whole-archive
  -Wl,--pop-state
 )
-include(CheckIncludeFile)
 
-message("compile pfsd for PostgreSQL")
+message("compile pfs for curve nvme storage engine")
 
 include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
 
@@ -128,18 +128,10 @@ set(CMAKE_BUILD_TYPE "Release")
 
 include(CMakeLists-config.txt)
 
-link_directories(/usr/lib/curve)
-set(CURVE_LIBS -lcbd -lcurve_client -lcurve_common -lcurve_auth -lcurve_concurrent
-    -lnameserver2_proto -ltopology_proto -lchunkserver-protos -lbrpc -lbutil -lbvar
-    -lbthread -lcc_brpc_internal_proto -ljson2pb -lmcpack2pb -lcc_brpc_idl_options_proto
-    -lcommon_proto -lscan_proto
-    -lprotobuf -lprotobuf_lite -lrt -lssl -lcrypto -ldl -lz -lpthread -lleveldb -lgflags -lglog)
-
 set(COMMON_FLAGS
   -fno-strict-aliasing
   #-fstack-protector
-  -fsanitize=address
-  #-DEV_STANDALONE
+  #-fsanitize=address
   -Wall
   -Werror
   -Wno-deprecated-declarations
@@ -154,23 +146,9 @@ set(COMMON_FLAGS
   -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
   -Wno-missing-declarations -fno-strict-aliasing
   -Wformat -Wformat-security -Wformat-nonliteral
+  -mssse3
   -g
   )
-
-if(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "x86_64")
-    set(COMMON_FLAGS ${COMMON_FLAGS}  -march=native -m64)
-endif()
-
-set(CMAKE_EXE_LINKER_FLAGS
-  # Enable full RELRO - no lazy relocation (resolve everything at load time).
-  # This allows the GOT to be made read-only early in the loading process.
-  -Wl,-z,relro,-z,now,-z,noexecstack
-  # Make the stack non-executable.
-  # This is the default in most environments, but it doesn't hurt to set it explicitly.
-  #-Wl,-z,noexecstack
-)
-
-set(COMMON_FLAGS ${COMMON_FLAGS}  -DPFS_DISK_IO_ONLY)
 
 set(CXX_FLAGS
   ${COMMON_FLAGS}
@@ -187,37 +165,17 @@ set(C_FLAGS
   ${COMMON_FLAGS}
 )
 
-string(REPLACE ";" " " CMAKE_CXX_FLAGS "${CXX_FLAGS}")
-string(REPLACE ";" " " CMAKE_C_FLAGS "${C_FLAGS}")
-
-set(CMAKE_CXX_COMPILER "g++")
-set(CMAKE_C_COMPILER "cc")
-
-set(DEBUG_LEVEL 20)
-set(RELEASE_LEVEL 40)
-
-if(DEFINED ENV{POLAR_LOG_DEBUG_LEVEL})
-	set(DEBUG_LEVEL $ENV{POLAR_LOG_DEBUG_LEVEL})
-endif()
-if(DEFINED ENV{POLAR_LOG_RELEASE_LEVEL})
-	set(RELEASE_LEVEL $ENV{POLAR_LOG_RELEASE_LEVEL})
-endif()
+string(REPLACE ";" " " CXX_FLAGS "${CXX_FLAGS}")
+string(REPLACE ";" " " C_FLAGS "${C_FLAGS}")
+string(APPEND CMAKE_CXX_FLAGS "${CXX_FLAGS}")
+string(APPEND CMAKE_C_FLAGS "${C_FLAGS}")
 
 message("build log level release level " ${RELEASE_LEVEL} " debug level " ${DEBUG_LEVEL})
-set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -ggdb -DDEBUG -DCHKSVR_LOG_LEVEL=${DEBUG_LEVEL}")
-set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O2 -finline-limit=100000 -DNDEBUG -DCHKSVR_LOG_LEVEL=${RELEASE_LEVEL}")
-set(CMAKE_C_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -ggdb -DDEBUG -DCHKSVR_LOG_LEVEL=${DEBUG_LEVEL}")
-set(CMAKE_C_FLAGS_RELEASE "$ENV{CXXFLAGS} -O2 -finline-limit=100000 -DNDEBUG -DCHKSVR_LOG_LEVEL=${RELEASE_LEVEL}")
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 string(TOUPPER ${CMAKE_BUILD_TYPE} BUILD_TYPE)
-message(STATUS "CXX_FLAGS = " ${CMAKE_CXX_FLAGS} " " ${CMAKE_CXX_FLAGS_${BUILD_TYPE}})
-message(STATUS "C_FLAGS = " ${CMAKE_C_FLAGS} " " ${CMAKE_C_FLAGS_${BUILD_TYPE}})
-
-execute_process(COMMAND mkdir -p ${PROJECT_SOURCE_DIR}/include)
-execute_process(COMMAND cp ${PROJECT_SOURCE_DIR}/src/pfs_sdk/pfsd_sdk.h ${PROJECT_SOURCE_DIR}/include/)
 
 add_subdirectory(src)
 
@@ -235,8 +193,12 @@ set(CPACK_PACKAGE_CONTACT "yfxu@")
 set(CPACK_GENERATOR "RPM;DEB")
 #don't detect nebd library
 set(CPACK_RPM_PACKAGE_AUTOREQ FALSE)
+
 file(GLOB pfsd_HEADERS
      ${PROJECT_SOURCE_DIR}/src/pfs_sdk/pfsd_sdk.h
+     ${PROJECT_SOURCE_DIR}/src/pfs_sdk/pfsd_sdk_log.h
+     ${PROJECT_SOURCE_DIR}/src/pfs_core/pfs_api.h
+     ${PROJECT_SOURCE_DIR}/src/pfs_core/pfs_trace_func.h
 )
 
 file(GLOB deploy_FILES
