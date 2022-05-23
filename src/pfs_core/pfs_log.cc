@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <dpdk/rte_memcpy.h>
+#include <rte_memcpy.h>
 
 #include "pfs_devio.h"
 #include "pfs_dir.h"

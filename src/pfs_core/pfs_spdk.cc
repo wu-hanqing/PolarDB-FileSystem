@@ -14,8 +14,8 @@
 
 #include <gflags/gflags.h>
 
-#include <dpdk/rte_config.h>
-#include <dpdk/rte_memory.h>
+#include <rte_config.h>
+#include <rte_memory.h>
 
 #include <spdk/init.h>
 #include <spdk/env.h>

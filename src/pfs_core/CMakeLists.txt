@@ -56,22 +56,9 @@ add_library(pfs STATIC
     ${SRC_LIST}
     ${SRC_LIST_LIB}
 )
-
-#message("spdk_init_LIB:= ${spdk_init_LIBRARIES}")
-#message("spdk_log_LIB:= ${spdk_log_LIBRARIES}")
-#message("spdk_bdev_LIB:= ${spdk_bdev_LIBRARIES}")
-message("spdk_bdev_nvme_LIB:= ${spdk_bdev_nvme_LIBRARIES}")
-#message("spdk_bdev_nvme_LDFLAGS:= ${spdk_bdev_nvme_LDFLAGS}")
-message("spdk_env_dpdk_LIB:= ${spdk_env_dpdk_LIBRARIES}")
-message("spdk_env_dpdk_LIB:= ${spdk_dpdklibs_LIBRARIES}")
-
-target_include_directories(pfs PUBLIC ${dpdk_INCLUDE_DIRS})
-target_include_directories(pfs PUBLIC ${spdk_init_INCLUDE_DIRS})
-target_link_directories(pfs PUBLIC ${dpdk_LIBRARY_DIRS})
+set_property(TARGET pfs PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 target_link_libraries(pfs
- gflags numa dl pthread rt uuid crypto m aio
+  spdk_libs gflags aio rt pthread
 )
-
-set_property(TARGET pfs PROPERTY POSITION_INDEPENDENT_CODE ON)
 

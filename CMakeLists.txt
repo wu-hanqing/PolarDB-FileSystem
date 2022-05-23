@@ -20,29 +20,35 @@ set(pfsd_VERSION
     ${pfsd_VERSION_MAJOR}.${pfsd_VERSION_MINOR}.${pfsd_VERSION_MATCH})
 
 include(CheckIncludeFile)
+include(ExternalProject)
 include(FindPkgConfig)
 if (NOT PKG_CONFIG_FOUND)
     message(FATAL_ERROR "pkg_config not found")
 endif()
 
-find_package(gflags REQUIRED)
-include_directories(${GFLAGS_INCLUDE_DIR})
-pkg_check_modules(dpdk REQUIRED libdpdk)
-pkg_check_modules(spdk_dpdklibs REQUIRED spdk_dpdklibs)
-pkg_check_modules(spdk_env_dpdk REQUIRED spdk_env_dpdk)
-pkg_check_modules(spdk_init REQUIRED spdk_init)
-pkg_check_modules(spdk_log REQUIRED spdk_log)
-pkg_check_modules(spdk_bdev REQUIRED spdk_bdev)
-pkg_check_modules(spdk_bdev_nvme REQUIRED spdk_bdev_nvme)
+include(thirdparties/CMakeLists.txt)
 
+set(DPDK_DIR /usr/local/dpdk CACHE STRING "dpdk directory")
+set(SPDK_DIR /usr/local/spdk CACHE STRING "spdk directory")
+list(APPEND CMAKE_PREFIX_PATH "${DPDK_DIR}" "${SPDK_DIR}")
+set(SANITIZE_ADDRESS OFF CACHE BOOL "enable -fsanitize=address")
+set(STACK_PROTECT OFF CACHE BOOL "enable -fstack-protector")
+
+pkg_check_modules(dpdk REQUIRED libdpdk)
 include_directories(${dpdk_INCLUDE_DIRS})
+link_directories(${dpdk_LIBRARY_DIRS})
+
+pkg_check_modules(spdk_init REQUIRED spdk_init)
+include_directories(${spdk_init_INCLUDE_DIRS})
+link_directories(${spdk_init_LIBRARY_DIRS})
 
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
-set(CMAKE_INSTALL_RPATH ${dpdk_LIBRARY_DIRS} ${spdk_init_LIBRARY_DIRS})
+set(CMAKE_INSTALL_RPATH ${ExtProjLocalDir}/lib ${dpdk_LIBRARY_DIRS} ${spdk_init_LIBRARY_DIRS})
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 set(SPDK_LIBS
+ -Wl,--disable-new-dtags
  -Wl,--push-state
  -Wl,--no-as-needed
  -Wl,--whole-archive
@@ -97,6 +103,7 @@ set(SPDK_LIBS
  -Wl,--no-whole-archive
 
  -Wl,--whole-archive
+ -Wl,--no-as-needed
  rte_bus_pci
  rte_cryptodev
  rte_dmadev
@@ -114,24 +121,28 @@ set(SPDK_LIBS
  rte_ring
  rte_telemetry
  rte_vhost
+ rte_meter
+ rte_timer
  -Wl,--no-whole-archive
  -Wl,--pop-state
 )
 
-message("compile pfs for curve nvme storage engine")
+add_library(spdk_libs INTERFACE)
+target_link_libraries(spdk_libs INTERFACE ${SPDK_LIBS} uuid numa crypto bsd m aio dl)
+
+message(STATUS "compile pfs for curve nvme storage engine")
 
 include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
+include_directories(${ExtProjLocalDir}/include SYSTEM)
+link_directories(${ExtProjLocalDir}/lib)
 
 set(PKG_DIR "/usr/local/polarstore/pfsd")
-set(CMAKE_BUILD_TYPE "Release")
-#set(CMAKE_BUILD_TYPE "Debug")
 
 include(CMakeLists-config.txt)
 
 set(COMMON_FLAGS
   -fno-strict-aliasing
   #-fstack-protector
-  #-fsanitize=address
   -Wall
   -Werror
   -Wno-deprecated-declarations
@@ -149,6 +160,13 @@ set(COMMON_FLAGS
   -mssse3
   -g
   )
+
+if (SANITIZE_ADDRESS)
+   list(APPEND COMMON_FLAGS -fsanitize=address)
+endif()
+if (STACK_PROTECT)
+   list(APPEND COMMON_FLAGS -fstack-protector)
+endif()
 
 set(CXX_FLAGS
   ${COMMON_FLAGS}
@@ -174,8 +192,6 @@ message("build log level release level " ${RELEASE_LEVEL} " debug level " ${DEBU
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
-
-string(TOUPPER ${CMAKE_BUILD_TYPE} BUILD_TYPE)
 
 add_subdirectory(src)
 

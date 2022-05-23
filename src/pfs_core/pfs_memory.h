@@ -16,7 +16,7 @@
 #ifndef	_PFS_MEMORY_H_
 #define	_PFS_MEMORY_H_
 
-#include <dpdk/rte_memory.h>
+#include <rte_memory.h>
 
 enum {
 	M_NONE = 0,

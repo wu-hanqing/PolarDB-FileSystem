@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <dpdk/rte_memory.h>
+#include <rte_memory.h>
 
 #include "pfs_admin.h"
 #include "pfs_devio.h"

@@ -17,7 +17,7 @@
 
 #include <malloc.h>
 #include <stdlib.h>
-#include <dpdk/rte_malloc.h>
+#include <rte_malloc.h>
 
 #include "pfs_impl.h"
 #include "pfs_admin.h"

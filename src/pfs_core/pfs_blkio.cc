@@ -15,9 +15,9 @@
 
 #include <sys/param.h>
 
-#include <dpdk/rte_memory.h>
-#include <dpdk/rte_memcpy.h>
-#include <dpdk/rte_malloc.h>
+#include <rte_memory.h>
+#include <rte_memcpy.h>
+#include <rte_malloc.h>
 
 #include "pfs_blkio.h"
 #include "pfs_devio.h"

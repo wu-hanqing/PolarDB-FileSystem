@@ -31,9 +31,9 @@
 #include <spdk/env.h>
 #include <spdk/log.h>
 #include <spdk/string.h>
-#include <dpdk/rte_memcpy.h>
-#include <dpdk/rte_thread.h>
-#include <dpdk/rte_pause.h>
+#include <rte_memcpy.h>
+#include <rte_thread.h>
+#include <rte_pause.h>
 
 #include "pfs_trace.h"
 #include "pfs_devio.h"
