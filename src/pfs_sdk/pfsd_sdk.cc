@@ -725,7 +725,7 @@ pfsd_write(int fd, const void *buf, size_t len)
 	}
 	pthread_mutex_unlock(&file->f_lseek_lock);
 	pfsd_put_file(file);
-	return total ? total : rc;
+	return rc < 0 ? rc: total;
 }
 
 ssize_t
@@ -759,7 +759,7 @@ pfsd_pwrite(int fd, const void *buf, size_t len, off_t off)
 		pthread_mutex_unlock(&file->f_lseek_lock);
 	}
 	pfsd_put_file(file);
-	return total ? total : rc;
+	return rc < 0 ? rc : total;
 }
 
 static ssize_t
