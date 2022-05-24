@@ -382,7 +382,7 @@ err_exit:
     dkdev->dk_sectsz = dkdev->dk_unit_size * dkdev->dk_block_size;
     dkdev->dk_has_cache = spdk_bdev_has_write_cache(dkdev->dk_bdev);
     dkdev->dk_size = dkdev->dk_block_num * dkdev->dk_block_size;
-    pfs_itrace("open spdk device: '%s', block_num:%ld, "
+    pfs_itrace("open spdk device: '%s', block_num: %ld, "
                "block_size: %d, write_unit_size: %d, has_cache: %d\n",
                dev->d_devname, dkdev->dk_block_num, dkdev->dk_block_size,
                dkdev->dk_unit_size, dkdev->dk_has_cache);
