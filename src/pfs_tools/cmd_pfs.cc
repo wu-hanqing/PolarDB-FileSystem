@@ -125,7 +125,7 @@ usage()
 	extern const cmd_info_t *__stop__pfscmd[];
 	const cmd_info_t **ci;
 
-	printf("Usage: pfs [-H hostid] [-C|--cluster=clustername] [-t pfsd_timeout] <command> [options] pbdpaths""\n"
+	printf("Usage: pfs [-H hostid] [-C|--cluster=clustername] -[J spdk json config] [-K nvme controller] [-t pfsd_timeout] <command> [options] pbdpaths""\n"
 	    "pfs has following commands\n");
 
 	for (ci = __start__pfscmd; ci != __stop__pfscmd; ci++) {
@@ -250,7 +250,7 @@ getopt_common(int argc, char *argv[], cmd_opts_t *co)
 	co->co_common.cluster = CL_DEFAULT;
 	co->co_common.enable_pfsd = 1;
 	optind = 1;
-	while ((opt = getopt_long(argc, argv, "+hH:C:t:E:J:S", long_opts_common,
+	while ((opt = getopt_long(argc, argv, "+hH:C:t:E:J:K:", long_opts_common,
 	    NULL)) != -1) {
 		switch (opt) {
 		case 'H':
@@ -274,8 +274,13 @@ getopt_common(int argc, char *argv[], cmd_opts_t *co)
 			break;
 
 		case 'J':
-            		pfs_spdk_conf_set_json_config_file(optarg);
-            		break;
+            pfs_spdk_conf_set_json_config_file(optarg);
+            break;
+
+        case 'K':
+            pfs_spdk_conf_set_controller(optarg);
+            break;
+
 		case 'h':
 		default:
 			usage();
