@@ -160,6 +160,7 @@ set(COMMON_FLAGS
   -Wformat -Wformat-security -Wformat-nonliteral
   -mssse3
   -g
+  -D_GNU_SOURCE
   )
 
 if (SANITIZE_ADDRESS)
