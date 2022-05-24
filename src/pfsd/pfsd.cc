@@ -135,13 +135,13 @@ pfsd_main_thread_entry(void *arg)
 
 	/* exit */
 	if (g_pfsd_worker != NULL && g_pfsd_worker->w_nch != 0) {
-		pfsd_info("[pfsd]pthread_join worker");
+		pfsd_info("pthread_join worker");
 		pthread_join(g_pfsd_worker->w_tid, NULL);
 	}
 
 	pfsd_destroy_workers(&g_pfsd_worker);
 	pfsd_pidfile_close(g_pfsd_pidfile);
 	g_pfsd_pidfile = -1;
-	pfsd_info("[pfsd]bye bye");
+	pfsd_info("bye bye");
 	return 0;
 }
