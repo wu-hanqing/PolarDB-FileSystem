@@ -336,6 +336,11 @@ bdev_check_pci_address(pfs_spdk_dev_t *dkdev)
     return 0;
 }
 
+/*
+    return param.rc:
+	failure: > 0
+	success: 0
+*/
 static void *
 bdev_thread_msg_loop(void *arg)
 {
@@ -352,9 +357,9 @@ bdev_thread_msg_loop(void *arg)
                              bdev_event_cb, dkdev, &dkdev->dk_desc);
     if (err) {
         pfs_etrace("can not open spdk device %s, %s\n", dev->d_devname,
-                   strerror(err));
+                   strerror(-err));
 err_exit:
-        param->rc = err;
+        param->rc = -err;
         sem_post(&param->sem);
         return NULL;
     }
@@ -419,6 +424,11 @@ err_exit:
     return NULL;
 }
 
+/*
+ * return:
+ *    failure: < 0
+ *    sucess : 0
+ */
 static int
 pfs_spdk_dev_open(pfs_dev_t *dev)
 {
@@ -432,9 +442,9 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
      * application's main thread earlier, put it here is just easy
      * for pfs tools.
      */
-    if (pfs_spdk_setup()) {
+    if ((err = pfs_spdk_setup())) {
         pfs_etrace("can not init spdk env");
-        return -EIO;
+        return err;
     }
     sem_init(&param.sem, 0, 0);
     param.dkdev = dkdev;
