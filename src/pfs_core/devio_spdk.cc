@@ -117,9 +117,11 @@ DEFINE_int32(pfs_spdk_driver_poll_delay, 10,
 DEFINE_bool(pfs_spdk_driver_auto_cpu_bind, false,
   "pfs spdk driver auto bind thread to cpus which are nearest to pci device");
 DEFINE_string(pfs_spdk_driver_cpu_bind, "", 
-  "pfs spdk driver should bind to this cpu set");
+  "pfs spdk driver list [device@dpdk_cpu_set] should bind to cpu set to");
 DEFINE_int32(pfs_spdk_driver_error_interval, 1,
   "pfs spdk driver DMA buffer allocation failure report interval (seconds)");
+DEFINE_string(pfs_spdk_driver_check_pci_address, "", 
+  "pfs spdk device list [device@domain:bus:dev.function;] to check pci address");
 
 #define PFS_MAX_CACHED_SPDK_IOCB        128
 static __thread SLIST_HEAD(, pfs_spdk_iocb) tls_free_iocb = {NULL};
@@ -285,6 +287,55 @@ set_it:
     return err;
 }
 
+static int
+bdev_check_pci_address(pfs_spdk_dev_t *dkdev)
+{
+    pfs_dev_t *dev = &dkdev->dk_base;
+    std::string pci_address = pfs_get_dev_pci_address(dkdev->dk_bdev);
+
+    if (pci_address.empty()) {
+        pfs_wtrace("device %s has empty pci address", dev->d_devname);
+        return 0;
+    }
+
+    pfs_itrace("device %s, current pci address %s", dev->d_devname,
+        pci_address.c_str());
+
+    if (!FLAGS_pfs_spdk_driver_check_pci_address.empty()) {
+        std::string &s = FLAGS_pfs_spdk_driver_check_pci_address;
+        auto pos = s.find(dev->d_devname);
+        if (pos != std::string::npos) {
+            pos += strlen(dev->d_devname);
+            if (s[pos] != '@') {
+                pfs_etrace("cannot find ':' for %s in %s",
+                     dev->d_devname, s.c_str());
+                return -1;
+            } else {
+                pos++;
+                auto pos2 = s.find(';', pos);
+                std::string substr;
+                if (pos2 != std::string::npos)
+                    substr = s.substr(pos2-pos);
+                else
+                    substr = s.substr(pos);
+                if (substr == pci_address) {
+                    pfs_itrace("ok to verify pci address for %s", dev->d_devname);
+                    return 0;
+                } else {
+                    pfs_etrace("pci address is not match for %s, current: %s, expected: %s",
+                        dev->d_devname, pci_address.c_str(), substr.c_str());
+                    return -1;
+                }
+            }
+        } else {
+            pfs_wtrace("device %s is not in pfs_spdk_driver_check_pci_address",
+                dev->d_devname);
+        }
+    }
+
+    return 0;
+}
+
 static void *
 bdev_thread_msg_loop(void *arg)
 {
@@ -308,6 +359,12 @@ err_exit:
         return NULL;
     }
     dkdev->dk_bdev = spdk_bdev_desc_get_bdev(dkdev->dk_desc);
+    if (bdev_check_pci_address(dkdev) == -1) {
+        spdk_bdev_close(dkdev->dk_desc);
+        err = EINVAL;
+        goto err_exit;
+    }
+
     dkdev->dk_ioch = pfs_get_spdk_io_channel(dkdev->dk_desc);
     if (dkdev->dk_ioch == NULL) {
         pfs_etrace("can not get io channel of spdk device: %s\n",
