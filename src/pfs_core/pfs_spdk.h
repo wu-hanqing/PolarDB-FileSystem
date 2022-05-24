@@ -41,6 +41,7 @@ void pfs_spdk_conf_set_allowed_pci(const char *s);
 void pfs_spdk_conf_set_json_config_file(const char *s);
 void pfs_spdk_conf_set_name(const char *s);
 void pfs_spdk_conf_set_env_context(const char *s);
+void pfs_spdk_conf_set_controller(const char *s);
 
 int pfs_spdk_setup(void);
 void pfs_spdk_cleanup(void);
