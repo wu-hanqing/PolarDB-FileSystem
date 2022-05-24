@@ -44,6 +44,7 @@ DEFINE_string(spdk_rpc_addr, SPDK_DEFAULT_RPC_ADDR, "spdk rpc address");
 DEFINE_string(spdk_log_flags, "", "spdk log flags");
 DEFINE_int32(spdk_log_level, SPDK_LOG_INFO, "spdk log level");
 DEFINE_int32(spdk_log_print_level, SPDK_LOG_INFO, "spdk log level");
+DEFINE_string(spdk_nvme_controller, "", "simply configured nvme controller");
 
 static pthread_mutex_t g_pfs_mtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_init_mtx = PTHREAD_MUTEX_INITIALIZER;
@@ -105,7 +106,7 @@ parse_pci_address(struct spdk_env_opts *opts)
     }
     *pa = NULL;
     if (s.empty())
-	return;
+        return;
 
     std::unique_ptr<char, decltype(free)*> store(strdup(s.c_str()), free);
 
@@ -154,10 +155,82 @@ pfs_spdk_bdev_init_done(int rc, void *cb_arg)
     *(bool *)cb_arg = true;
 }
 
+/*
+ * Generate json config file base on FLAGS_spdk_nvme_controller
+ *
+ * Return:
+ *    failure:   -1
+ *    nothing:   0
+ *    generated: 1
+ */
+static int
+pfs_generate_json_file(void)
+{
+    char temp[128];
+    int fd;
+
+    if (FLAGS_spdk_nvme_controller.empty())
+        return 0;
+
+    strcpy(temp, "/tmp/pfs_spdk_json_config_XXXXXX");
+    fd = mkstemp(temp);
+    if (fd == -1) {
+        pfs_etrace("can not create temp file");
+        return -1;
+    }
+
+    const char* s1 = R"foo({
+    "subsystems":
+    [
+        {
+            "subsystem": "bdev",
+            "config":
+            [
+                {
+                    "method": "bdev_nvme_attach_controller",
+                    "params":
+                    {
+                        "trtype": "PCIe",
+                        "name":"Nvme0",
+                        "traddr":"%"
+                    }
+                }
+            ]
+        }
+    ]
+})foo";
+
+    std::string s = s1;
+    auto pos = s.find('%');
+    if (std::string::npos == pos) {
+        pfs_fatal("cannot find %% char");
+        return -1;
+    }
+    s.replace(pos, 1, FLAGS_spdk_nvme_controller);
+    int rc = write(fd, s.data(), s.length()); 
+    if (rc == -1)
+        pfs_etrace("cannot write file %s, %s", temp, strerror(errno));
+    close(fd);
+    pfs_etrace("temp file: %s", temp);
+    if (rc == -1)
+        return -1;
+    FLAGS_spdk_json_config_file = temp; 
+    return 1;
+}
+
 static void
 pfs_spdk_bdev_init_start(void *arg)
 {
     bool *done = (bool *) arg;
+
+    if (FLAGS_spdk_json_config_file.empty())
+        pfs_etrace("json config file is not set!");
+    else
+        pfs_itrace("json config file: %s", FLAGS_spdk_json_config_file.c_str());
+    if (FLAGS_spdk_rpc_addr.empty())
+        pfs_etrace("spdk rpc address is not set!");
+    else
+        pfs_itrace("spdk rpc address:%s", FLAGS_spdk_rpc_addr.c_str());
 
     spdk_subsystem_init_from_json_config(
         FLAGS_spdk_json_config_file.c_str(),
@@ -529,6 +602,7 @@ pfs_spdk_setup(void)
 {
     static pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+    pfs_generate_json_file();
     spdk_log_set_level((spdk_log_level)FLAGS_spdk_log_level);
     spdk_log_set_print_level((spdk_log_level)FLAGS_spdk_log_print_level);
 
@@ -611,6 +685,11 @@ void pfs_spdk_conf_set_name(const char *s)
 void pfs_spdk_conf_set_env_context(const char *s)
 {
     FLAGS_spdk_env_context = s;
+}
+
+void pfs_spdk_conf_set_controller(const char *s)
+{
+    FLAGS_spdk_nvme_controller = s;
 }
 
 int
