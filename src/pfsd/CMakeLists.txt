@@ -22,16 +22,16 @@ link_directories(
 )
 
 SET(SRC_LIST
-	pfsd_api.cc
-        pfsd_chnl.cc
-        pfsd_chnl_shm.cc
-        pfsd_common.cc
-        pfsd_memory.cc
-        pfsd_option.cc
-        pfsd_shm.cc
-        pfsd_worker.cc
-	pfsd.cc
-    )
+    pfsd_api.cc
+    pfsd_chnl.cc
+    pfsd_chnl_shm.cc
+    pfsd_common.cc
+    pfsd_memory.cc
+    pfsd_option.cc
+    pfsd_shm.cc
+    pfsd_worker.cc
+    pfsd.cc
+)
 
 add_library(pfsd_svr STATIC ${SRC_LIST})
 target_compile_definitions(pfsd_svr PUBLIC PFSD_SERVER)
@@ -61,4 +61,5 @@ target_compile_definitions(pfsdaemon PUBLIC PFSD_SERVER)
 SET_TARGET_PROPERTIES(pfsdaemon PROPERTIES LINKER_LANGUAGE CXX)
 
 install(TARGETS pfsdaemon DESTINATION "${PKG_DIR}/bin")
+install(TARGETS pfsd_svr DESTINATION "${PKG_DIR}/lib")
 

@@ -29,6 +29,7 @@ if [ -f "${INSTALL_BASE_DIR}/pfsd/include/pfsd_sdk.h" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/include/pfs_api.h" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/include/pfs_trace_func.h" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/lib/libpfsd.a" ] || \
+[ -f "${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_svr.a" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_test.so" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/bin/pfsdaemon" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/bin/pfsd_shm_tool" ] || \
@@ -49,6 +50,7 @@ if [ ! -f "src/pfs_sdk/pfsd_sdk.h" ] || \
 [ ! -f "src/pfs_core/pfs_api.h" ] || \
 [ ! -f "src/pfs_core/pfs_trace_func.h" ] || \
 [ ! -f "lib/libpfsd.a" ] || \
+[ ! -f "lib/libpfsd_svr.a" ] || \
 [ ! -f "lib/libpfsd_test.so" ] || \
 [ ! -f "bin/pfsdaemon" ] || \
 [ ! -f "bin/pfsd_shm_tool" ] || \
@@ -75,6 +77,7 @@ install -m 0644 src/pfs_sdk/pfsd_sdk_log.h		${INSTALL_BASE_DIR}/pfsd/include/pfs
 install -m 0644 src/pfs_core/pfs_api.h			${INSTALL_BASE_DIR}/pfsd/include/pfs_api.h
 install -m 0644 src/pfs_core/pfs_trace_func.h		${INSTALL_BASE_DIR}/pfsd/include/pfs_trace_func.h
 install -m 0755 lib/libpfsd.a				${INSTALL_BASE_DIR}/pfsd/lib/libpfsd.a
+install -m 0755 lib/libpfsd_svr.a			${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_svr.a
 install -m 0755 lib/libpfsd_test.so			${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_test.so
 install -m 0755 bin/pfsdaemon				${INSTALL_BASE_DIR}/pfsd/bin/pfsdaemon
 install -m 0755 bin/pfsd_shm_tool			${INSTALL_BASE_DIR}/pfsd/bin/pfsd_shm_tool
@@ -96,6 +99,6 @@ chmod 777 /var/run/pfsd
 chmod 777 /dev/shm/pfsd
 chmod 777 /var/run/pfs
 touch /var/run/pfsd/.pfsd
-chkconfig --add pfsd_env
+service pfsd_env start
 
 echo "install pfsd success!"

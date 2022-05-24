@@ -1,0 +1,4 @@
+set +e
+service pfsd_env start 
+set -e
+

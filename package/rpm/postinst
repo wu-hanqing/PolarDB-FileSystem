@@ -1,5 +1,5 @@
 #!/bin/bash
 
 set +e
-chkconfig --add pfsd_env
+service pfsd_env start
 set -e
