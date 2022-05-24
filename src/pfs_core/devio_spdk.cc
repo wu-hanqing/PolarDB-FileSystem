@@ -370,6 +370,15 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
     struct bdev_open_param param;
     int err;
 
+    /*
+     * pfs_spdk_setup should be called as soone as possible in
+     * application's main thread earlier, put it here is just easy
+     * for pfs tools.
+     */
+    if (pfs_spdk_setup()) {
+        pfs_etrace("can not init spdk env");
+        return -EIO;
+    }
     sem_init(&param.sem, 0, 0);
     param.dkdev = dkdev;
     param.rc = 0;

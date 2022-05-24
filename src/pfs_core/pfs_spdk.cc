@@ -541,8 +541,11 @@ pfs_spdk_setup(void)
         }
 
         g_spdk_env_initialized = true;
+        pthread_mutex_unlock(&init_mutex);
+    } else {
+        pthread_mutex_unlock(&init_mutex);
+        return 0;
     }
-    pthread_mutex_unlock(&init_mutex);
 
     pfs_itrace("found devices:\n");
     struct spdk_bdev *bdev;

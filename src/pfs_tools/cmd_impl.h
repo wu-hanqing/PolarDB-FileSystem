@@ -25,7 +25,6 @@ typedef struct opts_common {
 	const char	*cluster;
 	int		help;
 	int		enable_pfsd;
-    int     init_spdk;
 } opts_common_t;
 
 typedef struct opts_tail {
