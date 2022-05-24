@@ -263,8 +263,6 @@ getopt_common(int argc, char *argv[], cmd_opts_t *co)
 
 		case 'C':
 			co->co_common.cluster = optarg;
-            if (strcmp(optarg, "spdk") == 0)
-                co->co_common.init_spdk = 1; 
 			break;
 
 		case 't':
@@ -275,13 +273,9 @@ getopt_common(int argc, char *argv[], cmd_opts_t *co)
 			co->co_common.enable_pfsd = atoi(optarg);
 			break;
 
-        case 'J':
-            pfs_spdk_conf_set_json_config_file(optarg);
-            co->co_common.init_spdk = 1; 
-            break;
-        case 'S':
-            co->co_common.init_spdk = 1; 
-            break;
+		case 'J':
+            		pfs_spdk_conf_set_json_config_file(optarg);
+            		break;
 		case 'h':
 		default:
 			usage();
@@ -987,10 +981,6 @@ main(int argc, char *argv[])
 	optind = getopt_common(argc, argv, &co);
 	if (optind < 0)
 	       return -1;
-    if (co.co_common.init_spdk) {
-        if (pfs_spdk_setup())
-           return 1;
-    }
 
 	argc -= optind;
 	argv += optind;

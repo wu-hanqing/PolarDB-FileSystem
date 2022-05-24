@@ -21,25 +21,36 @@ link_directories(
     ${LIBRARY_OUTPUT_PATH}
 )
 
-SET(SRC_LIST_PFSD pfsd_main.cc
-                  pfsd_api.cc
-                  pfsd_chnl.cc
-                  pfsd_chnl_shm.cc
-                  pfsd_common.cc
-                  pfsd_memory.cc
-                  pfsd_option.cc
-                  pfsd_shm.cc
-                  pfsd_worker.cc
-		  pfsd.cc
+SET(SRC_LIST
+	pfsd_api.cc
+        pfsd_chnl.cc
+        pfsd_chnl_shm.cc
+        pfsd_common.cc
+        pfsd_memory.cc
+        pfsd_option.cc
+        pfsd_shm.cc
+        pfsd_worker.cc
+	pfsd.cc
     )
+
+add_library(pfsd_svr STATIC ${SRC_LIST})
+target_compile_definitions(pfsd_svr PUBLIC PFSD_SERVER)
 
 # pfsd daemon
-add_executable(pfsdaemon
-    ${SRC_LIST_PFSD}
-    )
+add_executable(pfsdaemon pfsd_main.cc)
 
 target_link_libraries(pfsdaemon
+    -Wl,--disable-new-dtags
+    -Wl,--push-state
+    -Wl,--no-as-needed
+    -Wl,--whole-archive
+    -Bstatic
+    pfsd_svr
     pfs
+    -Wl,--no-whole-archive
+    -Wl,--pop-state
+    ${SPDK_LIBS}
+    ${SPDK_DEPS}
     glog
     gflags
     pthread

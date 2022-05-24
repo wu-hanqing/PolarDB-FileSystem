@@ -54,11 +54,10 @@ set(SRC_LIST
 # lib pfs
 add_library(pfs STATIC
     ${SRC_LIST}
-    ${SRC_LIST_LIB}
 )
 set_property(TARGET pfs PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 target_link_libraries(pfs
-  spdk_libs gflags aio rt pthread
+  gflags aio rt pthread
 )
 

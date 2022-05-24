@@ -52,6 +52,7 @@ set(SPDK_LIBS
  -Wl,--push-state
  -Wl,--no-as-needed
  -Wl,--whole-archive
+ -Wl,--start-group
  -Bstatic
  spdk_bdev_null
  spdk_bdev_nvme
@@ -100,6 +101,7 @@ set(SPDK_LIBS
  spdk_json
  spdk_util
  spdk_log
+ -Wl,--end-group
  -Wl,--no-whole-archive
 
  -Wl,--whole-archive
@@ -127,8 +129,7 @@ set(SPDK_LIBS
  -Wl,--pop-state
 )
 
-add_library(spdk_libs INTERFACE)
-target_link_libraries(spdk_libs INTERFACE ${SPDK_LIBS} uuid numa crypto bsd m aio dl)
+set(SPDK_DEPS uuid numa crypto bsd m aio dl)
 
 message(STATUS "compile pfs for curve nvme storage engine")
 
