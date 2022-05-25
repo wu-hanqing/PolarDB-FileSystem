@@ -344,15 +344,16 @@ bdev_check_pci_address(pfs_spdk_dev_t *dkdev)
 static void *
 bdev_thread_msg_loop(void *arg)
 {
-    struct pfs_spdk_thread *thread = pfs_current_spdk_thread();
     struct bdev_open_param *param = (struct bdev_open_param *)arg;
     pfs_spdk_dev_t *dkdev = param->dkdev;
     pfs_dev_t *dev = &dkdev->dk_base;
+    struct pfs_spdk_thread *thread = NULL;
     char thread_name[64];
     int err;
 
     snprintf(thread_name, sizeof(thread_name), "pfs-dev-%s", dev->d_devname);
     pthread_setname_np(pthread_self(), thread_name);
+    thread = pfs_create_spdk_thread(thread_name);
     err = spdk_bdev_open_ext(dev->d_devname, dev_writable(dev),
                              bdev_event_cb, dkdev, &dkdev->dk_desc);
     if (err) {
@@ -444,7 +445,7 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
      */
     if ((err = pfs_spdk_setup())) {
         pfs_etrace("can not init spdk env");
-        return err;
+        return -EIO;
     }
     sem_init(&param.sem, 0, 0);
     param.dkdev = dkdev;

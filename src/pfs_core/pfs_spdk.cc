@@ -41,11 +41,17 @@ DEFINE_uint64(spdk_base_virtaddr, 0x200000000000, "base virtual base");
 DEFINE_string(spdk_env_context, "", "env context string");
 DEFINE_string(spdk_json_config_file, "", "spdk json config file");
 DEFINE_string(spdk_rpc_addr, SPDK_DEFAULT_RPC_ADDR, "spdk rpc address");
+//DEFINE_string(spdk_log_flags, "bdev,thread,nvme", "spdk log flags");
 DEFINE_string(spdk_log_flags, "", "spdk log flags");
 DEFINE_int32(spdk_log_level, SPDK_LOG_INFO, "spdk log level");
 DEFINE_int32(spdk_log_print_level, SPDK_LOG_INFO, "spdk log level");
 DEFINE_string(spdk_nvme_controller, "", "simply configured nvme controller");
+DEFINE_int32(spdk_delete_temp_json_file, 1, "delete temp json file");
 
+#define RECYCLE_TIMEOUT 5
+
+static std::string g_spdk_temp_config_file;
+static pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_pfs_mtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_init_mtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_init_cond;
@@ -60,6 +66,8 @@ struct init_param {
 
 #define POLLING_TIMEOUT 1000000000ULL
 static __thread bool g_pfs_thread = false;
+static __thread bool g_pfs_internal = false;
+static int g_poll_exit_result = 0;
 static TAILQ_HEAD(, pfs_spdk_thread) g_gc_threads =
     TAILQ_HEAD_INITIALIZER(g_gc_threads);
 static TAILQ_HEAD(, pfs_spdk_thread) g_pfs_threads =
@@ -153,6 +161,9 @@ static void
 pfs_spdk_bdev_init_done(int rc, void *cb_arg)
 {
     *(bool *)cb_arg = true;
+    if (FLAGS_spdk_delete_temp_json_file) {
+        unlink(g_spdk_temp_config_file.c_str());
+    }
 }
 
 /*
@@ -191,8 +202,8 @@ pfs_generate_json_file(void)
                     "params":
                     {
                         "trtype": "PCIe",
-                        "name":"Nvme0",
-                        "traddr":"%"
+                        "name":"replace1",
+                        "traddr":"replace2"
                     }
                 }
             ]
@@ -201,20 +212,29 @@ pfs_generate_json_file(void)
 })foo";
 
     std::string s = s1;
-    auto pos = s.find('%');
+    auto pos = s.find("replace1");
     if (std::string::npos == pos) {
-        pfs_fatal("cannot find %% char");
+        pfs_fatal("cannot find substr replace1");
+        close(fd);
         return -1;
     }
-    s.replace(pos, 1, FLAGS_spdk_nvme_controller);
+    s.replace(pos, 8, FLAGS_spdk_nvme_controller);
+    pos = s.find("replace2");
+    if (std::string::npos == pos) {
+        pfs_fatal("cannot find substr replace2");
+        close(fd);
+        return -1;
+    }
+    s.replace(pos, 8, FLAGS_spdk_nvme_controller);
     int rc = write(fd, s.data(), s.length()); 
     if (rc == -1)
         pfs_etrace("cannot write file %s, %s", temp, strerror(errno));
     close(fd);
-    pfs_etrace("temp file: %s", temp);
-    if (rc == -1)
+    pfs_itrace("generated json config file: %s", temp);
+    if (rc == -1) {
         return -1;
-    FLAGS_spdk_json_config_file = temp; 
+    }
+    g_spdk_temp_config_file = temp; 
     return 1;
 }
 
@@ -222,18 +242,20 @@ static void
 pfs_spdk_bdev_init_start(void *arg)
 {
     bool *done = (bool *) arg;
+    std::string json_file;
 
-    if (FLAGS_spdk_json_config_file.empty())
+    json_file = g_spdk_temp_config_file;
+    if (json_file.empty() && FLAGS_spdk_json_config_file.empty())
         pfs_etrace("json config file is not set!");
     else
-        pfs_itrace("json config file: %s", FLAGS_spdk_json_config_file.c_str());
+        pfs_itrace("json config file: %s", json_file.c_str());
     if (FLAGS_spdk_rpc_addr.empty())
         pfs_etrace("spdk rpc address is not set!");
     else
         pfs_itrace("spdk rpc address:%s", FLAGS_spdk_rpc_addr.c_str());
 
     spdk_subsystem_init_from_json_config(
-        FLAGS_spdk_json_config_file.c_str(),
+        json_file.c_str(),
         FLAGS_spdk_rpc_addr.c_str(),
         pfs_spdk_bdev_init_done, done, true);
 }
@@ -253,6 +275,9 @@ pfs_spdk_schedule_thread(struct spdk_thread *spdk_thread)
         return 0;
     }
 
+    if (g_pfs_internal)
+        return 0;
+ 
     pthread_mutex_lock(&g_pfs_mtx);
     thread->on_pfs_list = 1;
     TAILQ_INSERT_TAIL(&g_pfs_threads, thread, link);
@@ -262,14 +287,16 @@ pfs_spdk_schedule_thread(struct spdk_thread *spdk_thread)
 }
 
 static int
-pfs_spdk_init_thread(struct pfs_spdk_thread **td, bool pfs)
+pfs_spdk_init_thread(struct pfs_spdk_thread **td, const char *name, bool internal)
 {
     struct pfs_spdk_thread *thread;
     struct spdk_thread *spdk_thread;
 
-    g_pfs_thread = pfs;
-    spdk_thread = spdk_thread_create(pfs? "pfs_thread" : "", NULL);
+    g_pfs_thread = true;
+    g_pfs_internal = internal;
+    spdk_thread = spdk_thread_create(name, NULL);
     g_pfs_thread = false;
+    g_pfs_internal = false;
     if (!spdk_thread) {
         pfs_etrace("failed to allocate thread\n");
         return -1;
@@ -304,19 +331,31 @@ pfs_spdk_cleanup_thread(struct pfs_spdk_thread *thread)
     spdk_set_thread(NULL);
 }
 
+struct pfs_spdk_thread *pfs_create_spdk_thread(const char *name)
+{
+    struct pfs_spdk_thread *pfs_td;
+
+    if (pfs_spdk_init_thread(&pfs_td, name, false))
+         return NULL;
+    return pfs_td;
+}
+
 struct pfs_spdk_thread *pfs_current_spdk_thread(void)
 {
     struct spdk_thread *spdk_td = spdk_get_thread();
     struct pfs_spdk_thread *pfs_td;
 
     if (spdk_td == NULL) {
-        if (pfs_spdk_init_thread(&pfs_td, true)) {
-            return NULL;
-        }
+        return NULL;
     } else {
         pfs_td = (pfs_spdk_thread *)spdk_thread_get_ctx(spdk_td);
     }
     return pfs_td;
+}
+
+void pfs_spdk_set_current_thread(struct pfs_spdk_thread *thread)
+{
+    spdk_set_thread(thread->spdk_thread);
 }
 
 struct spdk_io_channel* pfs_get_spdk_io_channel(struct spdk_bdev_desc *desc)
@@ -397,6 +436,7 @@ pfs_spdk_bdev_close_targets(void *arg)
             pfs_etrace("target ref is not zero, should put io channel before thread exiting\n");
         }
 
+        pfs_itrace("put io channel %p", target->channel);
         TAILQ_REMOVE(&thread->targets, target, link);
         spdk_put_io_channel(target->channel);
         pfs_mem_free(target, M_SPDK_TARGET);
@@ -431,6 +471,7 @@ pfs_spdk_calc_timeout(struct pfs_spdk_thread *thread, struct timespec *ts)
 static void
 pfs_spdk_bdev_fini_done(void *cb_arg)
 {
+    pfs_itrace("bdev subsystem shutdown");
     *(bool *)cb_arg = true;
 }
 
@@ -485,15 +526,30 @@ static void *thread_poll_loop(void *arg)
         }
     }
 
-    pfs_spdk_cleanup_thread(mytd);
+    struct timeval start, now, end, interval;
+    int timeouted = 0;
+
+    interval.tv_sec = 0;//  RECYCLE_TIMEOUT;
+    interval.tv_usec = 1000;
+    gettimeofday(&start, NULL);
+    timeradd(&start, &interval, &end);
 
     /* Finalize the bdev layer */
     done = false;
     spdk_thread_send_msg(mytd->spdk_thread, pfs_spdk_bdev_fini_start, &done);
+    pfs_spdk_cleanup_thread(mytd);
 
     do {
         TAILQ_FOREACH_SAFE(thread, &g_gc_threads, link, tmp) {
-            pfs_spdk_poll_thread(thread);
+            spdk_set_thread(thread->spdk_thread);
+            spdk_thread_poll(thread->spdk_thread, 0, 0);
+            spdk_set_thread(NULL);
+        }
+        gettimeofday(&now, NULL);
+        if (timercmp(&now, &end, >=)) {
+            pfs_etrace("waiting for spdk bdev shutdown timeout\n");
+            g_poll_exit_result = ETIMEDOUT;
+            goto out;
         }
     } while (!done);
 
@@ -509,6 +565,7 @@ static void *thread_poll_loop(void *arg)
     /* And wait for them to gracefully exit */
     while (!TAILQ_EMPTY(&g_gc_threads)) {
         TAILQ_FOREACH_SAFE(thread, &g_gc_threads, link, tmp) {
+            spdk_set_thread(thread->spdk_thread);
             if (spdk_thread_is_exited(thread->spdk_thread)) {
                 TAILQ_REMOVE(&g_gc_threads, thread, link);
                 fini_thread(thread);
@@ -516,9 +573,16 @@ static void *thread_poll_loop(void *arg)
             } else {
                 spdk_thread_poll(thread->spdk_thread, 0, 0);
             }
+            spdk_set_thread(NULL);
+        }
+        gettimeofday(&now, NULL);
+        if (timercmp(&now, &end, >=)) {
+            pfs_etrace("recycle spdk thread timeout\n");
+            break;
         }
     }
 
+out:
     pthread_exit(NULL);
 }
 
@@ -531,6 +595,10 @@ pfs_spdk_init_env(void)
     bool                done;
     int                 rc;
     struct timespec     ts;
+
+    if (pfs_generate_json_file() < 0) {
+        return -1;
+    }
 
     memset(&opts, 0, sizeof(opts));
     spdk_env_opts_init(&opts);
@@ -557,16 +625,13 @@ pfs_spdk_init_env(void)
                 return -1;
             }
         } while ((tok = strtok(NULL, ",")) != NULL);
-#ifdef DEBUG
-        spdk_log_set_print_level(SPDK_LOG_DEBUG);
-#endif
     }
 
     spdk_thread_lib_init(pfs_spdk_schedule_thread,
         sizeof(struct pfs_spdk_thread));
 
     /* Create an SPDK thread temporarily */
-    rc = pfs_spdk_init_thread(&mytd, false);
+    rc = pfs_spdk_init_thread(&mytd, "thread_poll", true);
     if (rc < 0) {
         pfs_etrace("Failed to create initialization thread\n");
         return rc;
@@ -600,9 +665,7 @@ pfs_spdk_init_env(void)
 int
 pfs_spdk_setup(void)
 {
-    static pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-    pfs_generate_json_file();
     spdk_log_set_level((spdk_log_level)FLAGS_spdk_log_level);
     spdk_log_set_print_level((spdk_log_level)FLAGS_spdk_log_print_level);
 
@@ -615,6 +678,7 @@ pfs_spdk_setup(void)
         }
 
         g_spdk_env_initialized = true;
+        atexit(pfs_spdk_cleanup);
         pthread_mutex_unlock(&init_mutex);
     } else {
         pthread_mutex_unlock(&init_mutex);
@@ -634,20 +698,26 @@ pfs_spdk_setup(void)
 void
 pfs_spdk_cleanup(void)
 {
-    struct timespec ts;
     int rc;
 
+    pthread_mutex_lock(&init_mutex);
+    if (!g_spdk_env_initialized) {
+        pthread_mutex_unlock(&init_mutex);
+        return;
+    }
     pfs_exit_spdk_thread();
+    g_poll_exit_result = 0;
     g_poll_loop = false;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_sec += 5;
-    rc = pthread_timedjoin_np(g_init_thread_id, NULL, &ts);
-    if (rc) {
-	pfs_etrace("can not join spdk polling thread, %s\n", strerror(rc));
-    } else {
+    rc = pthread_join(g_init_thread_id, NULL);
+    if (rc)
+	    pfs_etrace("can not join spdk polling thread, %s\n", strerror(rc));
+    if (!g_poll_exit_result) {
+        spdk_thread_lib_fini(); 
         spdk_env_fini();
         spdk_log_close();
+        g_spdk_env_initialized = 0;
     }
+    pthread_mutex_unlock(&init_mutex);
 }
 
 void pfs_exit_spdk_thread(void)

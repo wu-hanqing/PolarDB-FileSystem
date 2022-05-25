@@ -93,10 +93,10 @@ pfs_tls_destroy(void *data)
 			tls->tls_ioqueue[i] = NULL;
 		}
 	}
-	pfs_mem_free(tls, M_TLS);
-	pfs_mntstat_nthreads_change(-1);
 	pfs_exit_spdk_thread();
 	pfsdev_exit_thread();
+	pfs_mem_free(tls, M_TLS);
+	pfs_mntstat_nthreads_change(-1);
 }
 
 void __attribute__((constructor))

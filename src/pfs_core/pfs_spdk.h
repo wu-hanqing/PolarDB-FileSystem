@@ -28,7 +28,9 @@ struct pfs_spdk_thread {
     pthread_mutex_t mtx;
 };
 
+struct pfs_spdk_thread *pfs_create_spdk_thread(const char *name);
 struct pfs_spdk_thread *pfs_current_spdk_thread(void);
+struct pfs_spdk_thread *pfs_set_current_spdk_thread(struct pfs_spdk_thread *);
 
 struct spdk_io_channel* pfs_get_spdk_io_channel(struct spdk_bdev_desc *desc);
 int pfs_put_spdk_io_channel(struct spdk_io_channel *ch);
