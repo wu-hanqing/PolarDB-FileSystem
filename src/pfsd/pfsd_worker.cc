@@ -112,7 +112,7 @@ static int init_io_pollers(worker_t *wk)
 {
 	int i;
 
-	pfsd_info("create %d io workers", wk->w_nworkers);
+	pfsd_info("create %d io pollers", wk->w_npollers);
 
 	for (i = 0; i < wk->w_npollers; ++i) {
 		if (pthread_create(&wk->w_io_pollers[i], NULL, io_poller, wk)) {
