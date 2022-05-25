@@ -598,6 +598,7 @@ pfsd_read(int fd, void *buf, size_t len)
 	pfsd_file_t *file = NULL;
 	char *cbuf = (char *)buf;
 	ssize_t rc = 0, total = 0, to_read = 0;
+	int err = 0;
 
 	PFSD_SDK_GET_FILE(fd);
 	pthread_mutex_lock(&file->f_lseek_lock);
@@ -611,12 +612,13 @@ pfsd_read(int fd, void *buf, size_t len)
 			total += rc;
 			len -= rc;
 		} else {
+			err = rc;
 			break;
 		}
 	}
 	pthread_mutex_unlock(&file->f_lseek_lock);
 	pfsd_put_file(file);
-	return total > 0 ? total : rc;
+	return err ? err : total;
 }
 
 ssize_t
@@ -625,6 +627,7 @@ pfsd_pread(int fd, void *buf, size_t len, off_t off)
 	pfsd_file_t *file = NULL;
 	char *cbuf = (char *)buf;
 	ssize_t rc = 0, total = 0, to_read = 0;
+	int err = 0;
 
 	PFSD_SDK_GET_FILE(fd);
 	while (len > 0) {
@@ -636,11 +639,12 @@ pfsd_pread(int fd, void *buf, size_t len, off_t off)
 			total += rc;
 			len -= rc;
 		} else {
+			err = rc;
 			break;
 		}
 	}
 	pfsd_put_file(file);
-	return total ? total : rc;
+	return err ? err : total; 
 }
 
 static ssize_t
@@ -708,6 +712,7 @@ pfsd_write(int fd, const void *buf, size_t len)
 	pfsd_file_t *file = NULL;
 	char *cbuf = (char *)buf;
 	ssize_t rc = 0, total = 0, to_write = 0;
+	int err = 0;
 
 	PFSD_SDK_GET_FILE(fd);
 	pthread_mutex_lock(&file->f_lseek_lock);
@@ -720,12 +725,13 @@ pfsd_write(int fd, const void *buf, size_t len)
 			total += rc;
 			len -= rc;
 		} else {
+			err = rc;
 			break;
 		}
 	}
 	pthread_mutex_unlock(&file->f_lseek_lock);
 	pfsd_put_file(file);
-	return rc < 0 ? rc: total;
+	return err ? err : total;
 }
 
 ssize_t
@@ -734,6 +740,7 @@ pfsd_pwrite(int fd, const void *buf, size_t len, off_t off)
 	pfsd_file_t *file = NULL;
 	char *cbuf = (char *)buf;
 	ssize_t rc = 0, total = 0, to_write = 0;
+	int err = 0;
 
 	if (off < 0) {
 		errno = EINVAL;
@@ -752,6 +759,7 @@ pfsd_pwrite(int fd, const void *buf, size_t len, off_t off)
 			total += rc;
 			len -= rc;
 		} else {
+			err = rc;
 			break;
 		}
 	}
@@ -759,7 +767,7 @@ pfsd_pwrite(int fd, const void *buf, size_t len, off_t off)
 		pthread_mutex_unlock(&file->f_lseek_lock);
 	}
 	pfsd_put_file(file);
-	return rc < 0 ? rc : total;
+	return err ? err : total;
 }
 
 static ssize_t
