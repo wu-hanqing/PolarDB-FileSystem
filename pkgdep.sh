@@ -1,0 +1,24 @@
+#!/bin/sh
+apt install python3-pip
+pip3 install setuptools
+pip3 install wheel
+pip3 install meson
+apt install ninja
+apt install elftools
+apt install python-pyelftools
+apt install python3-pyelftools
+apt install uuid-dev
+apt install libaio-dev
+apt install libcunit1-dev
+apt install libblkid-dev
+apt install libnuma-dev
+apt install libisal-dev
+apt install isal
+apt install libnuma-dev
+apt install libpcap-dev
+apt install elftools
+apt install python3-pyelftools
+apt install libisal-dev
+apt install libnuma-dev
+apt install libbsd-dev
+apt install pkg-config
