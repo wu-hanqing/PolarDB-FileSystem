@@ -56,31 +56,31 @@ set(SPDK_LIBS
  -Bstatic
  spdk_bdev_null
  spdk_bdev_nvme
- spdk_bdev_passthru
- spdk_bdev_lvol
- spdk_bdev_raid
+# spdk_bdev_passthru
+# spdk_bdev_lvol
+# spdk_bdev_raid
  spdk_bdev_error
- spdk_bdev_gpt
- spdk_bdev_split
- spdk_bdev_delay
- spdk_bdev_zone_block
- spdk_blobfs_bdev
- spdk_blobfs
- spdk_blob_bdev
- spdk_lvol
- spdk_blob
+# spdk_bdev_gpt
+# spdk_bdev_split
+# spdk_bdev_delay
+# spdk_bdev_zone_block
+# spdk_blobfs_bdev
+# spdk_blobfs
+# spdk_blob_bdev
+# spdk_lvol
+# spdk_blob
  spdk_nvme
- spdk_bdev_ftl
- spdk_ftl
- spdk_bdev_aio
- spdk_bdev_virtio
- spdk_virtio
- spdk_accel_ioat
- spdk_ioat
- spdk_scheduler_dynamic
+# spdk_bdev_ftl
+# spdk_ftl
+# spdk_bdev_aio
+# spdk_bdev_virtio
+# spdk_virtio
+# spdk_accel_ioat
+# spdk_ioat
+# spdk_scheduler_dynamic
  spdk_env_dpdk
- spdk_scheduler_dpdk_governor
- spdk_scheduler_gscheduler
+# spdk_scheduler_dpdk_governor
+# spdk_scheduler_gscheduler
  spdk_sock_posix
  spdk_event
  spdk_event_bdev
