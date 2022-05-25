@@ -6,3 +6,4 @@ rm -f libglog.so
 rm -f libgflags.so.2.2
 rm -f libgflags.so
 set -e
+

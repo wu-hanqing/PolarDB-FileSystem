@@ -26,6 +26,8 @@ if (NOT PKG_CONFIG_FOUND)
     message(FATAL_ERROR "pkg_config not found")
 endif()
 
+set(PKG_DIR "/usr/local/polarstore/pfsd")
+
 include(thirdparties/CMakeLists.txt)
 
 set(DPDK_DIR /usr/local/dpdk CACHE STRING "dpdk directory")
@@ -43,8 +45,8 @@ include_directories(${spdk_init_INCLUDE_DIRS})
 link_directories(${spdk_init_LIBRARY_DIRS})
 
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
-set(CMAKE_INSTALL_RPATH ${ExtProjLocalDir}/lib ${dpdk_LIBRARY_DIRS} ${spdk_init_LIBRARY_DIRS})
-set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+set(CMAKE_INSTALL_RPATH ${PKG_DIR}/lib ${dpdk_LIBRARY_DIRS} ${spdk_init_LIBRARY_DIRS})
+#set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 set(SPDK_LIBS
@@ -131,15 +133,13 @@ set(SPDK_LIBS
 
 set(SPDK_DEPS uuid numa crypto bsd m aio dl)
 
+include(CMakeLists-config.txt)
+
 message(STATUS "compile pfs for curve nvme storage engine")
 
 include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
 include_directories(${ExtProjLocalDir}/include SYSTEM)
 link_directories(${ExtProjLocalDir}/lib)
-
-set(PKG_DIR "/usr/local/polarstore/pfsd")
-
-include(CMakeLists-config.txt)
 
 set(COMMON_FLAGS
   -fno-strict-aliasing
@@ -252,7 +252,8 @@ install(
 )
 
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
-    "${CMAKE_CURRENT_SOURCE_DIR}/package/deb/preinst;${CMAKE_CURRENT_SOURCE_DIR}/package/deb/postrm")
+    "${CMAKE_CURRENT_SOURCE_DIR}/package/deb/preinst;${CMAKE_CURRENT_SOURCE_DIR}/package/deb/postinst;${CMAKE_CURRENT_SOURCE_DIR}/package/deb/postrm")
 set(CPACK_RPM_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/package/rpm/preinst")
 set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/package/rpm/postinst")
+set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/package/rpm/postrm")
 include(CPack)
