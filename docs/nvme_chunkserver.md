@@ -208,7 +208,7 @@ Init chunk 1
                 metaset        1/2: sectbda      0x280051000, npage       64, objsize  128, nobj 2048, oid range [     800,     1000)
                 metaset        1/3: sectbda      0x280091000, npage       64, objsize  128, nobj 2048, oid range [     800,     1000)
 ...
-nited filesystem(1911260446720 bytes), 178 chunks, 2560 blktags, 2048 direntries, 2048 inodes per chunk
+inited filesystem(1911260446720 bytes), 178 chunks, 2560 blktags, 2048 direntries, 2048 inodes per chunk
 making paxos file
 init paxos lease
 making journal file
