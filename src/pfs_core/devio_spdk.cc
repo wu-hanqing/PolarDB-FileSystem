@@ -112,7 +112,7 @@ struct bdev_open_param {
 };
 
 static const int64_t g_iodepth = 128;
-DEFINE_int32(pfs_spdk_driver_poll_delay, 10,
+DEFINE_int32(pfs_spdk_driver_poll_delay, 0,
   "pfs spdk driver busy poll delay time(us)");
 DEFINE_bool(pfs_spdk_driver_auto_cpu_bind, false,
   "pfs spdk driver auto bind thread to cpus which are nearest to pci device");
@@ -239,7 +239,7 @@ bdev_thread_bind_cpuset(const char *thread_name, pfs_spdk_dev_t *dkdev)
     if (err == 0) {
         dev->d_mem_socket_id = pfs_cpuset_socket_id(&cpuset);
     } else {
-        pfs_etrace("cannot get device %s's local cpu set", dev->d_devname);
+        pfs_etrace("cannot get device %s's local cpuset", dev->d_devname);
     }
 
     if (FLAGS_pfs_spdk_driver_auto_cpu_bind) {
@@ -255,14 +255,14 @@ set_it:
                         cpuset_str.c_str());
                 err = -1;
             }
-        } 
+        }
     } else if (!FLAGS_pfs_spdk_driver_cpu_bind.empty()) {
         std::string &s = FLAGS_pfs_spdk_driver_cpu_bind;
         auto pos = s.find(dev->d_devname);
         if (pos != std::string::npos) {
             pos += strlen(dev->d_devname);
             if (s[pos] != '@') {
-                pfs_etrace("%s cannot find ':' for %s in %s", __func__,
+                pfs_etrace("%s cannot find cpuset for %s in %s", __func__,
                      dev->d_devname, s.c_str());
                 err = -1;
             } else {
@@ -277,10 +277,13 @@ set_it:
                 if (pfs_parse_set(substr.c_str(), &cpuset) == substr.length())
                     goto set_it;
                 else {
-                    pfs_etrace("%s, can not parse %s", __func__, substr.c_str());
+                    pfs_etrace("can not parse cpuset %s", substr.c_str());
                     err = -1;
                 }
             }
+        } else {
+            pfs_etrace("no cpuset found in %s for %s", s.c_str(),
+                       dev->d_devname);
         }
     }
 
@@ -406,15 +409,12 @@ err_exit:
             spdk_thread_poll(spdk_thread, 0, spdk_get_ticks());
             pfs_spdk_dev_pull_iocb(dkdev);
         }
- 
-        if (timeout.tv_nsec == 0) {
-            sem_trywait(&dkdev->dk_sem);
-        } else {
-            struct timespec ts;
-            clock_gettime(CLOCK_REALTIME, &ts);
-            timespecadd(&ts, &timeout, &ts);
-            sem_timedwait(&dkdev->dk_sem, &ts);
-        }
+        if (FLAGS_pfs_spdk_driver_poll_delay)
+            continue;
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        timespecadd(&ts, &timeout, &ts);
+        sem_timedwait(&dkdev->dk_sem, &ts);
     }
  
     pfs_put_spdk_io_channel(dkdev->dk_ioch);
@@ -839,9 +839,11 @@ pfs_spdk_dev_send_iocb(pfs_spdk_dev_t *dkdev,
         rte_pause();
     }
 
-    sem_getvalue(&dkdev->dk_sem, &count);
-    if (!count)
-        sem_post(&dkdev->dk_sem);
+    if (FLAGS_pfs_spdk_driver_poll_delay != 0) {
+        sem_getvalue(&dkdev->dk_sem, &count);
+        if (!count)
+            sem_post(&dkdev->dk_sem);
+    }
 }
 
 static void

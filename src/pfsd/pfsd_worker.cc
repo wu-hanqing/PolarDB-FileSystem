@@ -41,12 +41,12 @@
 
 #include "pfsd_option.h"
 
+#include "blockingconcurrentqueue.h"
 
 typedef std::pair<pfsd_iochannel_t *, int> WorkItem;
 
-static pthread_mutex_t g_work_mtx = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t g_work_cond = PTHREAD_COND_INITIALIZER;
-static std::deque<WorkItem> g_work_queue;
+static moodycamel::BlockingConcurrentQueue<WorkItem> g_work_queue;
+//static std::deque<WorkItem> g_work_queue;
 
 static void *io_worker(void *arg);
 static void *io_poller(void *arg);
@@ -129,12 +129,10 @@ static void stop_io_workers(worker_t *wk)
 {
 	int i;
 
-	pthread_mutex_lock(&g_work_mtx);
 	for (i = 0; i < wk->w_nworkers; ++i) {
-		g_work_queue.push_back({nullptr, -1});
+		if (!g_work_queue.enqueue({nullptr, -1}))
+            pfsd_fatal("can not enqueue stop-work item");
 	}
-	pthread_cond_broadcast(&g_work_cond);
-	pthread_mutex_unlock(&g_work_mtx);
 
 	for (i = 0; i < wk->w_nworkers; ++i) {
 		pthread_join(wk->w_io_workers[i], NULL);
@@ -154,9 +152,8 @@ static void drain_work_queue(void)
 {
 	WorkItem w;
 
-	pthread_mutex_lock(&g_work_mtx);
-	g_work_queue.clear();
-	pthread_mutex_unlock(&g_work_mtx);
+    while(g_work_queue.try_dequeue(w))
+        ;
 }
 
 void*
@@ -236,10 +233,8 @@ static void* io_poller(void *arg)
 					rsp->error = 0;
 				}
 
-				pthread_mutex_lock(&g_work_mtx);
-				g_work_queue.push_back({ch, index});
-				pthread_cond_signal(&g_work_cond);
-				pthread_mutex_unlock(&g_work_mtx);
+                if (!g_work_queue.enqueue({ch, index}))
+                    pfsd_fatal("can not enqueue workitem");
 				g_currentPid = PFSD_INVALID_PID;
 			}
 		}
@@ -257,16 +252,9 @@ static void *io_worker(void *arg)
 	prctl(PR_SET_NAME,(unsigned long)name);
 
 	for (;;) {
-		WorkItem w;
+        WorkItem w;
 
-		pthread_mutex_lock(&g_work_mtx);
-		while (g_work_queue.empty()) {
-			pthread_cond_wait(&g_work_cond, &g_work_mtx);
-		}
-		w = g_work_queue.front();
-		g_work_queue.pop_front();
-		pthread_mutex_unlock(&g_work_mtx);
-
+        g_work_queue.wait_dequeue(w);
 		pfsd_iochannel_t *ch = w.first;
 		if (ch == nullptr)
 			break;

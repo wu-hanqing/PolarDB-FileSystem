@@ -24,8 +24,10 @@
 #include <spdk/util.h>
 #include <spdk/json.h>
 
+#define THREAD_POLL "thread_poll"
+
 DEFINE_string(spdk_name, "", "give a name for spdk_env");
-DEFINE_string(spdk_core_mask, "", "spdk cpu core mask");
+DEFINE_string(spdk_core_mask, "[0-127]", "spdk cpu core mask");
 DEFINE_int32(spdk_shm_id, -1, "spdk shared memmory id");
 DEFINE_int32(spdk_mem_channel, -1, "spdk memmory channel");
 DEFINE_int32(spdk_main_core, -1, "spdk main cpu core id");
@@ -491,7 +493,7 @@ static void *thread_poll_loop(void *arg)
     int rc;
     bool done;
 
-    pthread_setname_np(pthread_self(), "pfs_spdk_gc");
+    pthread_setname_np(pthread_self(), "pfs_spdk_" THREAD_POLL);
 
     spdk_set_thread(mytd->spdk_thread);
     while (g_poll_loop) {
@@ -609,8 +611,12 @@ pfs_spdk_init_env(void)
         return -1;
     }
 
-    /* don't remove it, it is very important */
+    // Important. please don't remove following code.
+    // by default, dpdk binds every its lcore thread to its physical cpu
+    // with 1:1 mapping, unfortunately curve is not a typical dpdk application,
+    // we should unbind it from its core.
     spdk_unaffinitize_thread();
+    // end important 
 
     if (!FLAGS_spdk_log_flags.empty()) {
         // duplicate string
@@ -631,7 +637,7 @@ pfs_spdk_init_env(void)
         sizeof(struct pfs_spdk_thread));
 
     /* Create an SPDK thread temporarily */
-    rc = pfs_spdk_init_thread(&mytd, "thread_poll", true);
+    rc = pfs_spdk_init_thread(&mytd, THREAD_POLL, true);
     if (rc < 0) {
         pfs_etrace("Failed to create initialization thread\n");
         return rc;
@@ -685,10 +691,10 @@ pfs_spdk_setup(void)
         return 0;
     }
 
-    pfs_itrace("found devices:\n");
+    pfs_itrace("Found devices:\n");
     struct spdk_bdev *bdev;
     for (bdev = spdk_bdev_first(); bdev; bdev = spdk_bdev_next(bdev)) {
-         pfs_itrace("\t name: %s, size: %ld",
+         pfs_itrace("\t Name: %s, Size: %ld",
 	     spdk_bdev_get_name(bdev),
              spdk_bdev_get_num_blocks(bdev) * spdk_bdev_get_block_size(bdev));
     }
@@ -710,7 +716,7 @@ pfs_spdk_cleanup(void)
     g_poll_loop = false;
     rc = pthread_join(g_init_thread_id, NULL);
     if (rc)
-	    pfs_etrace("can not join spdk polling thread, %s\n", strerror(rc));
+	    pfs_etrace("can not join " THREAD_POLL " thread, %s\n", strerror(rc));
     if (!g_poll_exit_result) {
         spdk_thread_lib_fini(); 
         spdk_env_fini();
