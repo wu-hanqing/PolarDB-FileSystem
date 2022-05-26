@@ -165,7 +165,7 @@ bin/pfs -K '0000:81:00.0' -C spdk mkfs -f '0000:81:00.0n1'
 ```
 
 ```
-bin/pfs -K '0000:81:00.0' -C spdk mkfs -f '0000:81:00.0n1'|less
+bin/pfs -K '0000:81:00.0' -C spdk mkfs -f '0000:81:00.0n1'
 pfs tool cmd record:mkfs -f 0000:81:00.0n1
 [PFS_LOG] May 26 15:38:56.414026 INF [129089] pfs build version:libpfs_version_("pfsd-build-desc-e448f41-2022年 05月 26日 星期四 14:44:24 CST")
 [PFS_LOG] May 26 15:38:56.414170 INF [129089] pid: 122899, caller: bash
