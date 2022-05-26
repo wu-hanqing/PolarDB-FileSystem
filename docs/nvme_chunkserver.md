@@ -83,6 +83,7 @@ make install
 ```
 git clone git@github.com:opencurve/PolarDB-FileSystem.git
 cd PolarDB-FileSystem
+git checkout nvme
 mkdir build
 cd build
 ccmake ..
