@@ -314,6 +314,8 @@ pci设备位置最近的CPU上。
 vi /etc/default/grub
 
 GRUB_CMDLINE_LINUX_DEFAULT="net.ifnames=0 biosdevname=0 quiet cgroup_enable=memory crashkernel=512M isolcpus=32"
+
+update-grub
 ```
 重新启动linux即可。
 
