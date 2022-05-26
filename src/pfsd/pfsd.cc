@@ -45,12 +45,17 @@ pfsd_start(int daemon_allowed)
 	const char *pbdname;
 	int rc;
 
+	if (pfsd_prepare_env()) {
+		pfsd_error("pfsd_prepare_env failed\n");
+		return -1;
+	}
+
 	if (g_pfsd_started) {
 		pfsd_error("pfsd already started\n");
 		return -1;
 	}
 	if (pfsd_parse_option())
-		return 1;
+		return -1;
 
 	g_pfsd_stop = false;
 	sem_init(&g_pfsd_main_sem, 0, 0);

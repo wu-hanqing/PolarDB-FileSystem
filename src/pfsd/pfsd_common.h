@@ -64,6 +64,8 @@ int pfsd_make_shm_path(int seq, const char* dir, const char* pbdname, char* buf,
 	return snprintf(buf, size, "%s/shm_pfsd-%s_%02d", dir, pbdname, seq);
 }
 
+int pfsd_prepare_env(void);
+
 long pfsd_tolong(void* ptr);
 
 bool pfsd_request_alive(pfsd_request_t* req);

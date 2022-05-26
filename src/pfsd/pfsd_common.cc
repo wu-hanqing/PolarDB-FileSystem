@@ -130,6 +130,41 @@ pfsd_sdk_pbdname(const char *pbdpath, char *pbdname)
 	return 0;
 }
 
+#define PATH_PFSD_RUN   "/var/run/pfsd"
+#define PATH_PFS_RUN    "/var/run/pfs"
+#define PATH_PFSD_SHM   "/dev/shm/pfsd"
+
+static int
+pfsd_mkdir(const char *dir)
+{
+	int rc;
+
+	rc = access(dir, R_OK|W_OK|X_OK);
+	if (rc == -1) {
+		if (errno == ENOENT) {
+			pfsd_info("directory %s does not exists, create it!", dir);
+			rc = mkdir(dir, 0777);
+			if (rc == -1) {
+				pfsd_error("can not make directory: %s", dir);
+				return -1;
+			}
+		} else if (errno) {
+			pfsd_error("can not access directory: %s, error:%s", dir,
+					strerror(errno));
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+int
+pfsd_prepare_env(void)
+{
+	return pfsd_mkdir(PATH_PFSD_RUN) || pfsd_mkdir(PATH_PFS_RUN) ||
+	       pfsd_mkdir(PATH_PFSD_SHM);
+}
+
 int
 pfsd_pidfile_open(const char *pbdname)
 {
