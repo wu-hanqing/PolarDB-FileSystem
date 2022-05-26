@@ -25,6 +25,7 @@ PFS此前我们已经写过curve驱动，现在为其提供nvme驱动。
 ## 准备工作
 ### 安装依赖包
 这些包被DPDK和SPDK所需要
+```
   apt install meson
   apt install ninja
   apt install elftools
@@ -52,8 +53,11 @@ PFS此前我们已经写过curve驱动，现在为其提供nvme驱动。
   apt install libnuma-dev
   apt install libbsd-dev
   apt install pkg-config
+```
 
 ### 安装DPDK
+
+```
 git clone git@github.com:DPDK/dpdk.git
 cd dpdk
 git checkout v22.03
@@ -61,16 +65,22 @@ meson --prefix=/usr/local/dpdk
 cd build
 ninja
 sudo meson install
+```
 
 ### 安装SPDK
+
+```
 git clone git@github.com:spdk/spdk.git
 cd spdk
 git checkout v22.01.x
 ./configure --prefix=/usr/local/spdk
 make
 make install
+```
 
 ### 安装PFS FOR NVME
+
+```
 git clone git@github.com:opencurve/PolarDB-FileSystem.git
 cd PolarDB-FileSystem
 mkdir build
@@ -80,6 +90,7 @@ ccmake ..
 make
 make package
 sudo dpkg -i pfsd-e81e11b-2.1.2-x86_64.deb
+```
 
 ### 设置SPDK环境
 DPDK和是SPDK使用大页内存，LINUX缺省大页内存非常少，可以通过下列命令来设置:
@@ -93,9 +104,11 @@ echo 1024 > /sys/devices/system/node/node1/hugepages/hugepages-2048kB/nr_hugepag
 1024个2M依然太小了，如果CHUNK SERVER有多个，需要设置更多的大页内存。
 
 接下去，绑定SPDK驱动到NVME设备:
+
+```
 cd spdk
 scripts/setup.sh status
-```
+
 root@prit1-curve-chunk-node20:/home/yfxu/github/spdk# scripts/setup.sh status
 Hugepages
 node     hugesize     free /  total
