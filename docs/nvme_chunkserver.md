@@ -75,7 +75,7 @@ cd spdk
 git checkout v22.01.x
 ./configure --prefix=/usr/local/spdk
 make
-make install
+sudo make install
 ```
 
 ### 安装PFS FOR NVME
