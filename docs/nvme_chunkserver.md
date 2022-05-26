@@ -293,6 +293,35 @@ chunk_server()
     return 0;
 }
 ```
+### 性能调优
+
+PFS SPDK驱动内部使用一个忙等待的io线程，这个线程最好是绑定到与对应的NVME所在的
+pci设备位置最近的CPU上。
+
+#### 两种方式:
+
+1. PFS SPDK驱动能自动识别对应的NVME设备位于什么总线位置，并根据LINUX提供的topo架构
+计算cpu_set_t掩码，并自动绑定到这个cpu集合上。
+用gflags 命令行参数激活：
+  -pfs_spdk_driver_auto_cpu_bind=1
+
+2. 另外一种是使用LINUX cpu隔离
+
+在例如我们需要操作的nvme离cpu id 32比较近，可以在 linux kernel 启动选项上加入:
+ isolcpus=32 
+
+```
+vi /etc/default/grub
+
+GRUB_CMDLINE_LINUX_DEFAULT="net.ifnames=0 biosdevname=0 quiet cgroup_enable=memory crashkernel=512M isolcpus=32"
+```
+重新启动linux即可。
+
+然后把线程绑定, 命令行参数:
+ -pfs_spdk_driver_cpu_bind='0000:81:00.0n1@32'
+
+此后，cpu 32被我们的SPDK IO线程独占, 不再受调度干扰。
+
 ### 后续
 
 后续需要修改BRPC, 申请DMA BUF,直接把数据网络来的数据进入DMA buf，然后通过pfs_write_dma,
