@@ -249,7 +249,7 @@ W 2022-05-26T15:42:45.139199+0800 132046 <spdk>:1] --file-prefix=spdk_pid132046
 ### 开发
 PFS daemon只是用来验证用的。CHUNK SERVER不使用pfsdaemon，但是用api启动PFS模块：
 
-chunk server 直接调用 pfs api， 而不是通过pfsd client模块在通过SHM 通道去操作，这和数据库是不同的。
+chunk server 直接调用 pfs api， 而不是通过pfsd client模块再通过SHM 通道去操作，这和数据库是不同的。
 
 ![chunk server arch](pic/chunkserver.png "chunk server arch")
 
