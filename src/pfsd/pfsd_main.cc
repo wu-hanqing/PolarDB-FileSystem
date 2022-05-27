@@ -44,7 +44,7 @@
 static void
 signal_handler(int num)
 {
-	pfsd_stop();
+    pfsd_stop();
 }
 
 static void
