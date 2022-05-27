@@ -61,7 +61,7 @@ PFS此前我们已经写过curve驱动，现在为其提供nvme驱动。
 git clone git@github.com:DPDK/dpdk.git
 cd dpdk
 git checkout v22.03
-meson --prefix=/usr/local/dpdk
+meson build --prefix=/usr/local/dpdk --optimization=2
 cd build
 ninja
 sudo meson install
@@ -73,9 +73,10 @@ sudo meson install
 git clone git@github.com:spdk/spdk.git
 cd spdk
 git checkout v22.01.x
-./configure --prefix=/usr/local/spdk
-make
-sudo make install
+./configure --prefix=/usr/local/spdk --with-dpdk=/usr/local/dpdk
+Q= LDFLAGS=-lbsd make
+sudo bash
+Q= LDFLAGS=-lbsd make install
 ```
 
 ### 安装PFS FOR NVME
