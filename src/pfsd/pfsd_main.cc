@@ -185,4 +185,5 @@ main(int argc, char *argv[])
     if (pfsd_start(1))
         return 1;
     pfsd_wait_stop();
+    return 0;
 }
