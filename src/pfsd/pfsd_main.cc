@@ -149,7 +149,8 @@ glog_dpdk_log_func(void *cookie, const char *buf, size_t size)
     return size;
 }
 
-static void setup_sigaction()
+static void
+setup_sigaction()
 {
     /* init signal */
     struct sigaction sig;
