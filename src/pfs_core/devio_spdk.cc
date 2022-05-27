@@ -68,6 +68,7 @@ typedef struct pfs_spdk_dev {
     uint32_t    dk_block_size;
     uint32_t    dk_unit_size;
     int         dk_has_cache;
+    int         dk_bufalign;
     pthread_t   dk_pthread;
     struct pfs_spdk_thread *dk_thread;
     struct spdk_io_channel *dk_ioch;
@@ -248,7 +249,7 @@ set_it:
             std::string cpuset_str = pfs_cpuset_to_string(&cpuset);
             err = rte_thread_set_affinity(&cpuset);
             if (err == 0) {
-                pfs_itrace("bind thread %s to cpuset : %s", thread_name,
+                pfs_itrace("auto bind thread %s to cpuset : %s", thread_name,
                         cpuset_str.c_str());
             } else {
                 pfs_etrace("cannot bind thread %s to cpuset: %s", thread_name,
@@ -262,7 +263,7 @@ set_it:
         if (pos != std::string::npos) {
             pos += strlen(dev->d_devname);
             if (s[pos] != '@') {
-                pfs_etrace("%s cannot find cpuset for %s in %s", __func__,
+                pfs_etrace("cannot find cpuset bind for %s in %s",
                      dev->d_devname, s.c_str());
                 err = -1;
             } else {
@@ -282,7 +283,7 @@ set_it:
                 }
             }
         } else {
-            pfs_etrace("no cpuset found in %s for %s", s.c_str(),
+            pfs_etrace("no cpuset found in cpuset bind %s for %s", s.c_str(),
                        dev->d_devname);
         }
     }
@@ -391,10 +392,11 @@ err_exit:
     dkdev->dk_sectsz = dkdev->dk_unit_size * dkdev->dk_block_size;
     dkdev->dk_has_cache = spdk_bdev_has_write_cache(dkdev->dk_bdev);
     dkdev->dk_size = dkdev->dk_block_num * dkdev->dk_block_size;
+    dkdev->dk_bufalign = spdk_bdev_get_buf_align(dkdev->dk_bdev);
     pfs_itrace("open spdk device: '%s', block_num: %ld, "
-               "block_size: %d, write_unit_size: %d, has_cache: %d\n",
+               "block_size: %d, write_unit_size: %d, has_cache: %d, buf_align:%d\n",
                dev->d_devname, dkdev->dk_block_num, dkdev->dk_block_size,
-               dkdev->dk_unit_size, dkdev->dk_has_cache);
+               dkdev->dk_unit_size, dkdev->dk_has_cache, dkdev->dk_bufalign);
 
     bdev_thread_bind_cpuset(thread_name, dkdev);
 
