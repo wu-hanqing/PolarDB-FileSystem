@@ -777,6 +777,7 @@ pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *set)
 {
     std::string pci_addr;
 
+    CPU_ZERO(set);
     pci_addr = pfs_get_dev_pci_address(bdev);
     if (pci_addr.empty())
         return -1;
@@ -920,7 +921,7 @@ pfs_cpuset_to_string(const cpu_set_t *mask)
     char buf[64];
     std::string s;
 
-    for (i = 0; i < CPU_SETSIZE; i++) {
+    for (i = 0; i < CPU_SETSIZE;) {
         if (CPU_ISSET(i, mask)) {
             int run = 0;
             for (j = i + 1; j < CPU_SETSIZE; j++) {
@@ -937,6 +938,9 @@ pfs_cpuset_to_string(const cpu_set_t *mask)
                 i += run;
             }
             s += buf;
+            i = j;
+        } else {
+            i++;
         }
     }
     if (!s.empty()) {
