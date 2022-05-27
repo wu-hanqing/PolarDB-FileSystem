@@ -194,8 +194,8 @@ static pfs_file_t	**fdtbl;
 static int		fdtbl_nopen;
 static int		fdtbl_free_last;
 static int		pfs_max_nfd;
-static pthread_mutex_t	fdtbl_mtx;
-
+static pthread_rwlock_t	fdtbl_lock = PTHREAD_RWLOCK_WRITER_NONRECURSIVE_INITIALIZER_NP;
+static __thread int	fdtbl_rdlock_count;
 int64_t file_shrink_size = (10L << 30);
 PFS_OPTION_REG(file_shrink_size, pfs_check_ival_shrink_size);
 
@@ -236,6 +236,28 @@ PFS_OPTION_REG(file_shrink_size, pfs_check_ival_shrink_size);
  * 2. fdtbl[4] = fdtbl_free_last * 2 + 1 = 7 fdtbl_free_last = 4, --fdtbl_nopen
  * 3. fdtbl[2] = fdtbl_free_last * 2 + 1 = 9 fdtbl_free_last = 2, --fdtbl_nopen
  */
+
+static inline void
+fdtbl_rdlock()
+{
+	PFS_ASSERT(fdtbl_rdlock_count == 0);
+	PFS_ASSERT(pthread_rwlock_rdlock(&fdtbl_lock) == 0);
+	fdtbl_rdlock_count++;
+}
+
+static inline void
+fdtbl_wrlock()
+{
+	PFS_ASSERT(pthread_rwlock_wrlock(&fdtbl_lock) == 0);
+}
+
+static inline void
+fdtbl_unlock()
+{
+	PFS_ASSERT(pthread_rwlock_unlock(&fdtbl_lock) == 0);
+	if (fdtbl_rdlock_count)
+		fdtbl_rdlock_count--;	
+}
 
 static inline void
 fd_set_init()
@@ -306,11 +328,12 @@ static int
 fd_alloc(pfs_file_t *file)
 {
 	int fd = -1;
-	mutex_lock(&fdtbl_mtx);
+	fdtbl_wrlock();
 	fd = fd_get(file);
 	//We guarantee fd and file is consistent after releasing fdtbl_mtx.
 	file->f_fd = fd;
-	mutex_unlock(&fdtbl_mtx);
+	file->f_refcnt = 1;
+	fdtbl_unlock();
 	return fd;
 }
 
@@ -333,17 +356,20 @@ fd_free(pfs_file_t *file, bool file_is_locked)
 	bool need_free = false;
 
 	/*
-	 * File refcnt can only change when holding fdtbl lock.
+	 * File can only be closed when holding fdtbl wrlock.
 	 */
-	mutex_lock(&fdtbl_mtx);
+	fdtbl_wrlock();
 	PFS_ASSERT(fdtbl != NULL);
 	PFS_ASSERT(0 <= fd && fd < pfs_max_nfd);
 	PFS_ASSERT(fdtbl[fd] == file);
-	if (fdtbl[fd]->f_refcnt <= 1) {
+	if (fdtbl[fd]->f_refcnt <= 0) {
 		fd_put(fd);
+		pfs_itrace("put fd: %d", fd);
 		need_free = true;
+	} else {
+		PFS_ASSERT(fdtbl[fd]->f_refcnt <= 0);
 	}
-	mutex_unlock(&fdtbl_mtx);
+	fdtbl_unlock();
 
 	if (need_free) {
 		if (file_is_locked)
@@ -359,12 +385,12 @@ pfs_file_get(int fd, int lockflag)
 {
 	pfs_file_t *file = NULL;
 
-	mutex_lock(&fdtbl_mtx);
+	fdtbl_rdlock();
 	if (0 <= fd && fd < pfs_max_nfd)
 		file = fd_to_file(fd);
 	if (file)
-		file->f_refcnt++;
-	mutex_unlock(&fdtbl_mtx);
+		file_ref(file);
+	fdtbl_unlock();
 
 	if (file) {
 		pfs_mntstat_set_file_type(file->f_type);
@@ -384,9 +410,8 @@ pfs_file_put(pfs_file_t *file)
 
 	FILE_UNLOCK(file);
 
-	mutex_lock(&fdtbl_mtx);
-	file->f_refcnt--;
-	mutex_unlock(&fdtbl_mtx);
+	int old = file_unref(file);
+	PFS_ASSERT(old >= 1);
 }
 
 ssize_t
@@ -507,7 +532,6 @@ pfs_file_open_impl(pfs_mount_t *mnt, pfs_ino_t ino, int flags,
 	fd = fd_alloc(file);
 	if (fd < 0)
 		ERR_GOTO(EMFILE, out);
-
 	if (filep) {
 		*filep = file;
 		if (ino == JOURNAL_FILE_MONO)
@@ -785,7 +809,7 @@ pfs_file_close(pfs_file_t *file)
 {
 	if (file == NULL)
 		return 0;
-
+	file_unref(file);
 	return fd_free(file, false);
 }
 
@@ -795,6 +819,7 @@ pfs_file_close_locked(pfs_file_t *file)
 	if (file == NULL)
 		return 0;
 
+	file_unref(file);
 	return fd_free(file, true);
 }
 
@@ -1251,12 +1276,6 @@ pfs_file_xmap(pfs_file_t *file, fmap_entry_t *fmapv, int count)
 	return err;
 }
 
-static void __attribute__((constructor))
-init_pfs_fdtbl()
-{
-	mutex_init(&fdtbl_mtx);
-}
-
 static int
 dump_file(admin_buf_t *ab, pfs_file_t *file)
 {
@@ -1286,7 +1305,7 @@ pfs_fdtbl_dump(admin_buf_t *ab)
 	int i, n;
 	pfs_file_t *file;
 
-	mutex_lock(&fdtbl_mtx);
+	fdtbl_rdlock();
 	for (i = 0, n = 0; i < pfs_max_nfd && n < fdtbl_nopen; i++) {
 		file = fd_to_file(i);
 		if (file == NULL)
@@ -1294,7 +1313,7 @@ pfs_fdtbl_dump(admin_buf_t *ab)
 		n++;
 		(void)dump_file(ab, file);
 	}
-	mutex_unlock(&fdtbl_mtx);
+	fdtbl_unlock();
 
 	return 0;
 }

@@ -136,6 +136,9 @@ pthread_mutex_t	rename_mtx;
 	} else if (PFS_TRACE_##level == PFS_TRACE_DBG) {	\
 		pfs_dbgtrace("%s(" fmt ")\n",			\
 		    __func__, __VA_ARGS__);			\
+	} else if (PFS_TRACE_##level == PFS_TRACE_VERB) {	\
+		pfs_verbtrace("%s(" fmt ")\n",			\
+		    __func__, __VA_ARGS__);			\
 	}							\
 } while(0)
 
@@ -354,12 +357,13 @@ out:
 static int
 _pfs_close(int fd)
 {
-	int err;
+	int err, old;
 	pfs_mount_t *mnt = NULL;
 	pfs_file_t *file = NULL;
 
 	GET_MOUNT_FILE(fd, WRLOCK_FLAG, &mnt, &file);
-
+	file_unref(file);
+	/* remove refcount from GET_MOUNT_FILE */
 	err = pfs_file_close_locked(file);
 	if (err == 0) {
 		/* must set as null so that it will not be put again. */
@@ -932,10 +936,7 @@ pfs_open(const char *pbdpath, int flags, mode_t mode)
 	MNT_STAT_API_BEGIN(open_type);
 	if (!pbdpath)
 		err = -EINVAL;
-	if (flags & (O_CREAT | O_TRUNC))
-		API_ENTER(INFO, "%s, %#x, %#x", PATH_ARG(pbdpath), flags, mode);
-	else
-		API_ENTER(DEBUG, "%s, %#x, %#x", PATH_ARG(pbdpath), flags, mode);
+	API_ENTER(DEBUG, "%s, %#x, %#x", PATH_ARG(pbdpath), flags, mode);
 
 	while (err == -EAGAIN) {
 		fd = _pfs_open(pbdpath, flags, mode);
@@ -964,7 +965,7 @@ pfs_read_flags(int fd, void *buf, size_t len, int is_dma)
 		err = -EBADF;
 	else if (!buf || (ssize_t)len < 0)
 		err = -EINVAL;
-	API_ENTER(DEBUG, "%d, %p, %lu", fd, buf, len);
+	API_ENTER(VERB, "%d, %p, %lu", fd, buf, len);
 
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
@@ -998,7 +999,7 @@ pfs_write_flags(int fd, const void *buf, size_t len, int is_dma)
 	MNT_STAT_API_BEGIN(MNT_STAT_API_WRITE);
 	if (!fdok || !buf)
 		err = !fdok ? -EBADF : -EINVAL;
-	API_ENTER(DEBUG, "%d, %p, %lu", fd, buf, len);
+	API_ENTER(VERB, "%d, %p, %lu", fd, buf, len);
 
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
@@ -1035,7 +1036,7 @@ pfs_pread_flags(int fd, void *buf, size_t len, off_t offset, int is_dma)
 		err = -EINVAL;
 	else if (offset < 0 || (ssize_t)(offset + len) < 0)
 		err = -EINVAL;
-	API_ENTER(DEBUG, "%d, %p, %lu, %ld", fd, buf, len, offset);
+	API_ENTER(VERB, "%d, %p, %lu, %ld", fd, buf, len, offset);
 
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
@@ -1069,7 +1070,7 @@ pfs_pwrite_flags(int fd, const void *buf, size_t len, off_t offset, int is_dma)
 	MNT_STAT_API_BEGIN(MNT_STAT_API_PWRITE);
 	if (!fdok || !buf || offset < 0)
 		err = !fdok ? -EBADF : -EINVAL;
-	API_ENTER(DEBUG, "%d, %p, %lu, %ld", fd, buf, len, offset);
+	API_ENTER(VERB, "%d, %p, %lu, %ld", fd, buf, len, offset);
 
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
@@ -1122,7 +1123,7 @@ pfs_truncate(const char *pbdpath, off_t len)
 	MNT_STAT_API_BEGIN(MNT_STAT_API_TRUNCATE);
 	if (!pbdpath || len < 0)
 		err = -EINVAL;
-	API_ENTER(INFO, "%s, %ld", PATH_ARG(pbdpath), len);
+	API_ENTER(DEBUG, "%s, %ld", PATH_ARG(pbdpath), len);
 
 	while (err == -EAGAIN) {
 		err = _pfs_truncate(pbdpath, len);
@@ -1143,7 +1144,7 @@ pfs_ftruncate(int fd, off_t len)
 	MNT_STAT_API_BEGIN(MNT_STAT_API_FTRUNCATE);
 	if (!fdok || len < 0)
 		err = !fdok ? -EBADF : -EINVAL;
-	API_ENTER(INFO, "%d, %ld", fd, len);
+	API_ENTER(DEBUG, "%d, %ld", fd, len);
 
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
@@ -1164,7 +1165,7 @@ pfs_unlink(const char *pbdpath)
 	MNT_STAT_API_BEGIN(MNT_STAT_API_UNLINK);
 	if (!pbdpath)
 		err = -EINVAL;
-	API_ENTER(INFO, "%s", PATH_ARG(pbdpath));
+	API_ENTER(DEBUG, "%s", PATH_ARG(pbdpath));
 
 	while (err == -EAGAIN) {
 		mutex_lock(&unlink_mtx);
@@ -1274,7 +1275,7 @@ pfs_lseek(int fd, off_t offset, int whence)
 	MNT_STAT_API_BEGIN(MNT_STAT_API_LSEEK);
 	if (!fdok)
 		err = -EBADF;
-	API_ENTER(DEBUG, "%d, %ld, %d", fd, offset, whence);
+	API_ENTER(VERB, "%d, %ld, %d", fd, offset, whence);
 
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
@@ -1337,7 +1338,7 @@ pfs_mkdir(const char *pbdpath, mode_t mode)
 
 	if (!pbdpath)
 		err = -EINVAL;
-	API_ENTER(INFO, "%s, %#x", PATH_ARG(pbdpath), mode);
+	API_ENTER(DEBUG, "%s, %#x", PATH_ARG(pbdpath), mode);
 
 	while (err == -EAGAIN) {
 		err = _pfs_mkdir(pbdpath, mode);
@@ -1357,7 +1358,7 @@ pfs_opendir(const char *pbdpath)
 
 	if (!pbdpath)
 		err = -EINVAL;
-	API_ENTER(INFO, "%s", PATH_ARG(pbdpath));
+	API_ENTER(DEBUG, "%s", PATH_ARG(pbdpath));
 
 	while (err == -EAGAIN) {
 		err = _pfs_opendir(pbdpath, &dir);
@@ -1464,7 +1465,7 @@ pfs_rmdir(const char *pbdpath)
 
 	if (!pbdpath)
 		err = -EINVAL;
-	API_ENTER(INFO, "%s", PATH_ARG(pbdpath));
+	API_ENTER(DEBUG, "%s", PATH_ARG(pbdpath));
 
 	while (err == -EAGAIN) {
 		err = _pfs_rmdir(pbdpath);
@@ -1483,7 +1484,7 @@ pfs_rename(const char *opath, const char *npath)
 
 	if (!opath || !npath)
 		err = -EINVAL;
-	API_ENTER(INFO, "%s, %s", PATH_ARG(opath), PATH_ARG(npath));
+	API_ENTER(DEBUG, "%s, %s", PATH_ARG(opath), PATH_ARG(npath));
 
 	while (err == -EAGAIN) {
 		mutex_lock(&rename_mtx);
@@ -1504,7 +1505,7 @@ pfs_chdir(const char *pbdpath)
 
 	if (!pbdpath)
 		err = -EINVAL;
-	API_ENTER(INFO, "%s", PATH_ARG(pbdpath));
+	API_ENTER(DEBUG, "%s", PATH_ARG(pbdpath));
 
 	while (err == -EAGAIN) {
 		err = _pfs_chdir(pbdpath);

@@ -58,6 +58,13 @@ do { \
 		pfs_vtrace(PFS_TRACE_DBG, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__); \
 } while(0)
 
+#define pfs_verbtrace(fmt,...) \
+do { \
+	if (PFS_TRACE_VERB <= pfs_trace_plevel) \
+		pfs_vtrace(PFS_TRACE_VERB, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__); \
+} while(0)
+
+
 typedef struct tracectl {
 	const char 	*tc_file;
 	const char 	*tc_func;
@@ -67,6 +74,7 @@ typedef struct tracectl {
 	const char	*tc_format;
 } tracectl_t;
 
+/*
 #define	pfs_verbtrace(fmt, ...)	do {					\
 	static tracectl_t _tc = { 					\
 		__FILE__, __func__, __LINE__, 				\
@@ -79,6 +87,7 @@ typedef struct tracectl {
 	if (_tc.tc_enable)						\
 		pfs_trace(_tc.tc_level, true, fmt, ##__VA_ARGS__);	\
 } while (0)
+*/
 
 typedef	struct msg_header	msg_header_t;
 typedef	struct msg_trace	msg_trace_t;

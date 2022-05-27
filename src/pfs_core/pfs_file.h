@@ -65,6 +65,18 @@ typedef struct pfs_file {
 #define PFS_DMA_OFF 	0
 #define	PFS_DMA_ON	1
 
+static inline void
+file_ref(pfs_file_t *file)
+{
+	__atomic_fetch_add(&file->f_refcnt, 1, __ATOMIC_RELAXED);
+}
+
+static inline int
+file_unref(pfs_file_t *file)
+{
+	return __atomic_fetch_sub(&file->f_refcnt, 1, __ATOMIC_RELAXED);
+}
+
 pfs_file_t *
 	pfs_file_get(int fd, int lockflag);
 void	pfs_file_put(pfs_file_t *file);
