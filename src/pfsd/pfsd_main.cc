@@ -101,9 +101,9 @@ glog_spdk_func(int level, const char *a_file, const int a_line,
         glevel = google::GLOG_ERROR;
         break;
     case SPDK_LOG_WARN:
-    case SPDK_LOG_NOTICE:
         glevel = google::GLOG_WARNING;
         break;
+    case SPDK_LOG_NOTICE:
     case SPDK_LOG_INFO:
         glevel = google::GLOG_INFO;
         break;
