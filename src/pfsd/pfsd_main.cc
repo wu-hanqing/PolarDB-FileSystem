@@ -40,6 +40,7 @@
 #include "pfsd_chnl.h"
 #include "pfsd_log.h"
 #include "pfsd.h"
+#include "pfs_api.h"
 
 static void
 signal_handler(int num)
@@ -73,6 +74,8 @@ glog_pfs_func(int level, const char *file, const char *func, int line,
         glevel = google::GLOG_WARNING;
         break;
     case PFS_TRACE_INFO:
+    case PFS_TRACE_DBG:
+    case PFS_TRACE_VERB:
     default:
         glevel = google::GLOG_INFO;
         break;
