@@ -61,21 +61,21 @@ glog_pfs_func(int level, const char *file, const char *func, int line,
     int glevel = google::GLOG_INFO;
     vsnprintf(buf, sizeof(buf), fmt, ap);
     switch (level) {
-        case PFS_TRACE_FATAL:
-            glevel = google::GLOG_FATAL;
-            google::LogMessage(file, line, glevel).stream() << buf;
-            abort();
-            break;
-        case PFS_TRACE_ERROR:
-            glevel = google::GLOG_ERROR;
-            break;
-        case PFS_TRACE_WARN:
-            glevel = google::GLOG_WARNING;
-            break;
-        case PFS_TRACE_INFO:
-        default:
-            glevel = google::GLOG_INFO;
-            break;
+    case PFS_TRACE_FATAL:
+        glevel = google::GLOG_FATAL;
+        google::LogMessage(file, line, glevel).stream() << buf;
+        abort();
+        break;
+    case PFS_TRACE_ERROR:
+        glevel = google::GLOG_ERROR;
+        break;
+    case PFS_TRACE_WARN:
+        glevel = google::GLOG_WARNING;
+        break;
+    case PFS_TRACE_INFO:
+    default:
+        glevel = google::GLOG_INFO;
+        break;
     }
     google::LogMessage(file, line, glevel).stream() << buf;
 }
