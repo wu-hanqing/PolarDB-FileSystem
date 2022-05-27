@@ -49,7 +49,6 @@ DEFINE_int32(spdk_log_level, SPDK_LOG_INFO, "spdk log level");
 DEFINE_int32(spdk_log_print_level, SPDK_LOG_INFO, "spdk log level");
 DEFINE_string(spdk_nvme_controller, "", "simply configured nvme controller");
 DEFINE_int32(spdk_delete_temp_json_file, 1, "delete temp json file");
-DEFINE_string(pfs_cpuset_avoid, "", "pfs thread should avoid these cpus");
 
 #define RECYCLE_TIMEOUT 5
 
@@ -76,7 +75,6 @@ static TAILQ_HEAD(, pfs_spdk_thread) g_gc_threads =
 static TAILQ_HEAD(, pfs_spdk_thread) g_pfs_threads =
     TAILQ_HEAD_INITIALIZER(g_pfs_threads);
 
-static void pfs_avoid_cpu(void);
 static void pfs_spdk_bdev_close_targets(void *arg);
 
 static void
@@ -620,8 +618,6 @@ pfs_spdk_init_env(void)
     spdk_unaffinitize_thread();
     // end important 
 
-    pfs_avoid_cpu();
-
     if (!FLAGS_spdk_log_flags.empty()) {
         // duplicate string
         std::unique_ptr<char, decltype(free)*>
@@ -670,34 +666,6 @@ pfs_spdk_init_env(void)
     }
 
     return 0;
-}
-
-static void
-pfs_avoid_cpu(void)
-{
-	cpu_set_t avoid_cpuset, cpuset;
-
-	if (FLAGS_pfs_cpuset_avoid.empty())
-		return;
-
-	if (pfs_parse_set(FLAGS_pfs_cpuset_avoid.c_str(), &avoid_cpuset) != FLAGS_pfs_cpuset_avoid.length()) {
-		pfs_etrace("can not parse FLAGS_cpuset_avoid: %s", FLAGS_pfs_cpuset_avoid.c_str());
-		return;
-	}
-
-	rte_thread_get_affinity(&cpuset);
-	for (int i = 0; i < RTE_MAX_LCORE; ++i) {
-		if (CPU_ISSET(i, &avoid_cpuset))
-			CPU_CLR(i, &cpuset);
-	}
-
-	if (rte_thread_set_affinity(&cpuset)) {
-		pfs_etrace("can not set cpu affinity");
-		return;
-	}
-	std::string s = pfs_cpuset_to_string(&cpuset);
-	pfs_itrace("set cpuset to: %s, avoided cpuset: %s", s.c_str(),
-        	FLAGS_pfs_cpuset_avoid.c_str());
 }
 
 int
