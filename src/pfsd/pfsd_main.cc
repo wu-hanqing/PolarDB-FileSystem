@@ -122,9 +122,9 @@ glog_dpdk_log_func(void *cookie, const char *buf, size_t size)
         glevel = google::GLOG_ERROR;
         break;
     case RTE_LOG_WARNING:
-    case RTE_LOG_NOTICE:
         glevel = google::GLOG_WARNING;
         break;
+    case RTE_LOG_NOTICE:
     case RTE_LOG_INFO:
     default:
         glevel = google::GLOG_INFO;
