@@ -61,7 +61,7 @@ PFS此前我们已经写过curve驱动，现在为其提供nvme驱动。
 git clone git@github.com:DPDK/dpdk.git
 cd dpdk
 git checkout v22.03
-meson build --prefix=/usr/local/dpdk --buildtype release - --optimization=2
+meson build --prefix=/usr/local/dpdk --libdir=/usr/local/dpdk/lib --buildtype release --optimization=2
 cd build
 ninja
 sudo meson install
