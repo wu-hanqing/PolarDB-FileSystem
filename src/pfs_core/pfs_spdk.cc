@@ -38,8 +38,8 @@ DEFINE_bool(spdk_unlink_hugepage, false, "unlink hugepage file");
 DEFINE_string(spdk_hugedir, "", "spdk hugedir");
 DEFINE_string(spdk_pci_blocked, "", "blocked PCI address");
 DEFINE_string(spdk_pci_allowed, "", "allowed PCI address");
-DEFINE_string(spdk_iova_mode, "", "iova mode");
-DEFINE_uint64(spdk_base_virtaddr, 0x200000000000, "base virtual base");
+DEFINE_string(spdk_iova_mode, "va", "iova mode");
+DEFINE_uint64(spdk_base_virtaddr, 0, "base virtual base");
 DEFINE_string(spdk_env_context, "", "env context string");
 DEFINE_string(spdk_json_config_file, "", "spdk json config file");
 DEFINE_string(spdk_rpc_addr, SPDK_DEFAULT_RPC_ADDR, "spdk rpc address");
@@ -143,20 +143,26 @@ set_spdk_opts_from_gflags(struct spdk_env_opts *opts)
     if (!FLAGS_spdk_core_mask.empty()) {
         opts->core_mask = FLAGS_spdk_core_mask.c_str();
     }
+    opts->shm_id = FLAGS_spdk_shm_id;
     opts->mem_channel = FLAGS_spdk_mem_channel;
     opts->main_core = FLAGS_spdk_main_core;
     opts->mem_size = FLAGS_spdk_mem_size;
     opts->no_pci = FLAGS_spdk_no_pci;
     opts->hugepage_single_segments = FLAGS_spdk_hugepage_single_segments;
+    opts->unlink_hugepage = FLAGS_spdk_unlink_hugepage;
+    opts->num_pci_addr = 0;
     if (!FLAGS_spdk_hugedir.empty()) {
         opts->hugedir = FLAGS_spdk_hugedir.c_str();
     }
+    parse_pci_address(opts);
     if (!FLAGS_spdk_iova_mode.empty()) {
         opts->iova_mode = FLAGS_spdk_iova_mode.c_str();
     }
-
-    opts->base_virtaddr = FLAGS_spdk_base_virtaddr;
-    parse_pci_address(opts);
+    if (FLAGS_spdk_base_virtaddr)
+        opts->base_virtaddr = FLAGS_spdk_base_virtaddr;
+    if (!FLAGS_spdk_env_context.empty()) {
+        opts->env_context = (char *)FLAGS_spdk_env_context.c_str();
+    }
 }
 
 static void
