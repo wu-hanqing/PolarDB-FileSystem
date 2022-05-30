@@ -31,6 +31,7 @@
 #include <spdk/env.h>
 #include <spdk/log.h>
 #include <spdk/string.h>
+#include <rte_common.h>
 #include <rte_memcpy.h>
 #include <rte_thread.h>
 #include <rte_pause.h>
@@ -73,9 +74,10 @@ typedef struct pfs_spdk_dev {
     struct pfs_spdk_thread *dk_thread;
     struct spdk_io_channel *dk_ioch;
     int         dk_stop;
-    sem_t       dk_sem;
     int         dk_jobs;
-    pfs_spdk_iocb_t *dk_incoming;
+
+    pfs_spdk_iocb_t *dk_incoming __rte_aligned(RTE_CACHE_LINE_SIZE);
+    sem_t       dk_sem;
     char        dk_path[128];
 } pfs_spdk_dev_t;
 
@@ -102,8 +104,10 @@ typedef struct pfs_spdk_ioq {
     int         dkq_complete_count;
     TAILQ_HEAD(, pfs_devio) dkq_inflight_queue;
     TAILQ_HEAD(, pfs_devio) dkq_complete_queue;
-    pfs_spdk_iocb_t *dkq_done_q;
+
+    pfs_spdk_iocb_t *dkq_done_q __rte_aligned(RTE_CACHE_LINE_SIZE);
     sem_t       dkq_done_sem;
+    char	dkq_pad[RTE_CACHE_LINE_SIZE];
 } pfs_spdk_ioq_t;
 
 struct bdev_open_param {

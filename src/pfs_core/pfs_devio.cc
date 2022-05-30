@@ -222,8 +222,7 @@ pfs_dev_create(const char *cluster, const char *devname, int flags)
 	devsize = dop->dop_size;
 	devmtag = dop->dop_memtag;
 
-	dev = (pfs_dev_t *)pfs_mem_malloc(devsize, devmtag);
-	if (dev == NULL) {
+	if (pfs_mem_memalign((void **)&dev, 128, devsize, devmtag)) {
 		pfs_etrace("cluster %s, devname %s: no memory\n",
 		    cluster, devname);
 		return NULL;
