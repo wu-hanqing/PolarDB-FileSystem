@@ -38,6 +38,7 @@ extern int64_t file_shrink_size;
  */
 typedef struct pfs_file {
 	pthread_rwlock_t f_rwlock;	/* (I) */
+	pthread_mutex_t f_offset_lock;	/* (I) */
 	int		f_fd;		/* file description */
 	int		f_mntid;
 	int		f_flags;

@@ -386,7 +386,9 @@ _pfs_read(int fd, void *buf, size_t len, int flags)
 
 	GET_MOUNT_FILE(fd, RDLOCK_FLAG, &mnt, &file);
 
+	mutex_lock(&file->f_offset_lock);
 	rlen = pfs_file_xpread(file, buf, len, OFFSET_FILE_POS, flags);
+	mutex_unlock(&file->f_offset_lock);
 
 	PUT_MOUNT_FILE(mnt, file);
 	return rlen;
@@ -414,11 +416,15 @@ _pfs_write(int fd, const void *buf, size_t len, int flags)
 	 * maybe not equal.
 	 * Because argument -1 means do fallocate/pwrite from file's tail.
 	 */
+	mutex_lock(&file->f_offset_lock);
 	err = pfs_file_xfallocate(file, OFFSET_FILE_POS, len, FALLOC_FL_KEEP_SIZE);
-	if (err < 0)
+	if (err < 0) {
+		mutex_unlock(&file->f_offset_lock);
 		goto finish;
+	}
 
 	wlen = pfs_file_xpwrite(file, buf, len, OFFSET_FILE_POS, flags);
+	mutex_unlock(&file->f_offset_lock);
 
 	PUT_MOUNT_FILE(mnt, file);
 	return wlen;
@@ -602,7 +608,7 @@ _pfs_lseek(int fd, off_t offset, int whence)
 	pfs_file_t *file = NULL;
 	off_t new_offset = -1;
 
-	GET_MOUNT_FILE(fd, WRLOCK_FLAG, &mnt, &file);
+	GET_MOUNT_FILE(fd, RDLOCK_FLAG, &mnt, &file);
 
 	new_offset = pfs_file_xlseek(file, offset, whence);
 
@@ -1076,7 +1082,7 @@ pfs_write_dma(int fd, const void *buf, size_t len)
 	return pfs_write_flags(fd, buf, len, PFS_IO_DMA_ON);
 }
 
-ssize_t
+static ssize_t
 pfs_pread_flags(int fd, void *buf, size_t len, off_t offset, int flags)
 {
 	int err = -EAGAIN;
@@ -1110,16 +1116,24 @@ pfs_pread_flags(int fd, void *buf, size_t len, off_t offset, int flags)
 ssize_t
 pfs_pread(int fd, void *buf, size_t len, off_t offset)
 {
+	if (offset < 0) {
+		errno = EINVAL;
+		return -1;
+	}
 	return pfs_pread_flags(fd, buf, len, offset, PFS_IO_DMA_OFF);
 }
 
 ssize_t
 pfs_pread_dma(int fd, void *buf, size_t len, off_t offset)
 {
+	if (offset < 0) {
+		errno = EINVAL;
+		return -1;
+	}
 	return pfs_pread_flags(fd, buf, len, offset, PFS_IO_DMA_ON);
 }
 
-ssize_t
+static ssize_t
 pfs_pwrite_flags(int fd, const void *buf, size_t len, off_t offset, int flags)
 {
 	int err = -EAGAIN;
@@ -1151,6 +1165,10 @@ pfs_pwrite_flags(int fd, const void *buf, size_t len, off_t offset, int flags)
 ssize_t
 pfs_pwrite(int fd, const void *buf, size_t len, off_t offset)
 {
+	if (offset < 0) {
+		errno = EINVAL;
+		return -1;
+	}
 	return pfs_pwrite_flags(fd, buf, len, offset, PFS_IO_DMA_OFF);
 }
 
@@ -1163,6 +1181,10 @@ pfs_pwrite_dma(int fd, const void *buf, size_t len, off_t offset)
 ssize_t
 pfs_pwrite_zero(int fd, size_t len, off_t offset)
 {
+	if (offset < 0) {
+		errno = EINVAL;
+		return -1;
+	}
 	return pfs_pwrite_flags(fd, NULL, len, offset, PFS_IO_WRITE_ZERO);
 }
 

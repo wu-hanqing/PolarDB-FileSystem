@@ -509,6 +509,7 @@ pfs_file_open_impl(pfs_mount_t *mnt, pfs_ino_t ino, int flags,
 		ERR_RETVAL(ENOMEM);
 	memset(file, 0, sizeof(*file));
 	rwlock_init(&file->f_rwlock, NULL);
+	mutex_init(&file->f_offset_lock);
 	file->f_refcnt = 0;
 	file->f_offset = 0;
 	file->f_btime = btime;
@@ -549,6 +550,7 @@ out:
 	}
 	if (file) {
 		rwlock_destroy(&file->f_rwlock);
+		mutex_destroy(&file->f_offset_lock);
 		pfs_mem_free(file, M_FILE);
 		file = NULL;
 	}
@@ -1190,7 +1192,9 @@ pfs_file_xlseek(pfs_file_t *file, off_t offset, int whence)
 	MNT_STAT_BEGIN();
 	curoff = -1;
 	tls_read_begin_flags(mnt, need_sync);
+	mutex_lock(&file->f_offset_lock);
 	curoff = pfs_file_lseek(file, offset, whence);
+	mutex_unlock(&file->f_offset_lock);
 	err = curoff < 0 ? curoff : 0;
 	tls_read_end(err);
 	MNT_STAT_END(MNT_STAT_FILE_LSEEK);
