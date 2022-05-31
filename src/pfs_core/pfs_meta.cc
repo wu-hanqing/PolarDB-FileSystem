@@ -1327,7 +1327,7 @@ pfs_meta_used_oid(pfs_mount_t *mnt, int type, int ckid, oidvect_t *ov)
 }
 
 int
-pfs_meta_info(pfs_mount_t *mnt, int depth, pfs_printer_t *printer)
+pfs_meta_info(pfs_mount_t *mnt, int depth, int verbose, pfs_printer_t *printer)
 {
 	int i, err, err1;
 
@@ -1336,7 +1336,8 @@ pfs_meta_info(pfs_mount_t *mnt, int depth, pfs_printer_t *printer)
 	for (i = MT_NONE; i < MT_NTYPE; i++) {
 		if (i == MT_NONE)
 			continue;
-		err1 = pfs_anode_dump(&mnt->mnt_anode[i], i, depth, 0, printer);
+		err1 = pfs_anode_dump(&mnt->mnt_anode[i], i, depth,
+            verbose, 0, printer);
 		ERR_UPDATE(err, err1);
 	}
 	MOUNT_META_UNLOCK(mnt);

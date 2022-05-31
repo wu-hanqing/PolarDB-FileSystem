@@ -35,13 +35,15 @@
 typedef struct opts_info {
 	opts_common_t	common;
 	int		depth;	/* anode's depth */
+	int		verbose;	/* verbose mode */
 } opts_info_t;
 
 void
 usage_info()
 {
 	printf("pfs info [options] pbdname\n"
-	    "	-d:	info dump depth, start from 1\n");
+	    "	-d:	info dump depth, start from 1\n"
+		"	-v:	verbose mode, show extra infos");
 }
 
 int
@@ -51,13 +53,16 @@ getopt_info(int argc, char *argv[], cmd_opts_t *co)
 	opts_info_t *co_info = (opts_info_t *)co;
 
 	co_info->depth = 1;
+    co_info->verbose = 0;
 	optind = 1;
-	while ((opt = getopt(argc, argv, "hd:")) != -1) {
+	while ((opt = getopt(argc, argv, "hvd:")) != -1) {
 		switch (opt) {
 		case 'd':
 			co_info->depth = atoi(optarg);
 			break;
-
+        case 'v':
+			co_info->verbose = 1;
+			break;
 		case 'h':
 		default:
 			return -1;
@@ -88,7 +93,7 @@ cmd_info(int argc, char *argv[], cmd_opts_t *co)
 		ERR_RETVAL(ENODEV);
 	}
 
-	err = pfs_meta_info(mnt, co_info->depth, NULL);
+	err = pfs_meta_info(mnt, co_info->depth, co_info->verbose, NULL);
 
 	pfs_put_mount(mnt);
 	return err;

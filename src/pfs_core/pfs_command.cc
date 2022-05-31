@@ -130,7 +130,7 @@ pfs_command_info(struct cmdinfo *ci, admin_buf_t *ab)
 	if (mnt == NULL)
 		return -EINVAL;
 
-	err = pfs_meta_info(mnt, info->info_depth,
+	err = pfs_meta_info(mnt, info->info_depth, 0,
 	    pfs_adminbuf_printer(ab));
 
 	pfs_put_mount(mnt);
