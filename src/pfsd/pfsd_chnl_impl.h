@@ -31,7 +31,7 @@ typedef struct pfsd_chnl_op {
 		const char *pbdname, int host_id, int flags, int timout_us,
 		bool reconn);
 
-	int (*chnl_prepare)(const char *pbdname, int nworkers, void *arg);
+	int (*chnl_prepare)(void *ctx, const char *pbdname, int nworkers, void *arg);
 	int (*chnl_recover)(void *ctx, void *op, const char *svr_addr, 
 		int workers, void *arg);
 	int (*chnl_listen)(void *chnl_ctx, void *chnl_op, const char *svr_addr,

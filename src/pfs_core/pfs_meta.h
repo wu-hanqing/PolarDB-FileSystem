@@ -160,7 +160,7 @@ int	pfs_meta_redo(pfs_mount_t *mnt, int mtype, uint64_t objno,
 void	pfs_meta_redo_fini(pfs_tx_t* tx);
 void	pfs_meta_visit(pfs_mount_t *mnt, int type, int chunkid, int objid,
 	    pfs_meta_visitfn_t *visitfunc, void *visitdata);
-int	pfs_meta_info(pfs_mount_t *mnt, int depth, pfs_printer_t *printer);
+int	pfs_meta_info(pfs_mount_t *mnt, int depth, int verbose, pfs_printer_t *printer);
 void	pfs_meta_check_set(const pfs_metaobj_phy_t *objbuf, uint32_t nobj);
 void 	pfs_metaobj_dump(const pfs_metaobj_phy_t *mo, int level);
 

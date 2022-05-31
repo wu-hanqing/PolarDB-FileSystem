@@ -274,8 +274,42 @@ pfs_anode_destroy(pfs_anode_t *an)
 	}
 }
 
+int64_t
+pfs_anode_getsize(int type) {
+    int unit = 0;
+    switch (type) {
+        case MT_BLKTAG:
+            unit = PFS_BLOCK_SIZE;
+            break;
+        case MT_DIRENTRY:
+            unit = sizeof(pfs_metaobj_phy_t);
+            break;
+        case MT_INODE:
+            unit = sizeof(pfs_metaobj_phy_t);
+            break;
+        default:
+            break;
+    }
+    return unit;
+}
+
+static int
+bytes_to_human_readable_string(int64_t bytes, char *str, size_t size) {
+    const char FILE_SIZE_UNITS[8][3]{
+        "B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB"
+    };
+    int base = 0;
+    double value = double(bytes);
+    while ((bytes >> 10) != 0) {
+        base ++;
+        bytes = bytes >> 10;
+    }
+    value = value / (1ull << (base * 10));
+    return snprintf(str, size, "%.1f%s", value, FILE_SIZE_UNITS[base]);
+}
+
 int
-pfs_anode_dump(pfs_anode_t *an, int type, int depth, int lvl,
+pfs_anode_dump(pfs_anode_t *an, int type, int depth, int verbose, int lvl,
     pfs_printer_t *printer)
 {
 	int i, rv;
@@ -291,16 +325,35 @@ pfs_anode_dump(pfs_anode_t *an, int type, int depth, int lvl,
 			return rv;
 	}
 
-	rv = pfs_printf(printer, "%*s(%d)allocnode: id %llu, shift %u, "
-	    "nchild=%u, nall %d, nfree %d, next %d\n", lvl, " ", lvl,
-	    (unsigned long long)an->an_id, an->an_shift, an->an_nchild,
-	    an->an_nall, an->an_nfree, an->an_next);
+    if (1 == verbose) {
+        int64_t unit = pfs_anode_getsize(type);
+        int64_t nall = an->an_nall * unit;
+        char nallstr[16];
+        bytes_to_human_readable_string(nall, nallstr, 16);
+        int64_t nfree = an->an_nfree * unit;
+        char nfreestr[16];
+        bytes_to_human_readable_string(nfree, nfreestr, 16);
+        int64_t nused = nall - nfree;
+        char nusedstr[16];
+        bytes_to_human_readable_string(nused, nusedstr, 16);
+        double used_percent = double(nused) / nall * 100;
+
+        rv = pfs_printf(printer, "%*s(%d)allocnode: id %llu, shift %u, "
+            "nchild=%u, total %s, used %s, free %s, use%% %.1f%%, next %d\n", lvl, " ", lvl,
+            (unsigned long long)an->an_id, an->an_shift, an->an_nchild,
+            nallstr, nusedstr, nfreestr, used_percent, an->an_next);
+    } else {
+        rv = pfs_printf(printer, "%*s(%d)allocnode: id %llu, shift %u, "
+            "nchild=%u, nall %d, nfree %d, next %d\n", lvl, " ", lvl,
+            (unsigned long long)an->an_id, an->an_shift, an->an_nchild,
+            an->an_nall, an->an_nfree, an->an_next);
+    }
 	if (rv < 0)
 		return rv;
 
 	for (i = 0; i < an->an_nchild; i++) {
 		can = an->an_children[i];
-		rv = pfs_anode_dump(can, type, depth, lvl+1, printer);
+		rv = pfs_anode_dump(can, type, depth, verbose, lvl+1, printer);
 		if (rv < 0)
 			return rv;
 	}

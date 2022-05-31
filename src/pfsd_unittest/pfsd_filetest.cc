@@ -1623,12 +1623,12 @@ TEST_F(FileTest, pfsd_ROFS_test)
 TEST_F(FileTest, pfsd_large_rdwr)
 {
     char *wrbuf, *rdbuf;
-    int repeat = UNIT_1G / UNIT_4M;
+    int repeat = UNIT_1G / UNIT_8M;
     int len = 0;
     int offset = 0;
 
-    wrbuf = (char *) calloc(1, UNIT_4M);
-    rdbuf = (char *) calloc(1, UNIT_4M);
+    wrbuf = (char *) calloc(1, UNIT_8M);
+    rdbuf = (char *) calloc(1, UNIT_8M);
     ASSERT_TRUE(wrbuf);
     ASSERT_TRUE(rdbuf);
 
@@ -1636,8 +1636,8 @@ TEST_F(FileTest, pfsd_large_rdwr)
     offset += len;
 
     for (int i =0; i< repeat; i++) {
-        len = pfsd_pwrite(fd_, wrbuf, UNIT_4M, offset);
-        EXPECT_EQ(UNIT_4M, len);
+        len = pfsd_pwrite(fd_, wrbuf, UNIT_8M, offset);
+        EXPECT_EQ(UNIT_8M, len);
         offset += len + UNIT_4K;
     }
     CHECK_FILESIZE(fd_, UNIT_1G + UNIT_4K*repeat);
@@ -1646,9 +1646,9 @@ TEST_F(FileTest, pfsd_large_rdwr)
     len = 0;
     for (int i = 0; i< repeat; i++) {
         offset += len + UNIT_4K;
-        len = pfsd_pread(fd_, rdbuf, UNIT_4M, offset);
-        EXPECT_EQ(UNIT_4M, len);
-        EXPECT_TRUE(!strncmp(rdbuf, wrbuf, UNIT_4M));
+        len = pfsd_pread(fd_, rdbuf, UNIT_8M, offset);
+        EXPECT_EQ(UNIT_8M, len);
+        EXPECT_TRUE(!strncmp(rdbuf, wrbuf, UNIT_8M));
     }
     free(wrbuf);
     free(rdbuf);

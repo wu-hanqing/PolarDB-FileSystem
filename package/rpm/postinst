@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set +e
+chkconfig --add pfsd_env
+set -e

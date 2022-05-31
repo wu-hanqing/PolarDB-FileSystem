@@ -32,6 +32,7 @@ bool pfsd_writable(int mnt_flags);
 
 typedef struct pfsd_file {
     pthread_rwlock_t f_rwlock;
+    pthread_mutex_t f_lseek_lock;
     int     f_fd;
     int     f_flags;
     off_t   f_offset;

@@ -55,7 +55,7 @@ target_link_libraries(pfsdaemon
     -Wl,--start-group
     -Wl,--no-as-needed
     pfs
-    zlog
+    libzlog.a
     pthread
     -Wl,--end-group
 )
@@ -63,4 +63,6 @@ target_link_libraries(pfsdaemon
 target_compile_definitions(pfsdaemon PUBLIC PFSD_SERVER)
 
 SET_TARGET_PROPERTIES(pfsdaemon PROPERTIES LINKER_LANGUAGE CXX)
+
+install(TARGETS pfsdaemon DESTINATION "${PKG_DIR}/bin")
 

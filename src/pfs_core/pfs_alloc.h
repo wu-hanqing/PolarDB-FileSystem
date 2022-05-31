@@ -64,7 +64,7 @@ void *	pfs_anode_get(pfs_anode_t *an, uint64_t, pfs_txop_t *);
 int	pfs_anode_undo(pfs_anode_t *an, uint64_t val, pfs_txop_t *top);
 int	pfs_anode_redo(pfs_anode_t *an, uint64_t val, pfs_txop_t *top);
 void  	pfs_anode_destroy(pfs_anode_t *an);
-int	pfs_anode_dump(pfs_anode_t *an, int type, int depth, int lvl,
+int	pfs_anode_dump(pfs_anode_t *an, int type, int depth, int verbose, int lvl,
 	    pfs_printer_t *printer);
 int 	pfs_anode_walk(pfs_anode_t *an, pfs_anode_walkfn_t *walkfn,
 	    void *data);

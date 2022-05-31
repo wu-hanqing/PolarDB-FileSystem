@@ -24,18 +24,23 @@ struct pfsd_iochannel;
 
 extern volatile bool g_stop;
 
+typedef void (*worker_wait_io_t)(struct worker *);
+
 /*A worker thread is dedicated to a shm */
 typedef struct worker {
 	pthread_t w_tid;
-	int w_idx;
+	struct chnl_ctx_shm *w_ctx;
 	int w_nch;
-	struct pfsd_iochannel *w_channels[PFSD_SHM_MAX  *PFSD_WORKER_MAX];
+	int w_nworkers;
+	int w_npollers;
+	pthread_t *w_io_workers;
+	pthread_t *w_io_pollers;
+	struct pfsd_iochannel *w_channels[10000];
 	sem_t w_sem; /*for sync start thread */
-	pfsd_cpu_record_t *w_cr; /*if it set affinity */
+	worker_wait_io_t w_wait_io;
 } worker_t;
 
-extern worker_t *g_workers;
-extern int g_nworkers;
+extern worker_t *g_worker;
 
 worker_t *pfsd_create_workers(int nworkers);
 void pfsd_destroy_workers(worker_t **workers);
