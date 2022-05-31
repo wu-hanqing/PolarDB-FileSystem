@@ -158,9 +158,8 @@ pfs_spdk_dev_alloc_iocb(void)
         /* allocate it by malloc from global heap */
         err = pfs_mem_memalign(&p, 64, sizeof(*iocb), M_SPDK_IOCB);
         if (err) {
-            pfs_etrace("%s: create iocb failed, %s\n", __func__, strerror(err));
+            pfs_etrace("create iocb failed, %s\n", strerror(err));
             abort();
-//          return NULL;
         }
         iocb = (pfs_spdk_iocb_t *)p;
     }
