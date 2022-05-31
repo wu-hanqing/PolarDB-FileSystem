@@ -227,6 +227,7 @@ pfs_dev_create(const char *cluster, const char *devname, int flags)
 		    cluster, devname);
 		return NULL;
 	}
+	memset(dev, 0, devsize);
 	err = strncpy_safe(dev->d_cluster, cluster, PFS_MAX_CLUSTERLEN);
 	if (err < 0) {
 		pfs_etrace("cluster name too long: %s\n", cluster);

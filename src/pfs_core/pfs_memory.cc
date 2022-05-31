@@ -181,8 +181,10 @@ pfs_mem_memalign(void **pp, size_t alignment, size_t size, int type)
 	int err;
 
 	err = posix_memalign(pp, alignment, size);
-	if (err == 0)
+	if (err == 0) {
 		memtype_inc(type, 1, malloc_usable_size(*pp));
+		memset(*pp, 0, size);
+	}
 	return err;
 }
 
