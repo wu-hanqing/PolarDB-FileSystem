@@ -62,9 +62,6 @@ typedef struct pfs_file {
 
 #define FALLOC_PFSFL_FIXED_OFFSET	0x0100	/* lower bits defined in falloc.h */
 
-#define PFS_DMA_OFF 	0
-#define	PFS_DMA_ON	1
-
 static inline void
 file_ref(pfs_file_t *file)
 {

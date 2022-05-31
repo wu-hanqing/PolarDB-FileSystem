@@ -375,7 +375,7 @@ _pfs_close(int fd)
 }
 
 static ssize_t
-_pfs_read(int fd, void *buf, size_t len, int is_dma)
+_pfs_read(int fd, void *buf, size_t len, int flags)
 {
 	pfs_mount_t *mnt = NULL;
 	pfs_file_t *file = NULL;
@@ -386,14 +386,14 @@ _pfs_read(int fd, void *buf, size_t len, int is_dma)
 
 	GET_MOUNT_FILE(fd, RDLOCK_FLAG, &mnt, &file);
 
-	rlen = pfs_file_xpread(file, buf, len, OFFSET_FILE_POS, is_dma);
+	rlen = pfs_file_xpread(file, buf, len, OFFSET_FILE_POS, flags);
 
 	PUT_MOUNT_FILE(mnt, file);
 	return rlen;
 }
 
 static ssize_t
-_pfs_write(int fd, const void *buf, size_t len, int is_dma)
+_pfs_write(int fd, const void *buf, size_t len, int flags)
 {
 	int err;
 	pfs_mount_t *mnt = NULL;
@@ -418,7 +418,7 @@ _pfs_write(int fd, const void *buf, size_t len, int is_dma)
 	if (err < 0)
 		goto finish;
 
-	wlen = pfs_file_xpwrite(file, buf, len, OFFSET_FILE_POS, is_dma);
+	wlen = pfs_file_xpwrite(file, buf, len, OFFSET_FILE_POS, flags);
 
 	PUT_MOUNT_FILE(mnt, file);
 	return wlen;
@@ -429,7 +429,7 @@ finish:
 }
 
 static ssize_t
-_pfs_pread(int fd, void *buf, size_t len, off_t offset, int is_dma)
+_pfs_pread(int fd, void *buf, size_t len, off_t offset, int flags)
 {
 	pfs_mount_t *mnt = NULL;
 	pfs_file_t *file = NULL;
@@ -440,19 +440,51 @@ _pfs_pread(int fd, void *buf, size_t len, off_t offset, int is_dma)
 
 	GET_MOUNT_FILE(fd, RDLOCK_FLAG, &mnt, &file);
 
-	rlen = pfs_file_xpread(file, buf, len, offset, is_dma);
+	rlen = pfs_file_xpread(file, buf, len, offset, flags);
 
 	PUT_MOUNT_FILE(mnt, file);
 	return rlen;
 }
 
 static ssize_t
-_pfs_pwrite(int fd, const void *buf, size_t len, off_t offset, int is_dma)
+pfs_file_pzero(pfs_file_t *file, size_t len, off_t off)
+{
+	const int buflen = 65536;
+	char *buf = NULL;
+	size_t total = 0;
+ 	ssize_t wlen = 0;
+	int err = 0;
+
+	buf = (char *)pfs_dma_zalloc("fill_zero", 64, buflen, SOCKET_ID_ANY);
+	if (buf == NULL) {
+		return -ENOMEM;
+	}
+
+	while (len) {
+		wlen = MIN(len, buflen);
+		wlen = pfs_file_xpwrite(file, buf, wlen, off, PFS_IO_DMA_ON);
+		if (wlen < 0) {
+			err = wlen;
+			break;
+		}
+		off += wlen;
+		len -= wlen;
+		total += wlen;
+	}
+	pfs_dma_free(buf);
+	if (err)
+		return err;
+	return total;
+}
+
+static ssize_t
+_pfs_pwrite(int fd, const void *buf, size_t len, off_t offset, int flags)
 {
 	int err;
 	pfs_mount_t *mnt = NULL;
 	pfs_file_t *file = NULL;
 	ssize_t wlen = -1;
+	int cap = 0;
 
 	if (len == 0)
 		return 0;
@@ -468,7 +500,15 @@ _pfs_pwrite(int fd, const void *buf, size_t len, off_t offset, int is_dma)
 		return err;
 	}
 
-	wlen = pfs_file_xpwrite(file, buf, len, offset, is_dma);
+	if (!(flags & PFS_IO_WRITE_ZERO)) {
+		wlen = pfs_file_xpwrite(file, buf, len, offset, flags);
+	} else {
+		cap = pfsdev_get_cap(mnt->mnt_ioch_desc);
+		if (cap & DEV_CAP_ZERO)
+			wlen = pfs_file_xpwrite(file, buf, len, offset, flags);
+		else
+			wlen = pfs_file_pzero(file, len, offset);
+	}
 
 	PUT_MOUNT_FILE(mnt, file);
 	return wlen;
@@ -956,7 +996,7 @@ pfs_open(const char *pbdpath, int flags, mode_t mode)
 }
 
 ssize_t
-pfs_read_flags(int fd, void *buf, size_t len, int is_dma)
+pfs_read_flags(int fd, void *buf, size_t len, int flags)
 {
 	int err = -EAGAIN;
 	ssize_t rlen = -1;
@@ -970,7 +1010,7 @@ pfs_read_flags(int fd, void *buf, size_t len, int is_dma)
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
 		PFS_STAT_LATENCY_ENTRY();
-		rlen = _pfs_read(fd, buf, len, is_dma);
+		rlen = _pfs_read(fd, buf, len, flags);
 		err = rlen < 0 ? (int)rlen : 0;
 		PFS_STAT_LATENCY(STAT_PFS_API_READ_DONE);
 	}
@@ -987,11 +1027,17 @@ pfs_read_flags(int fd, void *buf, size_t len, int is_dma)
 ssize_t
 pfs_read(int fd, void *buf, size_t len)
 {
-	return pfs_read_flags(fd, buf, len, PFS_DMA_OFF);
+	return pfs_read_flags(fd, buf, len, PFS_IO_DMA_OFF);
 }
 
 ssize_t
-pfs_write_flags(int fd, const void *buf, size_t len, int is_dma)
+pfs_read_dma(int fd, void *buf, size_t len)
+{
+	return pfs_read_flags(fd, buf, len, PFS_IO_DMA_ON);
+}
+
+ssize_t
+pfs_write_flags(int fd, const void *buf, size_t len, int flags)
 {
 	int err = -EAGAIN;
 	ssize_t wlen = -1;
@@ -1004,7 +1050,7 @@ pfs_write_flags(int fd, const void *buf, size_t len, int is_dma)
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
 		PFS_STAT_LATENCY_ENTRY();
-		wlen = _pfs_write(fd, buf, len, is_dma);
+		wlen = _pfs_write(fd, buf, len, flags);
 		err = wlen < 0 ? (int)wlen : 0;
 		PFS_STAT_LATENCY(STAT_PFS_API_WRITE_DONE);
 	}
@@ -1021,11 +1067,17 @@ pfs_write_flags(int fd, const void *buf, size_t len, int is_dma)
 ssize_t
 pfs_write(int fd, const void *buf, size_t len)
 {
-	return pfs_write_flags(fd, buf, len, PFS_DMA_OFF);
+	return pfs_write_flags(fd, buf, len, PFS_IO_DMA_OFF);
 }
 
 ssize_t
-pfs_pread_flags(int fd, void *buf, size_t len, off_t offset, int is_dma)
+pfs_write_dma(int fd, const void *buf, size_t len)
+{
+	return pfs_write_flags(fd, buf, len, PFS_IO_DMA_ON);
+}
+
+ssize_t
+pfs_pread_flags(int fd, void *buf, size_t len, off_t offset, int flags)
 {
 	int err = -EAGAIN;
 	ssize_t rlen = -1;
@@ -1041,7 +1093,7 @@ pfs_pread_flags(int fd, void *buf, size_t len, off_t offset, int is_dma)
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
 		PFS_STAT_LATENCY_ENTRY();
-		rlen = _pfs_pread(fd, buf, len, offset, is_dma);
+		rlen = _pfs_pread(fd, buf, len, offset, flags);
 		err = rlen < 0 ? (int)rlen : 0;
 		PFS_STAT_LATENCY(STAT_PFS_API_PREAD_DONE);
 	}
@@ -1058,24 +1110,31 @@ pfs_pread_flags(int fd, void *buf, size_t len, off_t offset, int is_dma)
 ssize_t
 pfs_pread(int fd, void *buf, size_t len, off_t offset)
 {
-	return pfs_pread_flags(fd, buf, len, offset, PFS_DMA_OFF);
+	return pfs_pread_flags(fd, buf, len, offset, PFS_IO_DMA_OFF);
 }
 
 ssize_t
-pfs_pwrite_flags(int fd, const void *buf, size_t len, off_t offset, int is_dma)
+pfs_pread_dma(int fd, void *buf, size_t len, off_t offset)
+{
+	return pfs_pread_flags(fd, buf, len, offset, PFS_IO_DMA_ON);
+}
+
+ssize_t
+pfs_pwrite_flags(int fd, const void *buf, size_t len, off_t offset, int flags)
 {
 	int err = -EAGAIN;
 	ssize_t wlen = -1;
 	bool fdok = PFS_FD_ISVALID(fd);
+	bool write_zero = !!(flags & PFS_IO_WRITE_ZERO);
 	MNT_STAT_API_BEGIN(MNT_STAT_API_PWRITE);
-	if (!fdok || !buf || offset < 0)
+	if (!fdok || (!write_zero && !buf) || offset < 0)
 		err = !fdok ? -EBADF : -EINVAL;
 	API_ENTER(VERB, "%d, %p, %lu, %ld", fd, buf, len, offset);
 
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
 		PFS_STAT_LATENCY_ENTRY();
-		wlen = _pfs_pwrite(fd, buf, len, offset, is_dma);
+		wlen = _pfs_pwrite(fd, buf, len, offset, flags);
 		err = wlen < 0 ? (int)wlen : 0;
 		PFS_STAT_LATENCY(STAT_PFS_API_PWRITE_DONE);
 	}
@@ -1092,7 +1151,19 @@ pfs_pwrite_flags(int fd, const void *buf, size_t len, off_t offset, int is_dma)
 ssize_t
 pfs_pwrite(int fd, const void *buf, size_t len, off_t offset)
 {
-	return pfs_pwrite_flags(fd, buf, len, offset, PFS_DMA_OFF);
+	return pfs_pwrite_flags(fd, buf, len, offset, PFS_IO_DMA_OFF);
+}
+
+ssize_t
+pfs_pwrite_dma(int fd, const void *buf, size_t len, off_t offset)
+{
+	return pfs_pwrite_flags(fd, buf, len, offset, PFS_IO_DMA_ON);
+}
+
+ssize_t
+pfs_pwrite_zero(int fd, size_t len, off_t offset)
+{
+	return pfs_pwrite_flags(fd, NULL, len, offset, PFS_IO_WRITE_ZERO);
 }
 
 int

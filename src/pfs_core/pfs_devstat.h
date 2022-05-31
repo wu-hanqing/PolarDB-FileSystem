@@ -18,7 +18,7 @@
 
 #include "pfs_impl.h"
 
-enum {
+enum dev_io_t {
     PFSDEV_REQ_NOP      = 0,
     PFSDEV_REQ_INFO     = 1,
     PFSDEV_REQ_RD       = 2,

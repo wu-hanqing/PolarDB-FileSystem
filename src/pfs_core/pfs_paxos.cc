@@ -156,7 +156,7 @@ write_leader(pfs_mount_t *mnt, struct pfs_leader_record *lr)
 	lr->checksum = checksum;
 	lr_end->checksum = cpu_to_le32(checksum);
 
-	rv = pfs_write_paxos_sector(mnt, 0, lr_end, PFS_DMA_ON);
+	rv = pfs_write_paxos_sector(mnt, 0, lr_end, PFS_IO_DMA_ON);
 	if (rv == 0)
 		rv = pfsdev_flush(mnt->mnt_ioch_desc);
 	return rv;
@@ -175,7 +175,7 @@ read_leader(pfs_mount_t *mnt, struct pfs_leader_record *lr, uint32_t *checksum)
 	memset(lr_end, 0, sector_size);
 
 	/* 0 = leader record is first sector */
-	rv = pfs_read_paxos_sectors(mnt, 0, 1, lr_end, PFS_DMA_ON);
+	rv = pfs_read_paxos_sectors(mnt, 0, 1, lr_end, PFS_IO_DMA_ON);
 	/* N.B. checksum is computed while the data is in ondisk format. */
 	if (checksum)
 		*checksum = leader_checksum(lr_end);
@@ -368,7 +368,7 @@ pfs_leader_init(pfs_mount_t *mnt, int num_hosts, int max_hosts, int write_clear,
 	rv = 0;
 	for (num_disks = 1, d = 0; d < num_disks; d++) {
 		rv |= pfs_file_pwrite(mnt->mnt_paxos_file, iobuf, iobuf_len, 0,
-			PFS_DMA_ON);
+			PFS_IO_DMA_ON);
 		if (rv < 0)
 			goto out;
 	}

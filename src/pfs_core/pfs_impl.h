@@ -66,6 +66,10 @@
 #define USEC_PER_SEC		1000000L
 #define NSEC_PER_SEC		1000000000L
 
+#define PFS_IO_DMA_OFF		0x0
+#define PFS_IO_DMA_ON		0x1
+#define PFS_IO_WRITE_ZERO	0x2
+
 /*
  * A block is of unit size, 4M. A fragment is of size 16K.
  * Fragments are to make IO easy; A 4M block is too large for IO.

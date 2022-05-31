@@ -54,9 +54,6 @@
 #define	PFS_TOOL		MNTFLG_TOOL
 #define PFS_PAXOS_BYFORCE	MNTFLG_PAXOS_BYFORCE
 
-#define PFS_DMA_OFF		0
-#define PFS_DMA_ON		1
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -77,40 +74,15 @@ int	pfs_rename(const char *oldpbdpath, const char *newpbdpath);
 /* file */
 int	pfs_creat(const char *pbdpath, mode_t mode);
 int	pfs_open(const char *pbdpath, int flags, mode_t mode);
-ssize_t	pfs_read_flags(int fd, void *buf, size_t len, int is_dma);
 ssize_t	pfs_read(int fd, void *buf, size_t len);
-static inline ssize_t
-pfs_read_dma(int fd, void *buf, size_t len)
-{
-	return pfs_read_flags(fd, buf, len, PFS_DMA_ON);
-}
-
-ssize_t	pfs_write_flags(int fd, const void *buf, size_t len, int is_dma);
+ssize_t pfs_read_dma(int fd, void *buf, size_t len);
 ssize_t	pfs_write(int fd, const void *buf, size_t len);
-static inline ssize_t
-pfs_write_dma(int fd, const void *buf, size_t len)
-{
-	return pfs_write_flags(fd, buf, len, PFS_DMA_ON);
-}
-
-ssize_t	pfs_pread_flags(int fd, void *buf, size_t len, off_t offset,
-	int is_dma);
+ssize_t pfs_write_dma(int fd, const void *buf, size_t len);
 ssize_t	pfs_pread(int fd, void *buf, size_t len, off_t offset);
-static inline ssize_t
-pfs_pread_dma(int fd, void *buf, size_t len, off_t offset)
-{
-	return pfs_pread_flags(fd, buf, len, offset, PFS_DMA_ON);
-}
-
-ssize_t	pfs_pwrite_flags(int fd, const void *buf, size_t len, off_t offset,
-	int is_dma);
+ssize_t pfs_pread_dma(int fd, void *buf, size_t len, off_t offset);
 ssize_t	pfs_pwrite(int fd, const void *buf, size_t len, off_t offset);
-static inline ssize_t
-pfs_pwrite_dma(int fd, const void *buf, size_t len, off_t offset)
-{
-	return pfs_pwrite_flags(fd, buf, len, offset, PFS_DMA_ON);
-}
-
+ssize_t pfs_pwrite_dma(int fd, const void *buf, size_t len, off_t offset);
+ssize_t pfs_pwrite_zero(int fd, size_t len, off_t offset);
 int	pfs_close(int fd);
 int	pfs_truncate(const char *pbdpath, off_t len);
 int	pfs_ftruncate(int fd, off_t len);

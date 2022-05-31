@@ -692,7 +692,7 @@ pfs_log_read(pfs_log_t *log, char *buf, int len, size_t offset)
 		readlen = len;
 	PFS_ASSERT((size_t)readlen >= sizeof(pfs_logentry_phy_t));
 
-	rv = pfs_file_pread(logf, buf, readlen, offset, PFS_DMA_ON);
+	rv = pfs_file_pread(logf, buf, readlen, offset, PFS_IO_DMA_ON);
 	if (rv > 0) {
 		PFS_ASSERT(rv % sizeof(pfs_logentry_phy_t) == 0);
 		pfs_log_check((pfs_logentry_phy_t *)buf,
@@ -917,7 +917,7 @@ static int pfs_log_writebuf_flush(pfs_log_t *log)
 
 	if (log->log_writebuf_dirty) {
 		wlen = pfs_file_pwrite(logf, log->log_writebuf, log->log_writebuf_sz,
-				log->log_writebuf_off, PFS_DMA_ON);
+				log->log_writebuf_off, PFS_IO_DMA_ON);
 		if (wlen != log->log_writebuf_sz)
 			return -EIO;
 		log->log_writebuf_dirty = 0;
@@ -940,7 +940,7 @@ static char *pfs_log_writebuf_get(pfs_log_t *log, uint64_t offset, size_t len,
 		if (!(offset == align_off && len >= log->log_writebuf_sz)) {
 			/* if the buffer will not be fully overwritten */
 			rlen = pfs_file_pread(logf, log->log_writebuf, log->log_writebuf_sz,
-					align_off, PFS_DMA_ON);
+					align_off, PFS_IO_DMA_ON);
 			if (rlen <= 0) {
 				return NULL;
 			}

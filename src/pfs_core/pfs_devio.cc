@@ -694,3 +694,11 @@ pfsdev_get_socket_id(int devi)
 	PFS_ASSERT(dev != NULL);
 	return dev->d_mem_socket_id;
 }
+
+int pfsdev_get_cap(int devi)
+{
+	PFS_ASSERT(0 <= devi && devi < PFS_MAX_NCHD);
+	auto dev = pfs_devs[devi];
+	PFS_ASSERT(dev != NULL);
+	return dev->d_cap;
+}

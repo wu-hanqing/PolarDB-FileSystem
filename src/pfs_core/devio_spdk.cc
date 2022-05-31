@@ -396,6 +396,12 @@ err_exit:
     dkdev->dk_has_cache = spdk_bdev_has_write_cache(dkdev->dk_bdev);
     dkdev->dk_size = dkdev->dk_block_num * dkdev->dk_block_size;
     dkdev->dk_bufalign = spdk_bdev_get_buf_align(dkdev->dk_bdev);
+    dev->d_cap = DEV_CAP_RD | DEV_CAP_WR | DEV_CAP_FLUSH | DEV_CAP_TRIM;
+    if (spdk_bdev_io_type_supported(dkdev->dk_bdev,
+			SPDK_BDEV_IO_TYPE_WRITE_ZEROES)) {
+	dev->d_cap |= DEV_CAP_ZERO;
+    }
+
     pfs_itrace("open spdk device: '%s', block_num: %ld, "
                "block_size: %d, write_unit_size: %d, has_cache: %d, buf_align:%d\n",
                dev->d_devname, dkdev->dk_block_num, dkdev->dk_block_size,
@@ -670,7 +676,7 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
-    if (!(io->io_flags & IO_DMABUF)) {
+    if (!(io->io_flags & IO_DMABUF) && !(io->io_flags & IO_ZERO)) {
         iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, 64, io->io_len,
             SOCKET_ID_ANY);
         if (iocb->cb_dma_buf == NULL) {
@@ -698,8 +704,12 @@ pfs_spdk_dev_io_pwrite(void *arg)
 
     dkdev = iocb->cb_dev;
     io = iocb->cb_pfs_io;
-    rc = spdk_bdev_write(dkdev->dk_desc, dkdev->dk_ioch, iocb->cb_dma_buf,
-        io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
+    if (io->io_flags & IO_ZERO)
+    	rc = spdk_bdev_write_zeroes(dkdev->dk_desc, dkdev->dk_ioch,
+		io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
+    else
+    	rc = spdk_bdev_write(dkdev->dk_desc, dkdev->dk_ioch, iocb->cb_dma_buf,
+        	io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
     if (rc == ENOMEM) {
         iocb->cb_bdev_io_wait.bdev = dkdev->dk_bdev;
         iocb->cb_bdev_io_wait.cb_fn = pfs_spdk_dev_io_pwrite;
@@ -707,8 +717,8 @@ pfs_spdk_dev_io_pwrite(void *arg)
         spdk_bdev_queue_io_wait(dkdev->dk_bdev, dkdev->dk_ioch,
                                 &iocb->cb_bdev_io_wait);
     } else if (rc) {
-        pfs_etrace("%s error while writting to bdev: %d\n",
-            spdk_strerror(-rc), rc);
+        pfs_etrace("%s error while writting to bdev: %d, ioflags=%x",
+            spdk_strerror(-rc), rc, io->io_flags);
         if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf)
             pfs_dma_free(iocb->cb_dma_buf);
         abort();

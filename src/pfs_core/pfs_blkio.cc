@@ -22,7 +22,7 @@
 #include "pfs_blkio.h"
 #include "pfs_devio.h"
 #include "pfs_mount.h"
-
+#include "pfs_api.h"
 
 typedef int pfs_blkio_fn_t(int, pfs_bda_t, size_t, char*, pfs_bda_t, size_t,
 	char*, int);
@@ -101,13 +101,14 @@ pfs_blkio_align(pfs_mount_t *mnt, pfs_bda_t data_bda, size_t data_len,
 
 static int
 pfs_blkio_read_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
-    pfs_bda_t bda, size_t len, char *buf, int nowait)
+    pfs_bda_t bda, size_t len, char *buf, int ioflags)
 {
 	int err;
 
 	if (allen != len) {
 		PFS_ASSERT(albuf != NULL);
 		PFS_INC_COUNTER(STAT_PFS_UnAligned_R_4K);
+		/* align buffer is a dma buffer */
 		err = pfsdev_pread_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
 		if (err < 0)
 			return err;
@@ -116,13 +117,13 @@ pfs_blkio_read_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 	}
 
 	PFS_ASSERT(albda == bda);
-	err = pfsdev_pread_flags(iodesc, buf, len, bda, nowait);
+	err = pfsdev_pread_flags(iodesc, buf, len, bda, ioflags);
 	return err;
 }
 
 static int
 pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
-    pfs_bda_t bda, size_t len, char *buf, int nowait)
+    pfs_bda_t bda, size_t len, char *buf, int ioflags)
 {
 	int err;
 
@@ -132,38 +133,44 @@ pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 		err = pfsdev_pread_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
 		if (err < 0)
 			return err;
-		rte_memcpy(&albuf[bda - albda], buf, len);
+		if (ioflags & IO_ZERO)
+			memset(&albuf[bda - albda], 0, len);
+		else
+			rte_memcpy(&albuf[bda - albda], buf, len);
 		err = pfsdev_pwrite_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
 		return err;
 	}
 
 	PFS_ASSERT(albda == bda);
-	err = pfsdev_pwrite_flags(iodesc, buf, len, bda, nowait);
+	err = pfsdev_pwrite_flags(iodesc, buf, len, bda, ioflags);
 	return err;
 }
 
 static int
-pfs_blkio_done(int iodesc, int nowait)
+pfs_blkio_done(int iodesc, int ioflags)
 {
-	if (!nowait)
+	if (!(ioflags & IO_NOWAIT))
 		return 0;
 	return pfsdev_wait_io(iodesc);
 }
 
 static ssize_t
 pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
-    off_t off, ssize_t len, pfs_blkio_fn_t *iofunc, int is_dma)
+    off_t off, ssize_t len, pfs_blkio_fn_t *iofunc, int flags)
 {
 	char *albuf = NULL;
-	int err, err1, nowait;
+	int err, err1, ioflags;
 	pfs_bda_t bda, albda;
 	size_t allen, iolen, left;
 	int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
+	int write_zero = !!(flags & PFS_IO_WRITE_ZERO);
 
 	err = 0;
-	nowait = (len >= 2*PFS_FRAG_SIZE) ? IO_NOWAIT : 0;
-	if (is_dma)
-		nowait |= IO_DMABUF;
+	ioflags = (len >= 2*PFS_FRAG_SIZE) ? IO_NOWAIT : 0;
+	if (flags & PFS_IO_DMA_ON)
+		ioflags |= IO_DMABUF;
+	if (flags & PFS_IO_WRITE_ZERO)
+		ioflags |= IO_ZERO;
 	left = len;
 	while (left > 0) {
 		allen = iolen = 0;
@@ -177,11 +184,12 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 		}
 
 		err = (*iofunc)(mnt->mnt_ioch_desc, albda, allen, albuf, bda,
-		    iolen, data, nowait);
+		    iolen, data, ioflags);
 		if (err < 0)
 			break;
 
-		data += iolen;
+		if (data)
+			data += iolen;
 		off += iolen;
 		left -= iolen;
 	}
@@ -195,7 +203,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 		albuf = NULL;
 	}
 
-	err1 = pfs_blkio_done(mnt->mnt_ioch_desc, nowait);
+	err1 = pfs_blkio_done(mnt->mnt_ioch_desc, ioflags);
 	ERR_UPDATE(err, err1);
 	if (err < 0) {
 		if (err == -ETIMEDOUT)
@@ -208,33 +216,33 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 
 ssize_t
 pfs_blkio_read(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
-    off_t off, ssize_t len, int is_dma)
+    off_t off, ssize_t len, int flags)
 {
 	ssize_t iolen = 0;
 
 	PFS_ASSERT(off + len <= mnt->mnt_blksize);
 	iolen = pfs_blkio_execute(mnt, data, blkno, off, len,
-	    pfs_blkio_read_segment, is_dma);
+	    pfs_blkio_read_segment, flags);
 	return iolen;
 }
 
 ssize_t
 pfs_blkio_write(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
-    off_t off, ssize_t len, int is_dma)
+    off_t off, ssize_t len, int flags)
 {
 	ssize_t iolen = 0;
 	void *zerobuf = NULL;
 	int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 
 	PFS_ASSERT(off + len <= mnt->mnt_blksize);
-	if (data == NULL) {
+	if (!(flags & PFS_IO_WRITE_ZERO) && data == NULL) {
 		zerobuf = pfs_dma_zalloc("M_ZERO_BUF", 64, len, socket);
 		PFS_VERIFY(zerobuf != NULL);
 		data = (char *)zerobuf;
-		is_dma = 1;
+		flags |= PFS_IO_DMA_ON;
 	}
 	iolen = pfs_blkio_execute(mnt, data, blkno, off, len,
-	    pfs_blkio_write_segment, is_dma);
+	    pfs_blkio_write_segment, flags);
 
 	if (zerobuf) {
 		pfs_dma_free(zerobuf);

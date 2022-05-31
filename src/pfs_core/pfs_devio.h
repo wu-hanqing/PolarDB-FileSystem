@@ -72,6 +72,7 @@ enum {
 	IO_NOWAIT	= 0x0001,
 	IO_STAT		= 0x0010,
 	IO_DMABUF	= 0x0020,
+	IO_ZERO		= 0x0040
 };
 
 typedef struct pfs_dev pfs_dev_t;
@@ -124,6 +125,12 @@ typedef struct pfs_devops {
 	int		(*dop_has_cache)(pfs_dev_t *dev);
 } pfs_devops_t;
 
+#define DEV_CAP_RD    	0x01
+#define DEV_CAP_WR    	0x02
+#define DEV_CAP_FLUSH 	0x04
+#define DEV_CAP_ZERO  	0x08
+#define DEV_CAP_TRIM  	0x10
+
 /* pfs device */
 typedef struct pfs_dev {
 	int		d_id;		/* index in devices array */
@@ -135,6 +142,7 @@ typedef struct pfs_dev {
 	char		d_devname[PFS_MAX_PBDLEN];	/* alias pbdname */
 	int		d_mem_socket_id;
 
+	int		d_cap;
 	pfs_devstat_t	d_ds;		/* statistics */
 } pfs_dev_t;
 
@@ -154,6 +162,7 @@ int	pfsdev_pwrite_flags(int devi, void *buf, size_t len, uint64_t bda,
 	    int flags);
 int	pfsdev_wait_io(int devi);
 int	pfsdev_get_socket_id(int devi);
+int	pfsdev_get_cap(int devi);
 
 const char *pfsdev_trace_pbdname(const char *cluster, const char *pbdname);
 
