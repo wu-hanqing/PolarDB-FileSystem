@@ -23,6 +23,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
+#include <sys/statfs.h>
 #include <unistd.h>
 #include <errno.h>
 
@@ -67,6 +68,8 @@ int	pfs_mount_growfs(const char *pbdname);
 int	pfs_mount_acquire(const char *cluster, const char *pbdname,
 		int host_id, int flags);
 int	pfs_mount_release(const char *pbdname, int host_id);
+int	pfs_statfs(const char *pbdname, struct statfs *buf);
+int	pfs_fstatfs(int fd, struct statfs *buf);
 
 /* functions both for file and directory */
 int	pfs_rename(const char *oldpbdpath, const char *newpbdpath);

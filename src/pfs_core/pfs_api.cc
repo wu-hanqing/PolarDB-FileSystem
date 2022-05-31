@@ -1639,3 +1639,80 @@ pfs_du(const char *pbdpath, int all, int depth, pfs_printer_t *printer)
 		return -1;
 	return 0;
 }
+
+static void
+get_mnt_fstat(struct statfs *buf, pfs_mount_t *mnt)
+{
+	MOUNT_META_RDLOCK(mnt);
+	buf->f_bsize = PFS_BLOCK_SIZE;
+	buf->f_blocks = mnt->mnt_anode[MT_BLKTAG].an_nall;
+	buf->f_bavail = buf->f_bfree = mnt->mnt_anode[MT_BLKTAG].an_nfree;
+	buf->f_files = mnt->mnt_anode[MT_INODE].an_nall;
+	buf->f_ffree = mnt->mnt_anode[MT_INODE].an_nfree;
+	MOUNT_META_UNLOCK(mnt);
+}
+
+static int
+_pfs_statfs(const char *pbdpath, struct statfs *buf)
+{
+	int err = 0;
+	nameinfo_t ni;
+	pfs_mount_t *mnt = NULL;
+
+	GET_MOUNT_NAMEI(pbdpath, PFS_INODET_NONE, &mnt, &ni);
+	get_mnt_fstat(buf, mnt);
+	PUT_MOUNT_NAMEI(mnt, &ni);
+	return err;
+}
+
+int
+pfs_statfs(const char* pbdpath, struct statfs *buf)
+{
+	int err = -EAGAIN;
+
+	if (!pbdpath)
+		err = -EINVAL;
+	API_ENTER(DEBUG, "%s", PATH_ARG(pbdpath));
+
+	while (err == -EAGAIN) {
+		err = _pfs_statfs(pbdpath, buf);
+	}
+
+	API_EXIT(err);
+	if (err < 0)
+		return -1;
+	return 0;
+}
+
+static int
+_pfs_fstatfs(int fd, struct statfs *buf)
+{
+	int err;
+	pfs_mount_t *mnt = NULL;
+	pfs_file_t *file = NULL;
+
+	GET_MOUNT_FILE(fd, RDLOCK_FLAG, &mnt, &file);
+	get_mnt_fstat(buf, mnt);
+	PUT_MOUNT_FILE(mnt, file);
+	return 0;
+}
+
+int
+pfs_fstatfs(int fd, struct statfs *buf)
+{
+	int err = -EAGAIN;
+	bool fdok = PFS_FD_ISVALID(fd);
+	if (!fdok || !buf )
+		err = !fdok ? -EBADF : -EINVAL;
+	API_ENTER(DEBUG, "%d, %p", fd, buf);
+
+	fd = PFS_FD_RAW(fd);
+	while (err == -EAGAIN) {
+		err = _pfs_fstatfs(fd, buf);
+	}
+
+	API_EXIT(err);
+	if (err < 0)
+		return -1;
+	return 0;
+}
