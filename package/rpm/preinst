@@ -1,0 +1,10 @@
+#!/bin/bash
+
+mkdir -p /dev/shm/pfsd
+mkdir -p /var/run/pfsd
+mkdir -p /var/run/pfs
+chmod 777 /var/run/pfsd
+chmod 777 /dev/shm/pfsd
+chmod 777 /var/run/pfs
+touch /var/run/pfsd/.pfsd
+

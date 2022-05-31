@@ -19,6 +19,7 @@
 #include "pfs_impl.h"
 
 typedef struct {
+    int o_pollers;
 	/* Worker threads, same as num of channels */
 	int o_workers;
 	/* Worker thread usleep interval in us */

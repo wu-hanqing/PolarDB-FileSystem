@@ -352,7 +352,7 @@ pfsd_chnl_listen(const char *svr_addr, const char *pbdname, int nworkers,
 		return result;
 	}
 
-	result = opt->chnl_prepare(pbdname, nworkers, arg2);
+	result = opt->chnl_prepare(ctx, pbdname, nworkers, arg2);
 	if (result != 0) {
 		fprintf(stderr, "chnl_prepare failed %s\n", strerror(errno));
 		opt->chnl_ctx_destroy(ctx);

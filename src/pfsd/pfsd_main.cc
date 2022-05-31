@@ -109,41 +109,28 @@ int main(int ac, char *av[])
 	}
 
 	/* notify worker start */
-	for (int i = 0; i < g_option.o_workers; ++i) {
-		worker_t *wk = g_workers + i;
-		sem_post(&wk->w_sem);
-	}
+	worker_t *wk = g_worker ;
+	sem_post(&wk->w_sem);
 
 	int windex = 0;
 	while (!g_stop) {
-		windex = (windex + 1) % g_option.o_workers;
 		/* recycle zombie */
-		for (int ci = 0; ci < g_workers[windex].w_nch; ++ci) {
-			pfsd_iochannel_t *ch = g_workers[windex].w_channels[ci];
+		for (int ci = 0; ci < g_worker->w_nch; ++ci) {
+			pfsd_iochannel_t *ch = g_worker->w_channels[ci];
 			pfsd_shm_recycle_request(ch);
 		}
-
-		if (g_workers[windex].w_cr != NULL)
-			g_workers[windex].w_cr->cr_ts = time(NULL);
 
 		sleep(10);
 	}
 
 	/* exit */
-	for (int i = 0; i < g_nworkers; ++i) {
-		if (g_workers == NULL)
-			break;
-
-		if (g_workers[i].w_nch == 0)
-			break;
-
-		sem_post(&g_workers[i].w_sem);
-
-		pfsd_info("[pfsd]pthread_join %d", i);
-		pthread_join(g_workers[i].w_tid, NULL);
+	if (g_worker != NULL && g_worker->w_nch != 0) {
+		sem_post(&g_worker->w_sem);
+		pfsd_info("[pfsd]pthread_join worker");
+		pthread_join(g_worker->w_tid, NULL);
 	}
 
-	pfsd_destroy_workers(&g_workers);
+	pfsd_destroy_workers(&g_worker);
 
 	pfsd_info("[pfsd]bye bye");
 	return 0;

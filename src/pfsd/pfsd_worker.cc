@@ -19,6 +19,10 @@
 #include <sched.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <utility>
+
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #include "pfs_api.h"
 #include "pfs_inode.h"
@@ -30,15 +34,25 @@
 
 #include "pfsd_zlog.h"
 #include "pfsd_chnl.h"
+#include "pfsd_chnl_shm.h"
 #include "pfsd_worker.h"
 
+#include "pfsd_option.h"
+
+#include "blockingconcurrentqueue.h"
+
+typedef std::pair<pfsd_iochannel_t *, int> WorkItem;
+
+static moodycamel::BlockingConcurrentQueue<WorkItem> g_work_queue;
+
+static void *io_worker(void *arg);
+static void *io_poller(void *arg);
+#define IO_WORKERS 100
+static pthread_t io_worker_h[IO_WORKERS];
+
+worker_t *g_worker;
+
 volatile bool g_stop = false;
-
-worker_t *g_workers = NULL;
-int g_nworkers = 0;
-
-pfsd_cpu_record_t *g_cpufile = NULL;
-int g_ncpu = 0;
 
 /* current processing request's pid */
 __thread pid_t g_currentPid;
@@ -55,17 +69,18 @@ pfsd_create_workers(int nworkers)
 	if (nworkers <= 0)
 		return NULL;
 
-	worker_t *workers = PFSD_MALLOC_ARR(nworkers, worker_t);
-	if (workers == NULL)
+	worker_t *worker = PFSD_MALLOC(worker_t);
+	if (worker == NULL)
 		return NULL;
 
-	for (int i = 0; i < nworkers; ++i) {
-		workers[i].w_idx = -1;
-		workers[i].w_nch = 0;
-		sem_init(&workers[i].w_sem, PTHREAD_PROCESS_PRIVATE, 0);
-	}
+	worker->w_nch = 0;
+	worker->w_nworkers = nworkers;
+	worker->w_npollers = g_option.o_pollers;
+	worker->w_io_workers = (pthread_t *)calloc(nworkers, sizeof(pthread_t));
+	worker->w_io_pollers = (pthread_t *)calloc(worker->w_npollers, sizeof(pthread_t));
+	sem_init(&worker->w_sem, PTHREAD_PROCESS_PRIVATE, 0);
 
-	return workers;
+	return worker;
 }
 
 void
@@ -73,9 +88,68 @@ pfsd_destroy_workers(worker_t **workers)
 {
 	if (workers && *workers) {
 		sem_destroy(&(*workers)->w_sem);
+		free((*workers)->w_io_workers);
 		free(*workers);
 		*workers = NULL;
 	}
+}
+
+static int init_io_workers(worker_t *wk)
+{
+	int i;
+
+	pfsd_info("create %d io workers", wk->w_nworkers);
+
+	for (i = 0; i < wk->w_nworkers; ++i) {
+		if (pthread_create(&wk->w_io_workers[i], NULL, io_worker, wk)) {
+			pfsd_error("can not create io worker thread, idx = %d", i);
+		}
+	}
+	return 0;
+}
+
+static int init_io_pollers(worker_t *wk)
+{
+	int i;
+
+	pfsd_info("create %d io pollers", wk->w_npollers);
+
+	for (i = 0; i < wk->w_npollers; ++i) {
+		if (pthread_create(&wk->w_io_pollers[i], NULL, io_poller, wk)) {
+			pfsd_error("can not create io poller thread, idx = %d", i);
+		}
+	}
+	return 0;
+}
+
+static void stop_io_workers(worker_t *wk)
+{
+	int i;
+
+	for (i = 0; i < wk->w_nworkers; ++i) {
+		g_work_queue.enqueue({nullptr, -1});
+	}
+
+	for (i = 0; i < wk->w_nworkers; ++i) {
+		pthread_join(wk->w_io_workers[i], NULL);
+	}
+}
+
+static void stop_io_pollers(worker_t *wk)
+{
+	int i;
+
+	for (i = 0; i < wk->w_npollers; ++i) {
+		pthread_join(wk->w_io_pollers[i], NULL);
+	}
+}
+
+static void drain_work_queue(void)
+{
+	WorkItem w;
+
+	while(g_work_queue.try_enqueue(w))
+		;
 }
 
 void*
@@ -84,11 +158,8 @@ pfsd_worker_routine(void *arg)
 	worker_t *wk = (worker_t*)(arg);
 
 	char name[32];
-	snprintf(name, sizeof(name), "pfsd-worker%-2d", wk->w_idx);
+	snprintf(name, sizeof(name), "pfsd-poller");
 	prctl(PR_SET_NAME,(unsigned long)name);
-
-	if (g_cpufile != NULL)
-		pfsd_worker_bind_cpuset(wk);
 
 	/* assign channels to worker */
 	for (int si = 0; si < PFSD_SHM_MAX; ++si) {
@@ -110,14 +181,32 @@ pfsd_worker_routine(void *arg)
 
 	if (wk->w_nch == 0) {
 		g_stop = true;
-		pfsd_error("no avail channel for thread #%d", int(wk->w_idx));
+		pfsd_error("no avail channel for job poller");
 		return NULL;
 	}
 
 	/* wait main thread ready */
 	sem_wait(&wk->w_sem);
 
-	int busy = 0;
+	init_io_workers(wk);
+
+	init_io_pollers(wk);
+
+	while (!g_stop)
+		usleep(1000);
+
+	stop_io_workers(wk);
+	stop_io_pollers(wk);
+	drain_work_queue();
+	return NULL;
+}
+
+static void* io_poller(void *arg)
+{
+	worker_t *wk = (worker_t*)(arg);
+
+	moodycamel::ProducerToken ptok(g_work_queue);
+
 	while (!g_stop) {
 		for (int i = 0; i < wk->w_nch; ++i) {
 			int index = -1;
@@ -128,7 +217,6 @@ pfsd_worker_routine(void *arg)
 				g_currentPid = req->owner;
 				index = req - ch->ch_requests;
 				PFSD_ASSERT(index < ch->ch_max_req);
-				busy++;
 				pfsd_response_t *rsp = &ch->ch_responses[index];
 
 				if (req->shm_epoch != ch->ch_epoch) {
@@ -143,187 +231,39 @@ pfsd_worker_routine(void *arg)
 					rsp->error = 0;
 				}
 
-				pfsd_worker_handle_request(ch, index);
-
-				pfsd_shm_done_request(ch, index);
+				g_work_queue.enqueue(ptok, {ch, index});
 				g_currentPid = PFSD_INVALID_PID;
-			} else {
-				if (busy > 0)
-					busy--;
 			}
 		}
-
-		if (busy == 0)
-			pfsd_worker_usleep();
+		wk->w_wait_io(wk);
 	}
-
 	return NULL;
 }
 
-void*
-pfsd_worker_affinity_prepare(int nworkers)
+static void *io_worker(void *arg)
 {
-	if (g_option.o_affinity == 0)
-		return NULL;
+	worker_t *wk = (worker_t*)(arg);
+	moodycamel::ConsumerToken ctok(g_work_queue);
 
-	g_ncpu = (int)sysconf(_SC_NPROCESSORS_ONLN);
-	if (g_ncpu == 1) {
-		g_cpufile = NULL;
-		return NULL;
+	char name[32];
+	snprintf(name, sizeof(name), "pfsd-worker");
+	prctl(PR_SET_NAME,(unsigned long)name);
+
+	for (;;) {
+		WorkItem w;
+		g_work_queue.wait_dequeue(ctok, w);
+		pfsd_iochannel_t *ch = w.first;
+		if (ch == nullptr)
+			break;
+		int index = w.second;
+		pfsd_request_t *req = ch->ch_requests + index;
+		g_currentPid = req->owner;
+		index = req - ch->ch_requests;
+		pfsd_worker_handle_request(w.first, w.second);
+		pfsd_shm_done_request(w.first, w.second);
+		g_currentPid = PFSD_INVALID_PID;
 	}
-
-	int flags = O_RDWR | O_CREAT | O_EXCL | O_SYNC;
-	int fd = open(PFSD_CPUSET_FILE, flags, 0666);
-	if (fd < 0) {
-		if (errno == EEXIST)
-			fd = open(PFSD_CPUSET_FILE, flags & ~O_EXCL, 0666);
-
-		if (fd < 0) {
-			pfsd_error("can't open cpufile %s err %s", PFSD_CPUSET_FILE, strerror(errno));
-			return NULL;
-		}
-	}
-
-	struct stat st;
-	if (fstat(fd, &st) < 0) {
-		pfsd_error("can't stat cpufile %s err %s", PFSD_CPUSET_FILE, strerror(errno));
-		close(fd);
-		return NULL;
-	}
-
-	size_t file_size = g_ncpu * sizeof(pfsd_cpu_record_t);
-	if (st.st_size == 0) {
-		if (ftruncate(fd, file_size) == -1) {
-			pfsd_error("ftruncate cpufile error %d", errno);
-			close(fd);
-			return NULL;
-		}
-	}
-
-	pfsd_cpu_record_t *file = (pfsd_cpu_record_t*)mmap(NULL, file_size,
-	    PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	if (file == MAP_FAILED) {
-		pfsd_error("mmap cpufile error %d", errno);
-		close(fd);
-		return NULL;
-	} else {
-		close(fd);
-		fd = -1;
-	}
-
-	/* How many threads on each selected core */
-	int ngroup = 0;
-	int *worker_per_cpu = pfsd_calc_threads_per_cpu(nworkers, &ngroup);
-	int group_index  = 0;
-
-	/* find slots for all workers */
-	int worker_index = 0;
-	time_t now = time(NULL);
-	for (int ci = 0; worker_index < nworkers && ci < g_ncpu; ++ci) {
-		pfsd_cpu_record_t *cr = file + ci;
-		cr->cr_index = ci; /* set cpu index */
-
-		if (pfsd_is_busy_cpu(ci, g_ncpu)) {
-			pfsd_info("skip busy cpu %d", ci);
-			continue;
-		}
-
-		time_t oldts = cr->cr_ts;
-		if (strncmp(cr->cr_pbdname, g_option.o_pbdname, PFS_MAX_PBDLEN) != 0 &&
-			oldts + PFSD_CPUSET_TIMEOUT_SECONDS > now) {
-			pfsd_info("cpu %d is used by pfsd %s", ci, cr->cr_pbdname);
-			continue;
-		}
-
-		/* may be other process select this cpu, so CAS to avoid race condition */
-		if (__sync_bool_compare_and_swap(&cr->cr_ts, oldts, now)) {
-			memset(cr->cr_pbdname, 0, sizeof(cr->cr_pbdname));
-			snprintf(cr->cr_pbdname, sizeof(cr->cr_pbdname), "%s", g_option.o_pbdname);
-			memset(cr->cr_tindices, -1, sizeof(cr->cr_tindices));
-
-			int offset;
-			for (offset = 0; offset < worker_per_cpu[group_index]; ++offset) {
-				if (worker_index + offset == nworkers)
-					break;
-				cr->cr_tindices[offset] = worker_index + offset;
-				pfsd_info("worker %d is bind to cpu %d", worker_index+offset, ci);
-			}
-
-			worker_index += offset;
-			group_index++;
-		}
-	}
-
-	PFSD_FREE(worker_per_cpu);
-
-	if (worker_index < nworkers)
-		pfsd_error("may be too many workers or not enough cpu: workes %d, cpu %d", nworkers, g_ncpu);
-
-	return file;
-}
-
-bool
-pfsd_worker_bind_cpuset(worker_t *wk)
-{
-	if (g_cpufile == NULL)
-		return false;
-
-	int worker_index = wk->w_idx;
-	int cpuid = -1;
-	time_t now = time(NULL);
-	for (int ci = 0; ci < g_ncpu && cpuid == -1; ++ci) {
-		if (pfsd_is_busy_cpu(ci, g_ncpu))
-			continue;
-
-		pfsd_cpu_record_t *cr = &g_cpufile[ci];
-		if (cr->cr_ts + PFSD_CPUSET_TIMEOUT_SECONDS < now) {
-			pfsd_info("worker %d, skip cpu %d, timestamp %ld, now %ld",
-			    wk->w_idx, ci, cr->cr_ts, now);
-			continue;
-		}
-		if (strncmp(cr->cr_pbdname, g_option.o_pbdname, PFS_MAX_PBDLEN) != 0)
-			continue;
-		for (int i = 0; i < PFSD_THREADS_PERCPU; ++i) {
-			if (cr->cr_tindices[i] == -1)
-				break;
-			if (cr->cr_tindices[i] == worker_index) {
-				/* found avail cpu */
-				cpuid = cr->cr_index;
-				wk->w_cr = cr;
-				break;
-			}
-		}
-	}
-
-	if (cpuid != -1) {
-		cpu_set_t mask;
-		CPU_ZERO(&mask);
-		CPU_SET(cpuid, &mask);
-		if (sched_setaffinity(0, sizeof(mask), &mask) == -1) {
-			pfsd_error("could not set CPU affinity for cpuidx %d", cpuid);
-			return false;
-		} else {
-			return true;
-		}
-	} else
-		pfsd_warn("can't find cpuidx for worker %d", worker_index);
-
-	return false;
-}
-
-bool
-pfsd_is_busy_cpu(int cpuid, int ncpu)
-{
-	if (cpuid <= 2) /* pls */
-		return true;
-
-	if (ncpu < 4)
-		return false;
-
-	if (cpuid == ncpu/2 + 1 || cpuid == ncpu/2 + 2) /* pls */
-		return true;
-
-	return false;
+	return NULL;
 }
 
 int
