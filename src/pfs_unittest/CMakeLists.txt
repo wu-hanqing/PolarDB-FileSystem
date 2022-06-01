@@ -61,3 +61,23 @@ add_dependencies(pfs-tools
     pfs
 )
 
+add_executable(
+	pfs_pwrite_zero
+	pfs_pwrite_zero.cc
+)
+
+target_link_libraries(pfs_pwrite_zero
+    -Wl,--disable-new-dtags                                                     
+    -Wl,--push-state                                                            
+    -Wl,--no-as-needed                                                          
+    -Wl,--whole-archive                                                         
+    -Bstatic                                                                    
+    pfs
+    -Wl,--no-whole-archive                                                      
+    -Wl,--pop-state                                                             
+    ${SPDK_LIBS}
+    ${SPDK_DEPS}
+    gflags
+    pthread
+)
+
