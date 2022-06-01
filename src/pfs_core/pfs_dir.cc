@@ -666,7 +666,8 @@ pfs_dir_move(pfs_mount_t *mnt, pfs_ino_t odirino, uint64_t deno,
 static int
 pfs_memdir_before_rename(pfs_mount_t *mnt, nameinfo_t *oldnamei,
     nameinfo_t *newnamei, bool *isdir, pfs_inode_t **odirinp,
-    pfs_ino_t *oinop, pfs_inode_t **ndirinp, pfs_ino_t *ninop)
+    pfs_ino_t *oinop, pfs_inode_t **ndirinp, pfs_ino_t *ninop,
+    int flags)
 {
 	int type, err;
 	pfs_inode_t *odirin, *ndirin, *oin, *nin;
@@ -685,6 +686,8 @@ pfs_memdir_before_rename(pfs_mount_t *mnt, nameinfo_t *oldnamei,
 	if (err == 0) {
 		if (nin->in_ino == 0)
 			ERR_RETVAL(EBUSY);
+		if (flags & RENAME_NOREPLACE)
+			ERR_RETVAL(EEXIST);	
 	} else if (err == -ENOENT) {
 		if (pfs_namei_broken_path(newnamei))
 			return err; 	/* name path broken in the middle */
@@ -877,7 +880,8 @@ pfs_memdir_xremove(pfs_mount_t *mnt, nameinfo_t *ni)
 }
 
 int
-pfs_memdir_xrename(pfs_mount_t *mnt, nameinfo_t *oldni, nameinfo_t *newni)
+pfs_memdir_xrename(pfs_mount_t *mnt, nameinfo_t *oldni, nameinfo_t *newni,
+	int flags)
 {
 	pfs_inode_t *odirin, *ndirin;
 	pfs_ino_t oino, nino;
@@ -890,7 +894,7 @@ pfs_memdir_xrename(pfs_mount_t *mnt, nameinfo_t *oldni, nameinfo_t *newni)
 	odirin = ndirin = NULL;
 	oino = nino = INVALID_INO;
 	err = pfs_memdir_before_rename(mnt, oldni, newni, &isdir,
-	    &odirin, &oino, &ndirin, &nino);
+	    &odirin, &oino, &ndirin, &nino, flags);
 	if (err < 0)
 		goto out;
 

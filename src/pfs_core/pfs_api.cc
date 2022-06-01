@@ -785,7 +785,7 @@ init_pfs_rename_mtx()
 }
 
 static int
-_pfs_rename(const char *oldpbdpath, const char *newpbdpath)
+_pfs_rename(const char *oldpbdpath, const char *newpbdpath, int flags)
 {
 	int err;
 	nameinfo_t oldni, newni;
@@ -805,7 +805,7 @@ _pfs_rename(const char *oldpbdpath, const char *newpbdpath)
 	mnt = pfs_get_mount(oldni.ni_pbd);
 	if (!mnt)
 		ERR_RETVAL(ENODEV);
-	err = pfs_memdir_xrename(mnt, &oldni, &newni);
+	err = pfs_memdir_xrename(mnt, &oldni, &newni, flags);
 	if (err >= 0 && newni.ni_ino != INVALID_INO
 	    && newni.ni_ino != oldni.ni_ino) {
 		if (newni.ni_tgt_type == PFS_INODET_DIR)
@@ -1588,7 +1588,7 @@ pfs_rename(const char *opath, const char *npath)
 
 	while (err == -EAGAIN) {
 		mutex_lock(&rename_mtx);
-		err = _pfs_rename(opath, npath);
+		err = _pfs_rename(opath, npath, 0);
 		mutex_unlock(&rename_mtx);
 	}
 
@@ -1597,6 +1597,31 @@ pfs_rename(const char *opath, const char *npath)
 		return -1;
 	return 0;
 }
+
+int
+pfs_rename2(const char *opath, const char *npath, int flags)
+{
+	int err = -EAGAIN;
+
+	if (!opath || !npath)
+		err = -EINVAL;
+	// error if there are other bits */
+	if ((flags & ~RENAME_NOREPLACE)) 
+		err = -EINVAL;
+	API_ENTER(DEBUG, "%s, %s, %s", PATH_ARG(opath), PATH_ARG(npath), flags);
+
+	while (err == -EAGAIN) {
+		mutex_lock(&rename_mtx);
+		err = _pfs_rename(opath, npath, flags);
+		mutex_unlock(&rename_mtx);
+	}
+
+	API_EXIT(err);
+	if (err < 0)
+		return -1;
+	return 0;
+}
+
 
 int
 pfs_chdir(const char *pbdpath)

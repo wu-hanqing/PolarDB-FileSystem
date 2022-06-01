@@ -58,6 +58,10 @@
 extern "C" {
 #endif
 
+#ifndef RENAME_REPLACE
+#define RENAME_NOREPLACE	(1 << 0)
+#endif
+
 /* filesystem */
 int	pfs_mount(const char *cluster, const char *pbdname, int host_id, int flags);
 int	pfs_umount(const char *pbdname);
@@ -70,6 +74,7 @@ int	pfs_fstatfs(int fd, struct statfs *buf);
 
 /* functions both for file and directory */
 int	pfs_rename(const char *oldpbdpath, const char *newpbdpath);
+int	pfs_rename2(const char *oldpbdpath, const char *newpbdpath, int flags);
 
 /* file */
 int	pfs_creat(const char *pbdpath, mode_t mode);

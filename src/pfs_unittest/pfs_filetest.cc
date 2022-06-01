@@ -1183,6 +1183,28 @@ TEST_F(FileTest, pfs_close)
      */
 }
 
+TEST_F(FileTest, pfs_rename2)
+{
+    int fd, fd2, ret;
+    string path, path2;
+
+    path = "/" + g_testenv->pbdname_ + "/rename_test1.txt";
+    path2 = "/" + g_testenv->pbdname_ + "/rename_test2.txt";
+    pfs_unlink(path.c_str());
+    pfs_unlink(path2.c_str());
+    fd = pfs_open(path.c_str(), O_CREAT, 0);
+    EXPECT_GE(fd, 0);
+    fd2 = pfs_open(path2.c_str(), O_CREAT, 0);
+    EXPECT_GE(fd2, 0);
+    pfs_close(fd);
+    pfs_close(fd2);
+    ret = pfs_rename2(path.c_str(), path2.c_str(), RENAME_NOREPLACE);
+    CHECK_ERR_RET(-1, ret, EEXIST);
+
+    pfs_unlink(path.c_str());
+    pfs_unlink(path2.c_str());
+}
+
 TEST_F(FileTest, pfs_unlink)
 {
     int fd, fd1, ret;

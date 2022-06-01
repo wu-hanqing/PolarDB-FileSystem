@@ -74,7 +74,8 @@ void	pfs_memdir_unload(pfs_mount_t *mnt);
 /* directory tree resolving & updating */
 int	pfs_memdir_xlookup(pfs_mount_t *mnt, nameinfo_t *ni, int oflags);
 int	pfs_memdir_xremove(pfs_mount_t *mnt, nameinfo_t *ni);
-int	pfs_memdir_xrename(pfs_mount_t *mnt, nameinfo_t *oldni, nameinfo_t *newni);
+int	pfs_memdir_xrename(pfs_mount_t *mnt, nameinfo_t *oldni,
+		 nameinfo_t *newni, int flags);
 
 /* dirstream */
 int	pfs_memdir_xopen(pfs_mount_t *mnt, nameinfo_t *ni, DIR **dirp);
