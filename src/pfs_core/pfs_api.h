@@ -78,6 +78,7 @@ ssize_t	pfs_read(int fd, void *buf, size_t len);
 ssize_t pfs_read_dma(int fd, void *buf, size_t len);
 ssize_t	pfs_write(int fd, const void *buf, size_t len);
 ssize_t pfs_write_dma(int fd, const void *buf, size_t len);
+ssize_t	pfs_write_zero(int fd, size_t len);
 ssize_t	pfs_pread(int fd, void *buf, size_t len, off_t offset);
 ssize_t pfs_pread_dma(int fd, void *buf, size_t len, off_t offset);
 ssize_t	pfs_pwrite(int fd, const void *buf, size_t len, off_t offset);

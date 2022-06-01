@@ -689,7 +689,7 @@ pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 	pfs_blkno_t	dblkno;
 	pfs_blkid_t	blkid;
 	off_t		offset, blkoff, dbhoff, woff;
-	int		write_zero = !!(flags & PFS_IO_WRITE_ZERO);
+	int		filling_hole = 0;
 
 	if (locked) {
 		err = pfs_inode_sync_first(in, PFS_INODET_FILE, btime, false);
@@ -720,6 +720,7 @@ pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 			ERR_RETVAL(EAGAIN);
 		}
 
+		filling_hole = 0;
 		if (dbhoff < blkoff) {
 			/*
 			 * The write hits in the middle of a hole and will
@@ -734,6 +735,7 @@ pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 			wlen = blkoff - dbhoff;
 			pdata = NULL;
 			dbhoff = blkoff;
+			filling_hole = 1;
 			pfs_inode_writemodify_shrink_dblk_hole(in, blkid,
 			    dbhoff, blksize - dbhoff);
 		} else {
@@ -772,7 +774,7 @@ pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 		/*
 		 * Filling block hole shouldn't update offset.
 		 */
-		if (!write_zero && pdata == NULL)
+		if (filling_hole && pdata == NULL)
 			wlen = 0;
 		if (locked) {
 			err = pfs_inode_sync(in, PFS_INODET_FILE, btime, false);

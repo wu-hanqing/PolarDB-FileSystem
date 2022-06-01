@@ -1048,10 +1048,11 @@ pfs_write_flags(int fd, const void *buf, size_t len, int flags)
 	int err = -EAGAIN;
 	ssize_t wlen = -1;
 	bool fdok = PFS_FD_ISVALID(fd);
+	bool write_zero = !!(flags & PFS_IO_WRITE_ZERO);
 	MNT_STAT_API_BEGIN(MNT_STAT_API_WRITE);
-	if (!fdok || !buf)
+	if (!fdok || (!write_zero && !buf))
 		err = !fdok ? -EBADF : -EINVAL;
-	API_ENTER(VERB, "%d, %p, %lu", fd, buf, len);
+	API_ENTER(VERB, "%d, %p, %lu, %x", fd, buf, len, flags);
 
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
@@ -1074,6 +1075,12 @@ ssize_t
 pfs_write(int fd, const void *buf, size_t len)
 {
 	return pfs_write_flags(fd, buf, len, PFS_IO_DMA_OFF);
+}
+
+ssize_t
+pfs_write_zero(int fd, size_t len)
+{
+	return pfs_write_flags(fd, NULL, len, PFS_IO_WRITE_ZERO);
 }
 
 ssize_t

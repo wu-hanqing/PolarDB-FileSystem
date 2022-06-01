@@ -215,6 +215,99 @@ TEST_F(FileTest, pfs_write)
     // write causes file size exceeds limit(system limit, length type limit)
 }
 
+TEST_F(FileTest, pfs_write_zero)
+{
+    ssize_t len;
+    int fd;
+    std::string dirpath;
+
+    // 1 write len change
+    // 1.1 write len is zero
+    len = pfs_write_zero(fd_, 0);
+    CHECK_RET(0, len);
+    CHECK_CUR_OFFSET(fd_, 0);
+
+    // 1.2 write 10 bytes
+    len = pfs_write_zero(fd_, 10);
+    EXPECT_EQ(10, len);
+    CHECK_CUR_OFFSET(fd_, 10);
+    CHECK_FILESIZE(fd_, 10);
+
+    // 1.3 continue write 8 bytes with overlap
+    pfs_lseek(fd_, -5, SEEK_END);
+    len = pfs_write_zero(fd_, 8);
+    EXPECT_EQ(8, len);
+    CHECK_CUR_OFFSET(fd_, 13);
+    CHECK_FILESIZE(fd_, 13);
+
+    // 1.4 write len -2
+    pfs_lseek(fd_, 5, SEEK_SET);
+    len = pfs_write_zero(fd_, -2);
+    CHECK_ERR_RET(-1, len, EFBIG);
+    CHECK_FILESIZE(fd_, 13);
+
+    // 2 file offset change
+    // 2.1 Write with a big offset, which will cause a big hole
+    ssize_t large_len = 0x1000000;
+    pfs_lseek(fd_, large_len, SEEK_SET);
+    len = pfs_write_zero(fd_, 10);
+    CHECK_RET(10, len);
+    static int curr_file_len = large_len + 10;
+    CHECK_FILESIZE(fd_, curr_file_len);
+
+    // 2.2 read with small offset, large len
+    pfs_lseek(fd_, 10, SEEK_SET);
+#if 0
+    char *buf = (char *)malloc(large_len);
+    memset(buf, 0, large_len);
+    len = pfs_read(fd_, buf, large_len);
+    EXPECT_EQ(len, large_len);
+    free(buf);
+#endif
+    //  2.3 If result file offset is bigger than the offset maximum,
+    // no data transfer shall occur.
+    pfs_lseek(fd_, OFF_MAX, SEEK_SET);
+    len = pfs_write_zero(fd_, 10);
+    CHECK_ERR_RET(-1, len, EFBIG);
+    CHECK_FILESIZE(fd_, curr_file_len);
+
+    // 3 buf invalid
+    len = pfs_write(fd_, NULL, 10);
+    CHECK_ERR_RET(-1, len, EINVAL);
+    CHECK_FILESIZE(fd_, curr_file_len);
+
+    // 4 EBADF
+    fd = -1;
+    pfs_lseek(fd_, 0, SEEK_SET);
+    len = pfs_write_zero(fd, 10);
+    CHECK_ERR_RET(-1, len, EBADF);
+
+    /*
+     * EISDIR
+     * This errno only exists in PFS.
+     */
+    dirpath = "/" + g_testenv->pbdname_ + "/";
+    fd = pfs_open(dirpath.c_str(), 0, 0666);
+    EXPECT_GE(fd, 0);
+
+    len = pfs_pwrite_zero(fd, 3, 10);
+    CHECK_ERR_RET(-1, len, EISDIR);
+
+    len = pfs_write_zero(fd, 3);
+    CHECK_ERR_RET(-1, len, EISDIR);
+
+    pfs_close(fd);
+    fd = -1;
+
+    // TODO
+    // 5 EDQUOT
+    // 6 EINTR
+    // 7 EIO
+    // 8 ENOSPC no enough room for write, only as many bytes as there is room for shall be written
+    // write causes file size exceeds limit(system limit, length type limit)
+}
+
+
 TEST_F(FileTest, pfs_pwrite)
 {
     ssize_t len;
@@ -333,6 +426,126 @@ TEST_F(FileTest, pfs_pwrite)
     EXPECT_EQ(len, 2);
     CHECK_FILESIZE(fd_, 4*1024*1024+1);
 }
+
+TEST_F(FileTest, pfs_pwrite_zero)
+{
+    ssize_t len;
+    int err, fd;
+    std::string dirpath;
+
+    // 1 write len change
+    // 1.1 write len is zero
+    len = pfs_pwrite_zero(fd_, 0, 0);
+    CHECK_RET(0, len);
+
+    // 1.2 write 10 bytes
+    CHECK_CUR_OFFSET(fd_, 0);
+    len = pfs_pwrite_zero(fd_, 10, 0);
+    EXPECT_EQ(len, 10);
+    CHECK_FILESIZE(fd_, 10);
+
+    // 1.3 continue write 8 bytes with overlap
+    len = pfs_pwrite_zero(fd_, 8, 5);
+    EXPECT_EQ(len, 8);
+    CHECK_FILESIZE(fd_, 13);
+
+    // 1.4 write len -2
+    len = pfs_pwrite_zero(fd_, -2, 15);
+    CHECK_ERR_RET(-1, len, EFBIG);
+    CHECK_FILESIZE(fd_, 13);
+
+    // 2 file offset change
+    // 2.1 Write with a big offset, which will cause a big hole
+    ssize_t large_len = 0x1000000;
+    len = pfs_pwrite_zero(fd_, 10, large_len);
+    CHECK_RET(10, len);
+    static int curr_file_len = large_len + 10;
+    CHECK_FILESIZE(fd_, curr_file_len);
+
+    // 2.2 read with small offset, large len
+#if 0
+    char *buf = (char *)malloc(large_len);
+    memset(buf, 0, large_len);
+    len = pfs_pread(fd_, buf, large_len, 10);
+    EXPECT_EQ(len, large_len);
+    free(buf);
+#endif
+
+    // 2.3 If result file offset is bigger than the offset maximum,
+    // no data transfer shall occur.
+    len = pfs_pwrite_zero(fd_, 10, OFF_MAX);
+    CHECK_ERR_RET(-1, len, EFBIG);
+    CHECK_FILESIZE(fd_, curr_file_len);
+
+    // 3 buf invalid
+//    len = pfs_pwrite(fd_, NULL, 10, curr_file_len);
+//   CHECK_ERR_RET(-1, len, EINVAL);
+//    CHECK_FILESIZE(fd_, curr_file_len);
+
+    // 4 EBADF
+    fd = -1;
+    len = pfs_pwrite_zero(fd, 10, 0);
+    CHECK_ERR_RET(-1, len, EBADF);
+
+    /*
+     * EBADF
+     * pwrite a fd which represents a directory.
+     * Expect: EBADF
+     * Actual: EISDIR
+     */
+    dirpath = "/" + g_testenv->pbdname_ + "/";
+    fd = pfs_open(dirpath.c_str(), 0, 0666);
+    EXPECT_GE(fd, 0);
+
+    len = pfs_pwrite_zero(fd, 3, 10);
+    CHECK_ERR_RET(-1, len, EISDIR);
+
+    pfs_close(fd);
+    fd = -1;
+
+
+    // TODO
+    // 5 EDQUOT
+    // 6 EINTR
+    // 7 EIO
+    // 8 ENOSPC no enough room for write, only as many bytes as there is room for shall be written
+    // write causes file size exceeds limit(system limit, length type limit)
+
+    /*
+     * file hole test
+     * 1) the whole write area exceeds file size.
+     * 2) the whole write area is in the range of filesize.
+     * 3) part of write area exceeds file size.
+     */
+    // 1) write 1B @3M of a empty file
+    err = pfs_ftruncate(fd_, 0);
+    EXPECT_EQ(err, 0);
+    CHECK_FILESIZE(fd_, 0);
+    len = pfs_pwrite_zero(fd_, 1, 3*1024*1024);
+    EXPECT_EQ(len, 1);
+    CHECK_FILESIZE(fd_, 3*1024*1024 + 1);
+
+    // 2) write 1B @3M of a 4MB file
+    err = pfs_ftruncate(fd_, 0);
+    EXPECT_EQ(err, 0);
+    err = pfs_ftruncate(fd_, 4*1024*1024);
+    EXPECT_EQ(err, 0);
+    CHECK_FILESIZE(fd_, 4*1024*1024);
+    len = pfs_pwrite_zero(fd_, 1, 3*1024*1024);
+    EXPECT_EQ(len, 1);
+    CHECK_FILESIZE(fd_, 4*1024*1024);
+
+    // 3) write 2B @(4M-1) of a 4MB file
+    err = pfs_ftruncate(fd_, 0);
+    EXPECT_EQ(err, 0);
+    err = pfs_ftruncate(fd_, 4*1024*1024);
+    EXPECT_EQ(err, 0);
+    CHECK_FILESIZE(fd_, 4*1024*1024);
+    len = pfs_pwrite_zero(fd_, 2, 4*1024*1024-1);
+    EXPECT_EQ(len, 2);
+    CHECK_FILESIZE(fd_, 4*1024*1024+1);
+}
+
 
 TEST_F(FileTest, pfs_read)
 {

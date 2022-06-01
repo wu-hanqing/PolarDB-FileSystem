@@ -233,13 +233,18 @@ pfs_blkio_write(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 	ssize_t iolen = 0;
 	void *zerobuf = NULL;
 	int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
+	int cap = pfsdev_get_cap(mnt->mnt_ioch_desc);
 
 	PFS_ASSERT(off + len <= mnt->mnt_blksize);
-	if (!(flags & PFS_IO_WRITE_ZERO) && data == NULL) {
-		zerobuf = pfs_dma_zalloc("M_ZERO_BUF", 64, len, socket);
-		PFS_VERIFY(zerobuf != NULL);
-		data = (char *)zerobuf;
-		flags |= PFS_IO_DMA_ON;
+	if (data == NULL) {
+		if (cap & DEV_CAP_ZERO) 
+			flags |= PFS_IO_WRITE_ZERO;
+		else if (!(flags & PFS_IO_WRITE_ZERO)) {
+			zerobuf = pfs_dma_zalloc("M_ZERO_BUF", 64, len, socket);
+			PFS_VERIFY(zerobuf != NULL);
+			data = (char *)zerobuf;
+			flags |= PFS_IO_DMA_ON;
+		}
 	}
 	iolen = pfs_blkio_execute(mnt, data, blkno, off, len,
 	    pfs_blkio_write_segment, flags);
