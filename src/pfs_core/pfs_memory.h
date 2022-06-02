@@ -79,6 +79,7 @@ enum {
 	M_SPDK_DEV_IOQ,
 	M_SPDK_DEV,
 	M_SPDK_IOCB,
+	M_RANGE_LOCK,
 	M_NTYPE
 };
 

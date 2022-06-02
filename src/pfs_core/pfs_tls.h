@@ -61,6 +61,9 @@ typedef struct pfs_tls {
 	 * unaligned ptr to aligned ptr.
 	 */
 	char		*tls_directio_buf;
+
+	struct rl_q_entry	*tls_rlqe;
+	int		tls_rlqe_count;
 } pfs_tls_t;
 
 pfs_tls_t 	*pfs_current_tls();
