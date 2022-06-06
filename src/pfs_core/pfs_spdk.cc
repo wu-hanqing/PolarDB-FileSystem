@@ -703,9 +703,11 @@ pfs_spdk_setup(void)
         cpu_set_t cpuset;
         if (pfs_get_dev_local_cpus(bdev, &cpuset) == 0)
             cpuset_str = pfs_cpuset_to_string(&cpuset);
-        pfs_itrace("\tName: %s, \tSize: %ld, WriteZero: %d, \tLocal CPUs: %s",
+        pfs_itrace("\tName: %s, Size: %ld, BlockSize: %d, WriteUnit: %d, WriteZero: %d, Local CPUs: %s",
              spdk_bdev_get_name(bdev),
              spdk_bdev_get_num_blocks(bdev) * spdk_bdev_get_block_size(bdev),
+             spdk_bdev_get_block_size(bdev),
+             spdk_bdev_get_write_unit_size(bdev),
 	     spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_WRITE_ZEROES),
              cpuset_str.c_str());
     }
