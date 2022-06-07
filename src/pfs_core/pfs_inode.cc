@@ -1305,7 +1305,6 @@ pfs_inode_destroy(pfs_inode_t *in)
 	pfs_inode_destroy_index(in);
 	pfs_inode_writemodify_fini(&in->in_write_modify);
 	pfs_inode_dxredo_fini(&in->in_dx_redo);
-	pfs_rangelock_destroy(&in->in_rl);
 
 	pfs_mem_free(in, M_INODE);
 }
@@ -1353,7 +1352,6 @@ pfs_inode_create(pfs_mount_t *mnt, pfs_ino_t ino)
 		    offsetof(pfs_dxent_t, e_avlnode));
 		pfs_inode_dxredo_init(&in->in_dx_redo);
 		pfs_inode_init_blktable(in);
-		pfs_rangelock_init(&in->in_rl);
 	}
 	return in;
 }

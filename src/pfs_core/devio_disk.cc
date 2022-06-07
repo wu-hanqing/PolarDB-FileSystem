@@ -176,6 +176,7 @@ pfs_diskdev_open(pfs_dev_t *dev)
 	dkdev->dk_sectsz = (size_t)sectsz;
 	dkdev->dk_base.d_cap |= (DEV_CAP_RD | DEV_CAP_WR | 
 				 DEV_CAP_FLUSH | DEV_CAP_TRIM);
+	dkdev->dk_base.d_write_unit = sectsz;
 	return 0;
 }
 static int

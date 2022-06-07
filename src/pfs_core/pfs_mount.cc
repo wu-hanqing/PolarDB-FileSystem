@@ -40,6 +40,7 @@
 #include "pfs_stat.h"
 #include "pfs_namecache.h"
 #include "pfs_config.h"
+#include "pfs_locktable.h"
 
 extern "C" {
     unsigned int __attribute__((weak)) server_id = 1984;
@@ -478,6 +479,11 @@ pfs_create_mount(const char *cluster, const char *pbdname, int host_id,
 	cond_init(&mnt->mnt_discard_cond, NULL);
 	mutex_init(&mnt->mnt_stat_mtx);
 	cond_init(&mnt->mnt_stat_cond, NULL);
+	mnt->mnt_locktable = pfs_locktable_init();
+	if (mnt->mnt_locktable == NULL) {
+		pfs_etrace("can not init locktable");
+		ERR_GOTO(ENOMEM, out);
+	}
 
 	/**
 	 * MySQL is bounded to a fixed io channel. Otherwise vestigial
@@ -525,6 +531,9 @@ pfs_create_mount(const char *cluster, const char *pbdname, int host_id,
 	return 0;
 
 out:
+	if (mnt->mnt_locktable) {
+		pfs_locktable_destroy(mnt->mnt_locktable);
+	}
 	if (mnt) {
 		pfs_mem_free(mnt, M_MOUNT);
 		mnt = NULL;

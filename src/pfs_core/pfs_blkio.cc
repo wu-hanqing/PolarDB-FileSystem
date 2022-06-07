@@ -22,10 +22,29 @@
 #include "pfs_blkio.h"
 #include "pfs_devio.h"
 #include "pfs_mount.h"
-#include "pfs_api.h"
+#include "pfs_impl.h"
+#include "pfs_rangelock.h"                                                      
+#include "pfs_locktable.h"
+#include "pfs_option.h"
 
 typedef int pfs_blkio_fn_t(int, pfs_bda_t, size_t, char*, pfs_bda_t, size_t,
 	char*, int);
+
+/* 
+ * 0: block mode (chunk server)
+ * 1: file mode (normal pfs)
+ */
+static int64_t block_io_atomic = 0;
+
+static bool pfs_check_ival(void *data)
+{
+	int64_t integer_val = *(int64_t*)data;
+	if (integer_val < 0 || integer_val > 1)
+		return false;
+	return true;
+}
+
+PFS_OPTION_REG(block_io_atomic, pfs_check_ival);
 
 /*
  * pfs_blkio_align:
@@ -76,17 +95,19 @@ pfs_blkio_align(pfs_mount_t *mnt, pfs_bda_t data_bda, size_t data_len,
 {
 	pfs_bda_t aligned_bda;
 	size_t sect_off, frag_off;
+	size_t sectsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
 
-	sect_off = data_bda & (mnt->mnt_sectsize - 1);
+	PFS_ASSERT(sectsize <= mnt->mnt_fragsize);
+	sect_off = data_bda & (sectsize - 1);
 	frag_off = data_bda & (mnt->mnt_fragsize - 1);
 	if (sect_off != 0) {
 		aligned_bda = data_bda - sect_off;
-		*op_len = MIN(mnt->mnt_sectsize - sect_off, data_len);
-		*io_len = mnt->mnt_sectsize;
+		*op_len = MIN(sectsize - sect_off, data_len);
+		*io_len = sectsize;
 	} else {
 		aligned_bda = data_bda;
 		*op_len = MIN(mnt->mnt_fragsize - frag_off, data_len);
-		*io_len = roundup(*op_len, mnt->mnt_sectsize);
+		*io_len = roundup(*op_len, sectsize);
 	}
 
 	PFS_ASSERT(aligned_bda <= data_bda);
@@ -97,7 +118,6 @@ pfs_blkio_align(pfs_mount_t *mnt, pfs_bda_t data_bda, size_t data_len,
 
 	return aligned_bda;
 }
-
 
 static int
 pfs_blkio_read_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
@@ -154,6 +174,59 @@ pfs_blkio_done(int iodesc, int ioflags)
 	return pfsdev_wait_io(iodesc);
 }
 
+static void
+pfs_block_lock(pfs_mount_t *mnt, int64_t blkno, off_t woff,
+	size_t wlen, struct rangelock **rlp, void *cookie[], int *cc)
+{
+	const size_t dev_bsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
+	off_t lock_start = woff, lock_mid_end = 0, lock_end = woff + wlen;
+	struct rangelock *rl = NULL;
+	pthread_mutex_t *mtx = NULL;
+
+	*cc = 0;
+	rl = pfs_locktable_get_rangelock(mnt->mnt_locktable, blkno);
+	mtx = &rl->rl_mutex;
+	pthread_mutex_lock(mtx);
+	if (lock_start & (dev_bsize-1)) {
+		lock_start = RTE_ALIGN_FLOOR(lock_start, dev_bsize);
+		cookie[*cc] = pfs_rangelock_wlock(rl, lock_start,
+			lock_start + dev_bsize, mtx);
+		lock_start += dev_bsize;
+        	*cc = *cc + 1;
+	}
+
+	lock_mid_end = RTE_ALIGN_FLOOR(lock_end, dev_bsize);
+	if (lock_start < lock_mid_end) {
+		cookie[*cc] = pfs_rangelock_rlock(rl, lock_start,
+			lock_mid_end, mtx);
+		*cc = *cc + 1;
+	}
+
+	if (lock_mid_end < lock_end) {
+		lock_end = RTE_ALIGN_CEIL(lock_end, dev_bsize);
+		cookie[*cc] = pfs_rangelock_wlock(rl, lock_mid_end,
+			 lock_end, mtx);
+		*cc = *cc + 1;
+	}
+	pthread_mutex_unlock(mtx);
+	*rlp = rl;
+}
+
+static void
+pfs_block_unlock(pfs_mount_t *mnt, uint64_t blkno,
+	struct rangelock *rl, void **cookie, int cc)
+{
+	pthread_mutex_t *mtx = NULL;
+
+	mtx = &rl->rl_mutex;
+	pthread_mutex_lock(mtx);
+	for (int i = 0; i < cc; ++i) {
+		pfs_rangelock_unlock(rl, cookie[i], mtx);
+	}
+	pthread_mutex_unlock(mtx);
+	pfs_locktable_put_rangelock(mnt->mnt_locktable, blkno, rl);
+}
+
 static ssize_t
 pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
     off_t off, ssize_t len, pfs_blkio_fn_t *iofunc, int flags)
@@ -163,15 +236,30 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 	pfs_bda_t bda, albda;
 	size_t allen, iolen, left;
 	int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
+	const size_t dev_bsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
 	int write_zero = !!(flags & PFS_IO_WRITE_ZERO);
-
+	struct rangelock *rl = NULL;
+	void		*cookie[3];
+	int		cc = 0;
+	int		blk_lock = 0;
+	
 	err = 0;
 	ioflags = (len >= 2*PFS_FRAG_SIZE) ? IO_NOWAIT : 0;
 	if (flags & PFS_IO_DMA_ON)
 		ioflags |= IO_DMABUF;
 	if (flags & PFS_IO_WRITE_ZERO)
 		ioflags |= IO_ZERO;
+
+	if (pfs_blkio_write_segment == iofunc && !(flags & PFS_IO_NO_LOCK)) {
+		if (block_io_atomic == 0)
+			blk_lock = (dev_bsize > 512);
+		else
+			blk_lock = 1;
+	}
+
 	left = len;
+	if (blk_lock)
+		pfs_block_lock(mnt, blkno, off, len, &rl, cookie, &cc);
 	while (left > 0) {
 		allen = iolen = 0;
 		bda = blkno * mnt->mnt_blksize + off;
@@ -194,16 +282,15 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 		left -= iolen;
 	}
 
-	/*
-	 * albuf should never be used by nowait I/O,
-	 * so free it before wait_io() is safe.
-	 */
+	err1 = pfs_blkio_done(mnt->mnt_ioch_desc, ioflags);
+	if (blk_lock)
+		pfs_block_unlock(mnt, blkno, rl, cookie, cc);
+
 	if (albuf) {
 		pfs_dma_free(albuf);
 		albuf = NULL;
 	}
 
-	err1 = pfs_blkio_done(mnt->mnt_ioch_desc, ioflags);
 	ERR_UPDATE(err, err1);
 	if (err < 0) {
 		if (err == -ETIMEDOUT)

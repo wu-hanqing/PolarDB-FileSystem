@@ -401,6 +401,9 @@ err_exit:
 			SPDK_BDEV_IO_TYPE_WRITE_ZEROES)) {
 	dev->d_cap |= DEV_CAP_ZERO;
     }
+    dev->d_write_unit = spdk_bdev_get_write_unit_size(dkdev->dk_bdev) *
+		spdk_bdev_get_block_size(dkdev->dk_bdev);
+    PFS_ASSERT(RTE_IS_POWER_OF_2(dev->d_write_unit));
 
     pfs_itrace("open spdk device: '%s', block_num: %ld, "
                "block_size: %d, write_unit_size: %d, has_cache: %d, buf_align:%d\n",

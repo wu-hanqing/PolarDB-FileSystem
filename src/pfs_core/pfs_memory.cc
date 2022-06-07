@@ -94,6 +94,8 @@ static pfs_memtype_t	pfs_mem_type[M_NTYPE] = {
 	MEMTYPE_ENTRY(M_SPDK_DEV),
 	MEMTYPE_ENTRY(M_SPDK_IOCB),
 	MEMTYPE_ENTRY(M_RANGE_LOCK),
+	MEMTYPE_ENTRY(M_LOCKTABLE),
+	MEMTYPE_ENTRY(M_LOCKITEM),
 };
 
 static inline const char *

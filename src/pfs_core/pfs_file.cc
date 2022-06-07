@@ -678,7 +678,7 @@ pfs_file_read(pfs_inode_t *in, void *buf, size_t len, off_t offset,
  * journal.
  */
 ssize_t
-do_pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
+pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
     bool locked, uint64_t btime, int flags)
 {
 	char		*data = (char *)buf, *pdata;
@@ -695,6 +695,8 @@ do_pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 		err = pfs_inode_sync_first(in, PFS_INODET_FILE, btime, false);
 		if (err)
 			return err;
+	} else {
+		flags |= PFS_IO_NO_LOCK;
 	}
 
 	fsize = pfs_inode_size(in);
@@ -784,62 +786,6 @@ do_pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 	}
 	*off = offset;
 	return wsum;
-}
-
-ssize_t
-pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
-    bool locked, uint64_t btime, int flags)
-{
-	off_t offset, lock_start, lock_mid_end, lock_end;
-	void *cookie[3];
-	int cc = 0;
-	ssize_t wlen;
-
-	offset = *off;
-        if (offset == OFFSET_FILE_SIZE) {
-		lock_start = in->in_size;
-		lock_end = lock_start + len;
-	} else {
-		lock_start = offset;
-		lock_end = offset + len;
-	}
-
-	if (!locked)
-		pfs_inode_lock(in);
-
-	if (lock_start % PBD_SECTOR_SIZE) {
-		abort();
-		lock_start = RTE_ALIGN_FLOOR(offset, PBD_SECTOR_SIZE);
-		cookie[cc++] = pfs_rangelock_wlock(&in->in_rl, lock_start, lock_start + PBD_SECTOR_SIZE,
-			&in->in_mtx);
-		lock_start += PBD_SECTOR_SIZE;
-	}
-
-	lock_mid_end = RTE_ALIGN_FLOOR(lock_end, PBD_SECTOR_SIZE);
-	if (lock_start < lock_mid_end) {
-		cookie[cc++] = pfs_rangelock_rlock(&in->in_rl, lock_start, lock_mid_end,
-			&in->in_mtx);
-	}
-
-	if (lock_mid_end < lock_end) {
-		lock_end = RTE_ALIGN_CEIL(lock_end, PBD_SECTOR_SIZE);
-		cookie[cc++] = pfs_rangelock_wlock(&in->in_rl, lock_mid_end, lock_end,
-			&in->in_mtx);
-	}
-
-	if (!locked)
-		pfs_inode_unlock(in);
-
-	wlen = do_pfs_file_write(in, buf, len, off, locked, btime, flags);
-
-	if (!locked)
-		pfs_inode_lock(in);
-	while (cc-- > 0) {
-		pfs_rangelock_unlock(&in->in_rl, cookie[cc], &in->in_mtx);
-	}
-	if (!locked)
-		pfs_inode_unlock(in);
-	return wlen;
 }
 
 static int

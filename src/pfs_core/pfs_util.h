@@ -18,6 +18,20 @@
 
 #include <sys/types.h>
 #include <stdint.h>
+#include <stdarg.h>
+
+#define GOLDEN_RATIO_32 0x61C88647
+#define GOLDEN_RATIO_64 0x61C8864680B583EBull
+
+static inline uint32_t hash_32(uint64_t val, unsigned int bits)
+{                                                                               
+	return val * GOLDEN_RATIO_32 >> (32 - bits);
+}       
+
+static inline uint32_t hash_64(uint64_t val, unsigned int bits)
+{
+	return val * GOLDEN_RATIO_64 >> (64 - bits);
+}
 
 uint32_t 	crc32c(uint32_t crc, const void *buf, size_t size);
 uint64_t	roundup_power2(uint64_t val);

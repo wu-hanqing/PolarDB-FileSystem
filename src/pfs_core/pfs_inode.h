@@ -25,7 +25,6 @@
 #include "pfs_avl.h"
 #include "pfs_impl.h"
 #include "pfs_meta.h"
-#include "pfs_rangelock.h"
 
 /* time update mode */
 #define	IN_ATIME	0x01
@@ -139,7 +138,6 @@ typedef struct pfs_inode {
 	pfs_inode_blk_table_t	*in_blk_tables;
 	int64_t		in_blk_table_nsoft;
 	int64_t		in_blk_table_nhard;
-	struct rangelock in_rl;
 } pfs_inode_t;
 
 #define	IN_FIELD(in, field)	(in)->in_phyin->field

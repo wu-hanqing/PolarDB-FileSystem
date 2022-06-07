@@ -85,6 +85,7 @@ set(SPDK_LIBS
 
  -Wl,--whole-archive
  -Wl,--no-as-needed
+ -Wl,--start-group
  rte_bus_pci
  rte_cryptodev
  rte_dmadev
@@ -104,6 +105,8 @@ set(SPDK_LIBS
  rte_vhost
  rte_meter
  rte_timer
+ rte_stack
+ -Wl,--end-group
  -Wl,--no-whole-archive
  -Wl,--pop-state
 )

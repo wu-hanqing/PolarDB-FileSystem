@@ -24,6 +24,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "pfs_def.h"
 #include "pfs_trace.h"
 #include "pfs_memory.h"
 #include "pfs_util.h"
@@ -69,6 +70,7 @@
 #define PFS_IO_DMA_OFF		0x0
 #define PFS_IO_DMA_ON		0x1
 #define PFS_IO_WRITE_ZERO	0x2
+#define PFS_IO_NO_LOCK		0x4
 
 /*
  * A block is of unit size, 4M. A fragment is of size 16K.
@@ -140,12 +142,12 @@ void	pfs_abort(const char *action, const char *cond, const char *func,
 #endif
 
 #define	PFS_ASSERT(cond)	do {				\
-	if (!(cond))						\
+	if (unlikely(!(cond)))					\
 		pfs_abort("assert", #cond, __func__, __LINE__);	\
 } while(0)
 
 #define	PFS_VERIFY(cond)	do {				\
-	if (!(cond))						\
+	if (unlikely(!(cond)))					\
 		pfs_abort("verify", #cond, __func__, __LINE__);	\
 } while(0)
 

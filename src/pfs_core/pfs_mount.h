@@ -126,6 +126,7 @@ typedef struct pfs_mount {
 	pthread_cond_t	mnt_stat_cond;
 	pthread_t	mnt_stat_tid;
 	int		mnt_stat_stop;
+	struct locktable *mnt_locktable;
 } pfs_mount_t;
 
 #define	MOUNT_META_RDLOCK(mnt)	do { \

@@ -142,7 +142,8 @@ typedef struct pfs_dev {
 	char		d_devname[PFS_MAX_PBDLEN];	/* alias pbdname */
 	int		d_mem_socket_id;
 
-	int		d_cap;
+	unsigned	d_cap;
+	unsigned	d_write_unit;
 	pfs_devstat_t	d_ds;		/* statistics */
 } pfs_dev_t;
 
@@ -162,7 +163,8 @@ int	pfsdev_pwrite_flags(int devi, void *buf, size_t len, uint64_t bda,
 	    int flags);
 int	pfsdev_wait_io(int devi);
 int	pfsdev_get_socket_id(int devi);
-int	pfsdev_get_cap(int devi);
+unsigned	pfsdev_get_cap(int devi);
+unsigned	pfsdev_get_write_unit(int devi);
 
 const char *pfsdev_trace_pbdname(const char *cluster, const char *pbdname);
 

@@ -577,12 +577,14 @@ pfsdev_pread_flags(int devi, void *buf, size_t len, uint64_t bda, int flags)
 {
 	pfs_dev_t *dev;
 	pfs_devio_t *io;
+	size_t bsize;
 
 	PFS_ASSERT(0 <= devi && devi < PFS_MAX_NCHD);
 	dev = pfs_devs[devi];
+        bsize = dev->d_write_unit;
 	PFS_ASSERT(dev != NULL);
-	PFS_ASSERT((bda % PBD_SECTOR_SIZE) == 0);
-	PFS_ASSERT(len > 0 && (len % PBD_SECTOR_SIZE) == 0);
+	PFS_ASSERT((bda & (bsize - 1)) == 0);
+	PFS_ASSERT(len > 0 && (len & (bsize-1)) == 0);
 
 	io = pfs_io_create(dev, PFSDEV_REQ_RD, buf, len, bda, flags);
 	PFS_VERIFY(io != NULL);
@@ -595,12 +597,14 @@ pfsdev_pwrite_flags(int devi, void *buf, size_t len, uint64_t bda, int flags)
 {
 	pfs_dev_t *dev;
 	pfs_devio_t *io;
+	size_t bsize;
 
 	PFS_ASSERT(0 <= devi && devi < PFS_MAX_NCHD);
 	dev = pfs_devs[devi];
+        bsize = dev->d_write_unit;
 	PFS_ASSERT(dev != NULL && dev_writable(dev));
-	PFS_ASSERT((bda % PBD_SECTOR_SIZE) == 0);
-	PFS_ASSERT(len > 0 && (len % PBD_SECTOR_SIZE) == 0);
+	PFS_ASSERT((bda & (bsize - 1)) == 0);
+	PFS_ASSERT(len > 0 && (len & (bsize-1)) == 0);
 
 	io = pfs_io_create(dev, PFSDEV_REQ_WR, buf, len, bda, flags);
 	PFS_VERIFY(io != NULL);
@@ -691,14 +695,21 @@ pfsdev_get_socket_id(int devi)
 {
 	PFS_ASSERT(0 <= devi && devi < PFS_MAX_NCHD);
 	auto dev = pfs_devs[devi];
-	PFS_ASSERT(dev != NULL);
 	return dev->d_mem_socket_id;
 }
 
-int pfsdev_get_cap(int devi)
+unsigned
+pfsdev_get_cap(int devi)
 {
 	PFS_ASSERT(0 <= devi && devi < PFS_MAX_NCHD);
 	auto dev = pfs_devs[devi];
-	PFS_ASSERT(dev != NULL);
 	return dev->d_cap;
+}
+
+unsigned
+pfsdev_get_write_unit(int devi)
+{
+	PFS_ASSERT(0 <= devi && devi < PFS_MAX_NCHD);
+	auto dev = pfs_devs[devi];
+	return dev->d_write_unit;
 }
