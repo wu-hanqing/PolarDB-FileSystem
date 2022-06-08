@@ -27,4 +27,5 @@ void  		  pfs_locktable_destroy(locktable_t *t);
 struct rangelock *pfs_locktable_get_rangelock(locktable_t *t, uint64_t blkno);
 void              pfs_locktable_put_rangelock(locktable_t *t, uint64_t blkno,
 			struct rangelock *rl);
+void		  pfs_locktable_thread_exit();
 #endif

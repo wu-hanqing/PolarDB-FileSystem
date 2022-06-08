@@ -187,7 +187,7 @@ dev_writable(pfs_dev_t *dev)
 	return (dev->d_flags & DEVFLG_WR) != 0;
 }
 
-void pfsdev_exit_thread(void);
+void pfsdev_thread_exit(void);
 void pfsdev_exit_thread_spdk_drv(void);
 
 #endif	/* _PFS_DEVIO_H_ */

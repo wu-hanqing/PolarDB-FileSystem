@@ -25,6 +25,7 @@
 #include "pfs_spdk.h"
 #include "pfs_devio.h"
 #include "pfs_rangelock.h"
+#include "pfs_locktable.h"
 
 /*
  * TLS manages txs, locks, and meta data exception handling.
@@ -71,6 +72,7 @@ pfs_tls_create()
 	}
 	tls->tls_rlqe = NULL;
 	tls->tls_rlqe_count = 0;
+
 	return tls;
 }
 
@@ -81,7 +83,7 @@ pfs_tls_destroy(void *data)
 	pfs_ioq_t *ioq;
 
 	if (tls == NULL) {
-		pfs_exit_spdk_thread();
+		pfs_spdk_thread_exit();
 		return;
 	}
 	/*
@@ -96,9 +98,10 @@ pfs_tls_destroy(void *data)
 			tls->tls_ioqueue[i] = NULL;
 		}
 	}
-	pfs_rangelock_exit();
-	pfs_exit_spdk_thread();
-	pfsdev_exit_thread();
+	pfs_rangelock_thread_exit();
+	pfs_locktable_thread_exit();
+	pfs_spdk_thread_exit();
+	pfsdev_thread_exit();
 	pfs_mem_free(tls, M_TLS);
 	pfs_mntstat_nthreads_change(-1);
 }

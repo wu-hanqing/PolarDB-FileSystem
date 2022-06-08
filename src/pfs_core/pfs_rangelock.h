@@ -81,7 +81,7 @@ void	*pfs_rangelock_wlock(struct rangelock *lock, off_t start, off_t end,
 void	*pfs_rangelock_trywlock(struct rangelock *lock, off_t start, off_t end,
 	    pthread_mutex_t *ilk);
 void	 pfs_rlqentry_free(struct rl_q_entry *rlqe);
-void	pfs_rangelock_exit();
+void	pfs_rangelock_thread_exit();
 
 #if defined(INVARIANTS) || defined(INVARIANT_SUPPORT)
 void	_pfs_rangelock_cookie_assert(void *cookie, int what, const char *file,

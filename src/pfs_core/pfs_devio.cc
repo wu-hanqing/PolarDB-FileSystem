@@ -678,7 +678,7 @@ pfsdev_trace_pbdname(const char *cluster, const char *pbdname)
 }
 
 void
-pfsdev_exit_thread(void)
+pfsdev_thread_exit(void)
 {
 	pfs_devio_t *io;
 

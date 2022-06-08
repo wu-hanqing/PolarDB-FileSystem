@@ -64,6 +64,9 @@ typedef struct pfs_tls {
 
 	struct rl_q_entry	*tls_rlqe;
 	int		tls_rlqe_count;
+
+	struct locktable_item *tls_locktable_items[3];
+	int		tls_locktable_item_count;
 } pfs_tls_t;
 
 pfs_tls_t 	*pfs_current_tls();

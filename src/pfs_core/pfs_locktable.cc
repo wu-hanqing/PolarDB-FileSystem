@@ -58,22 +58,40 @@ static struct rte_stack *g_lt_cache;
 static pthread_once_t once_control = PTHREAD_ONCE_INIT;
 
 static inline struct locktable_item *
+item_alloc_from_local(void)
+{
+	pfs_tls_t *tls = pfs_current_tls();
+	if (tls->tls_locktable_item_count == 0)
+		return NULL;
+
+	return tls->tls_locktable_items[--tls->tls_locktable_item_count];
+}
+
+static inline bool
+item_free_to_local(struct locktable_item *li)
+{
+	pfs_tls_t *tls = pfs_current_tls();
+	if (tls->tls_locktable_item_count == arraysize(tls->tls_locktable_items))
+		return false;
+
+	tls->tls_locktable_items[tls->tls_locktable_item_count++] = li;
+	return true;
+}
+
+static inline struct locktable_item *
 item_alloc(void)
 {
 	struct locktable_item *li;
 
-	if (!rte_stack_pop(g_lt_cache, (void **)&li, 1)) {
-		if (pfs_mem_memalign((void **)&li, 64, sizeof(*li), M_LOCKITEM))
-			li = NULL;
-		if (li) {
-			li->li_blkno = 0;
-			li->li_refcount = 0;
-			pfs_rangelock_init(&li->li_rl);
+	if ((li = item_alloc_from_local()) == NULL &&
+	    !rte_stack_pop(g_lt_cache, (void **)&li, 1)) {
+		if (pfs_mem_memalign((void **)&li, 64, sizeof(*li), M_LOCKITEM)) {
+			return NULL;
 		}
-	} else {
-		li->li_blkno = 0;
-		li->li_refcount = 0;
+		pfs_rangelock_init(&li->li_rl);
 	}
+	li->li_blkno = 0;
+	li->li_refcount = 0;
 	return li;
 }
 
@@ -87,10 +105,14 @@ item_free(struct locktable_item *li)
 static inline void
 item_release(struct locktable_item *li)
 {
+	pfs_tls_t *tls = pfs_current_tls();
 	void * const a[] = { li };
 
 	PFS_ASSERT(li->li_refcount == 0);
 	PFS_ASSERT(TAILQ_EMPTY(&li->li_rl.rl_waiters));
+
+	if (item_free_to_local(li))
+		return;
 	if (rte_stack_push(g_lt_cache, a, 1))
 		return;
 	item_free(li);
@@ -207,5 +229,16 @@ pfs_locktable_put_rangelock(struct locktable *lt, uint64_t blkno,
 	pthread_mutex_unlock(&lc->lc_lock);
 	if (li) {
 		item_release(li);
+	}
+}
+
+void
+pfs_locktable_thread_exit(void)
+{
+	pfs_tls_t *tls = pfs_current_tls();
+	while (tls->tls_locktable_item_count) {
+		item_free(
+		  tls->tls_locktable_items[--tls->tls_locktable_item_count]
+		);
 	}
 }

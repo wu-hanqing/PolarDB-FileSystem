@@ -83,7 +83,7 @@ rlqentry_release(struct rl_q_entry *rlqe)
 }
 
 void
-pfs_rangelock_exit(void)
+pfs_rangelock_thread_exit(void)
 {
 	pfs_tls_t *current = pfs_current_tls();
 	struct rl_q_entry *rlqe;

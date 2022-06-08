@@ -747,7 +747,7 @@ pfs_spdk_cleanup(void)
         pthread_mutex_unlock(&init_mutex);
         return;
     }
-    pfs_exit_spdk_thread();
+    pfs_spdk_thread_exit();
     g_poll_exit_result = 0;
     g_poll_loop = false;
     rc = pthread_join(g_init_thread_id, NULL);
@@ -762,7 +762,7 @@ pfs_spdk_cleanup(void)
     pthread_mutex_unlock(&init_mutex);
 }
 
-void pfs_exit_spdk_thread(void)
+void pfs_spdk_thread_exit(void)
 {
     struct spdk_thread *spdk_td = spdk_get_thread();
     struct pfs_spdk_thread *pfs_td;

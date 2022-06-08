@@ -91,4 +91,6 @@ int	pfs_printf(pfs_printer_t *pr, const char *fmt, ...);
 
 int pfs_ratecheck(struct timeval *lasttime, const struct timeval *mininterval);
 
+#define arraysize(a)	(sizeof(a) / sizeof(a[0]))
+
 #endif
