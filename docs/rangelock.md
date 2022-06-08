@@ -166,3 +166,23 @@ group_reporting
 全局变量io_atomic控制RangeLock如何起作用。如果是0, 则自动判断设备是否支持512字节对齐写，
 如果支持，RangeLock不起作用，这适合做Chunkserver的存储引擎。
 如果设置为1, 则总是启用，这适合作为普通文件系统使用。
+
+pfs做块IO的函数集中在pfs_blkio_execute这个函数，由这个函数决定是否调用
+pfs_block_lock
+
+```
+static ssize_t
+pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
+    off_t off, ssize_t len, pfs_blkio_fn_t *iofunc, int flags)
+	const size_t dev_bsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
+...
+	/* 这里判断是否是写操作，并且上层是否要求不加锁*/
+	if (pfs_blkio_write_segment == iofunc && !(flags & PFS_IO_NO_LOCK)) {
+		/* 对于io_atomic为0的情况，判断设备是否是大于512的扇区，大于512的
+		 必须使用锁来支持curvebs的512字节协议 */
+		if (block_io_atomic == 0)
+			blk_lock = (dev_bsize > 512);
+		else
+			blk_lock = 1;
+	}
+```
