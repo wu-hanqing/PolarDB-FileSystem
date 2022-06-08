@@ -176,6 +176,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
     off_t off, ssize_t len, pfs_blkio_fn_t *iofunc, int flags)
 	/* 获取块设备扇区大小*/
 	const size_t dev_bsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
+	int blk_lock = 0;
 ...
 	/* 这里判断是否是写操作，并且上层是否要求不加锁*/
 	if (pfs_blkio_write_segment == iofunc && !(flags & PFS_IO_NO_LOCK)) {
@@ -186,4 +187,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 		else
 			blk_lock = 1;
 	}
+	if (blk_lock)
+		pfs_block_lock(mnt, blkno, off, len, &rl, cookie, &cc);
+
 ```
