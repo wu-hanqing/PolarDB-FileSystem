@@ -51,7 +51,7 @@ RangeLock对象支持范围锁，范围锁的参数是(start offset, end offset,
 
    ![Image](pic/rangelock_hashtable.png "range_hashtable")
 
-寻找bucket需要hash函数，可以使用<b>唐纳德·克努特</b>函数函数：
+寻找bucket需要hash函数，可以使用<b>唐纳德·克努特</b>函数：
 ```
 #define GOLDEN_RATIO_64 0x61C8864680B583EBull
 static inline uint32_t hash_64(uint64_t val, unsigned int bits)                 
