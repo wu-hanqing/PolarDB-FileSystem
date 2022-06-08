@@ -266,8 +266,8 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 		albda = pfs_blkio_align(mnt, bda, left, &allen, &iolen);
 
 		if (allen != iolen && albuf == NULL) {
-			albuf = (char *)pfs_dma_malloc("alignbuf", 64,
-				PFS_FRAG_SIZE, socket);
+			albuf = (char *)pfs_dma_malloc("alignbuf",
+				PFS_CACHELINE_SIZE, PFS_FRAG_SIZE, socket);
 			PFS_VERIFY(albuf != NULL);
 		}
 
@@ -327,7 +327,8 @@ pfs_blkio_write(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 		if (cap & DEV_CAP_ZERO) 
 			flags |= PFS_IO_WRITE_ZERO;
 		else if (!(flags & PFS_IO_WRITE_ZERO)) {
-			zerobuf = pfs_dma_zalloc("M_ZERO_BUF", 64, len, socket);
+			zerobuf = pfs_dma_zalloc("M_ZERO_BUF",
+				PFS_CACHELINE_SIZE, len, socket);
 			PFS_VERIFY(zerobuf != NULL);
 			data = (char *)zerobuf;
 			flags |= PFS_IO_DMA_ON;

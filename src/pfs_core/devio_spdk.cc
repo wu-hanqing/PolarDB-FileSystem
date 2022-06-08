@@ -156,7 +156,8 @@ pfs_spdk_dev_alloc_iocb(void)
         tls_free_iocb_num--;
     } else {
         /* allocate it by malloc from global heap */
-        err = pfs_mem_memalign(&p, 64, sizeof(*iocb), M_SPDK_IOCB);
+        err = pfs_mem_memalign(&p, PFS_CACHELINE_SIZE, sizeof(*iocb),
+		M_SPDK_IOCB);
         if (err) {
             pfs_etrace("create iocb failed, %s\n", strerror(err));
             abort();
@@ -201,7 +202,8 @@ pfs_spdk_dev_create_ioq(pfs_dev_t *dev)
     void *p = NULL;
     int err;
 
-    err = pfs_mem_memalign(&p, 64, sizeof(*dkioq), M_SPDK_DEV_IOQ);
+    err = pfs_mem_memalign(&p, PFS_CACHELINE_SIZE, sizeof(*dkioq),
+		M_SPDK_DEV_IOQ);
     if (err) {
         pfs_etrace("create disk ioq failed: %d, %s\n", strerror(err));
         return NULL;
@@ -608,8 +610,8 @@ pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
     if (!(io->io_flags & IO_DMABUF)) {
-        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, 64, io->io_len,
-            SOCKET_ID_ANY);
+        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, PFS_CACHELINE_SIZE,
+		io->io_len, SOCKET_ID_ANY);
         if (iocb->cb_dma_buf == NULL) {
             struct timeval tv = error_time_interval;
             if (pfs_ratecheck(&last, &tv)) {
@@ -680,8 +682,8 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
     if (!(io->io_flags & IO_DMABUF) && !(io->io_flags & IO_ZERO)) {
-        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, 64, io->io_len,
-            SOCKET_ID_ANY);
+        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, PFS_CACHELINE_SIZE,
+		io->io_len, SOCKET_ID_ANY);
         if (iocb->cb_dma_buf == NULL) {
             struct timeval tv = error_time_interval;
             if (pfs_ratecheck(&last, &tv)) {

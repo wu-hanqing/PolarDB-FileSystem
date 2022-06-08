@@ -130,6 +130,8 @@ typedef int64_t			pfs_ino_t;	/* inode number */
 		a = b;						\
 } while (0)
 
+#define PFS_CACHELINE_SIZE 64
+
 void	pfs_abort(const char *action, const char *cond, const char *func,
 	    int line);
 

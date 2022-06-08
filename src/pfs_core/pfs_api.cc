@@ -461,7 +461,8 @@ pfs_file_pzero(pfs_file_t *file, size_t len, off_t off)
  	ssize_t wlen = 0;
 	int err = 0;
 
-	buf = (char *)pfs_dma_zalloc("fill_zero", 64, buflen, SOCKET_ID_ANY);
+	buf = (char *)pfs_dma_zalloc("fill_zero", PFS_CACHELINE_SIZE, buflen,
+		SOCKET_ID_ANY);
 	if (buf == NULL) {
 		return -ENOMEM;
 	}

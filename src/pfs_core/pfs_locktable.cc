@@ -48,7 +48,7 @@ LIST_HEAD(locktable_list, locktable_item);
 struct locktable_chain {
 	pthread_mutex_t lc_lock;
 	struct locktable_list lc_list;
-} __attribute__((aligned(64)));
+} __attribute__((aligned(PFS_CACHELINE_SIZE)));
  
 struct locktable {
 	struct locktable_chain lt_chains[LOCKTABLE_SIZE];
@@ -85,7 +85,8 @@ item_alloc(void)
 
 	if ((li = item_alloc_from_local()) == NULL &&
 	    !rte_stack_pop(g_lt_cache, (void **)&li, 1)) {
-		if (pfs_mem_memalign((void **)&li, 64, sizeof(*li), M_LOCKITEM)) {
+		if (pfs_mem_memalign((void **)&li, PFS_CACHELINE_SIZE,
+			sizeof(*li), M_LOCKITEM)) {
 			return NULL;
 		}
 		pfs_rangelock_init(&li->li_rl);
@@ -166,7 +167,8 @@ pfs_locktable_init(void)
 
 	pthread_once(&once_control, item_cache_init);
 
-	if (pfs_mem_memalign((void **)&lt, 64, sizeof(*lt), M_LOCKTABLE)) {
+	if (pfs_mem_memalign((void **)&lt, PFS_CACHELINE_SIZE, sizeof(*lt),
+		M_LOCKTABLE)) {
 		return NULL;
 	}
 	for (i = 0; i < LOCKTABLE_SIZE; ++i) {
