@@ -162,6 +162,7 @@ group_reporting
 在关闭和打开RangeLock的情况下，都是平均112K IOPS左右。 几乎看不出对性能的影响。
 
 6. 配置
+
 全局变量io_atomic控制RangeLock如何起作用。如果是0, 则自动判断设备是否支持512字节对齐写，
 如果支持，RangeLock不起作用，这适合做Chunkserver的存储引擎。
 如果设置为1, 则总是启用，这适合作为普通文件系统使用。
