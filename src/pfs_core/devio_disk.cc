@@ -28,6 +28,7 @@
 #include "pfs_option.h"
 
 #define DISK_NR_EVENTS		(16)
+#define io_buf 			io_iov[0].iov_base
 
 enum {
 	DISKTRIM_ENABLE		= 1,

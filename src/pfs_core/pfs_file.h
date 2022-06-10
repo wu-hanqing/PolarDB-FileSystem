@@ -84,19 +84,19 @@ int 	pfs_file_open_impl(pfs_mount_t *mnt, pfs_ino_t ino, int flags,
 int	pfs_file_close(pfs_file_t *file);
 int	pfs_file_close_locked(pfs_file_t *file);
 int	pfs_file_xstat(pfs_file_t *file, struct stat *st);
-ssize_t	pfs_file_xpread(pfs_file_t *file, void *buf, size_t len, off_t offset,
-	int is_dma);
-ssize_t	pfs_file_xpwrite(pfs_file_t *file, const void *buf, size_t len,
-	off_t offset, int is_dma);
+ssize_t	pfs_file_xpread(pfs_file_t *file, const struct iovec *iov, int iovcnt,
+	size_t len, off_t offset, int is_dma);
+ssize_t	pfs_file_xpwrite(pfs_file_t *file, const struct iovec *iov, int iovcnt,
+	size_t len, off_t offset, int is_dma);
 int	pfs_file_xftruncate(pfs_file_t *file, off_t len);
 int	pfs_file_xfallocate(pfs_file_t *file, off_t offset, size_t len, int mode);
 off_t	pfs_file_xlseek(pfs_file_t *file, off_t offset, int whence);
 off_t	pfs_file_lseek(pfs_file_t *file, off_t offset, int whence);
 int	pfs_file_xmap(pfs_file_t *file, fmap_entry_t *fmapv, int count);
 ssize_t	pfs_file_size(pfs_file_t *file, uint64_t btime);
-ssize_t pfs_file_read(pfs_inode_t *in, void *buf, size_t len, off_t offset,
+ssize_t pfs_file_read(pfs_inode_t *in, const struct iovec *iov, int iovcnt, size_t len, off_t offset,
     bool locked, uint64_t btime, int is_dma);
-ssize_t pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
+ssize_t pfs_file_write(pfs_inode_t *in, const struct iovec *iov, int iovcnt, size_t len, off_t *off,
     bool locked, uint64_t btime, int is_dma);
 ssize_t pfs_file_pread(pfs_file_t *file, void *buf, size_t len, off_t offset, int is_dma);
 ssize_t pfs_file_pwrite(pfs_file_t *file, const void *buf, size_t len, off_t offset, int is_dma);

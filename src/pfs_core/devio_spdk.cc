@@ -45,6 +45,7 @@
 #include "pfs_util.h"
 
 #define BUF_TYPE "pfs_iobuf"
+#define io_buf io_iov[0].iov_base
 
 #define timespecadd(tsp, usp, vsp)                              \
     do {                                                        \
@@ -600,6 +601,18 @@ pfs_spdk_dev_io_done(struct spdk_bdev_io *bdev_io,
     spdk_bdev_free_io(bdev_io);
 }
 
+#if 0
+static inline size_t
+iovec_bytes(struct iovec *iov, int cnt)
+{
+	size_t *total = 0;
+	while (cnt-- > 0) {
+		total += iov[cnt].iov_len;
+	}
+	return total;
+}
+#endif
+
 static int
 pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     pfs_spdk_iocb_t *iocb)
@@ -611,7 +624,7 @@ pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
 
     if (!(io->io_flags & IO_DMABUF)) {
         iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, PFS_CACHELINE_SIZE,
-		io->io_len, SOCKET_ID_ANY);
+            io->io_len, SOCKET_ID_ANY);
         if (iocb->cb_dma_buf == NULL) {
             struct timeval tv = error_time_interval;
             if (pfs_ratecheck(&last, &tv)) {
@@ -620,7 +633,7 @@ pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
             return -ENOBUFS;
         }
     } else {
-        iocb->cb_dma_buf = io->io_buf;
+        iocb->cb_dma_buf = NULL;
     }
     iocb->cb_io_done = pfs_spdk_dev_io_fini_pread;
     return 0;
@@ -636,8 +649,13 @@ pfs_spdk_dev_io_pread(void *arg)
 
     dkdev = iocb->cb_dev;
     io = iocb->cb_pfs_io;
-    rc = spdk_bdev_read(dkdev->dk_desc, dkdev->dk_ioch, iocb->cb_dma_buf,
-        io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
+    if (iocb->cb_dma_buf) {
+        rc = spdk_bdev_read(dkdev->dk_desc, dkdev->dk_ioch, iocb->cb_dma_buf,
+            io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
+    } else {
+        rc = spdk_bdev_readv(dkdev->dk_desc, dkdev->dk_ioch, io->io_iov,
+            io->io_iovcnt, io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
+    }
     if (rc == ENOMEM) {
         iocb->cb_bdev_io_wait.bdev = dkdev->dk_bdev;
         iocb->cb_bdev_io_wait.cb_fn = pfs_spdk_dev_io_pread;
@@ -647,10 +665,40 @@ pfs_spdk_dev_io_pread(void *arg)
     } else if (rc) {
         pfs_etrace("%s error while reading from bdev: %d\n",
             spdk_strerror(-rc), rc);
-        if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf) {
+        if (iocb->cb_dma_buf) {
             pfs_dma_free(iocb->cb_dma_buf);
         }
         abort();
+    }
+}
+
+static void copy_from_dma_buffer(struct iovec *iovec, const void *_dma, size_t len)
+{
+    const char *dma = (const char *)_dma;
+    int i = 0;
+    int cpbytes = 0;
+
+    while (len > 0) {
+        cpbytes = RTE_MIN(iovec[i].iov_len, len);
+        rte_memcpy(iovec[i].iov_base, dma, cpbytes);
+        dma += cpbytes;
+        len -= cpbytes;
+        i++;
+    }
+}
+
+static void copy_to_dma_buffer(void *_dma, struct iovec *iovec, size_t len)
+{
+    char *dma = (char *)_dma;
+    int i = 0;
+    int cpbytes = 0;
+
+    while (len > 0) {
+        cpbytes = RTE_MIN(iovec[i].iov_len, len);
+        rte_memcpy(dma, iovec[i].iov_base, cpbytes);
+        dma += cpbytes;
+        len -= cpbytes;
+        i++;
     }
 }
 
@@ -661,12 +709,12 @@ pfs_spdk_dev_io_fini_pread(void *arg)
     pfs_devio_t *io = iocb->cb_pfs_io;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)io->io_queue;
     if (io->io_error == 0 && !(io->io_flags & IO_DMABUF)) {
-        rte_memcpy(io->io_buf, iocb->cb_dma_buf, io->io_len);
+        copy_from_dma_buffer(io->io_iov, iocb->cb_dma_buf, io->io_len);
     }
     pfs_spdk_dev_deq_inflight_io(dkioq, io);
     pfs_spdk_dev_enq_complete_io(dkioq, io);
 
-    if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf)
+    if (iocb->cb_dma_buf)
         pfs_dma_free(iocb->cb_dma_buf);
     pfs_spdk_dev_free_iocb(iocb);
 }
@@ -691,9 +739,9 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
             }
             return -ENOBUFS;
         }
-        rte_memcpy(iocb->cb_dma_buf, io->io_buf, io->io_len);
+        copy_to_dma_buffer(iocb->cb_dma_buf, io->io_iov, io->io_len);
     } else {
-        iocb->cb_dma_buf = io->io_buf;
+        iocb->cb_dma_buf = NULL;
     }
     iocb->cb_io_done = pfs_spdk_dev_io_fini_pwrite;
     return 0;
@@ -709,12 +757,16 @@ pfs_spdk_dev_io_pwrite(void *arg)
 
     dkdev = iocb->cb_dev;
     io = iocb->cb_pfs_io;
-    if (io->io_flags & IO_ZERO)
+    if (io->io_flags & IO_ZERO) {
     	rc = spdk_bdev_write_zeroes(dkdev->dk_desc, dkdev->dk_ioch,
-		io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
-    else
+            io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
+    } else if (iocb->cb_dma_buf) {
     	rc = spdk_bdev_write(dkdev->dk_desc, dkdev->dk_ioch, iocb->cb_dma_buf,
         	io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
+    } else {
+	    rc = spdk_bdev_writev(dkdev->dk_desc, dkdev->dk_ioch, io->io_iov,
+            io->io_iovcnt, io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
+    }
     if (rc == ENOMEM) {
         iocb->cb_bdev_io_wait.bdev = dkdev->dk_bdev;
         iocb->cb_bdev_io_wait.cb_fn = pfs_spdk_dev_io_pwrite;
@@ -724,7 +776,7 @@ pfs_spdk_dev_io_pwrite(void *arg)
     } else if (rc) {
         pfs_etrace("%s error while writting to bdev: %d, ioflags=%x",
             spdk_strerror(-rc), rc, io->io_flags);
-        if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf)
+        if (iocb->cb_dma_buf)
             pfs_dma_free(iocb->cb_dma_buf);
         abort();
     }
@@ -739,7 +791,7 @@ pfs_spdk_dev_io_fini_pwrite(void *arg)
     pfs_spdk_dev_deq_inflight_io(dkioq, io);
     pfs_spdk_dev_enq_complete_io(dkioq, io);
 
-    if (iocb->cb_dma_buf != io->io_buf && iocb->cb_dma_buf)
+    if (iocb->cb_dma_buf)
         pfs_dma_free(iocb->cb_dma_buf);
     pfs_spdk_dev_free_iocb(iocb);
 }

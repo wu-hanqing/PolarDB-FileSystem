@@ -26,9 +26,11 @@
 #include "pfs_rangelock.h"                                                      
 #include "pfs_locktable.h"
 #include "pfs_option.h"
+#include "pfs_util.h"
 
-typedef int pfs_blkio_fn_t(int, pfs_bda_t, size_t, char*, pfs_bda_t, size_t,
-	char*, int);
+typedef int pfs_blkio_fn_t(
+    int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
+    pfs_bda_t bda, size_t len, struct iovec *iov, int iovcnt, int ioflags);
 
 /* 
  * 0: block mode (chunk server)
@@ -121,7 +123,7 @@ pfs_blkio_align(pfs_mount_t *mnt, pfs_bda_t data_bda, size_t data_len,
 
 static int
 pfs_blkio_read_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
-    pfs_bda_t bda, size_t len, char *buf, int ioflags)
+    pfs_bda_t bda, size_t len, struct iovec *iov, int iovcnt, int ioflags)
 {
 	int err;
 
@@ -132,22 +134,24 @@ pfs_blkio_read_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 		err = pfsdev_pread_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
 		if (err < 0)
 			return err;
+		char *buf = (char *)iov[0].iov_base;
 		rte_memcpy(buf, &albuf[bda - albda], len);
 		return 0;
 	}
 
 	PFS_ASSERT(albda == bda);
-	err = pfsdev_pread_flags(iodesc, buf, len, bda, ioflags);
+	err = pfsdev_preadv_flags(iodesc, iov, iovcnt, len, bda, ioflags);
 	return err;
 }
 
 static int
 pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
-    pfs_bda_t bda, size_t len, char *buf, int ioflags)
+    pfs_bda_t bda, size_t len, struct iovec *iov, int iovcnt, int ioflags)
 {
 	int err;
 
 	if (allen != len) {
+		char *buf = (char *)iov[0].iov_base;
 		PFS_ASSERT(albuf != NULL);
 		PFS_INC_COUNTER(STAT_PFS_UnAligned_W_4K);
 		err = pfsdev_pread_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
@@ -162,7 +166,7 @@ pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 	}
 
 	PFS_ASSERT(albda == bda);
-	err = pfsdev_pwrite_flags(iodesc, buf, len, bda, ioflags);
+	err = pfsdev_pwritev_flags(iodesc, iov, iovcnt, len, bda, ioflags);
 	return err;
 }
 
@@ -228,7 +232,7 @@ pfs_block_unlock(pfs_mount_t *mnt, uint64_t blkno,
 }
 
 static ssize_t
-pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
+pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t blkno,
     off_t off, ssize_t len, pfs_blkio_fn_t *iofunc, int flags)
 {
 	char *albuf = NULL;
@@ -242,7 +246,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 	void		*cookie[3];
 	int		cc = 0;
 	int		blk_lock = 0;
-	
+
 	err = 0;
 	ioflags = (len >= 2*PFS_FRAG_SIZE) ? IO_NOWAIT : 0;
 	if (flags & PFS_IO_DMA_ON)
@@ -272,12 +276,13 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 		}
 
 		err = (*iofunc)(mnt->mnt_ioch_desc, albda, allen, albuf, bda,
-		    iolen, data, ioflags);
+		    iolen, *iov, *iovcnt, ioflags);
 		if (err < 0)
 			break;
 
-		if (data)
-			data += iolen;
+		if (!(ioflags & IO_ZERO))
+			forward_iovec_iter(iov, iovcnt, iolen);
+
 		off += iolen;
 		left -= iolen;
 	}
@@ -302,39 +307,47 @@ pfs_blkio_execute(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
 }
 
 ssize_t
-pfs_blkio_read(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
-    off_t off, ssize_t len, int flags)
+pfs_blkio_read(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
+    pfs_blkno_t blkno, off_t off, ssize_t len, int flags)
 {
 	ssize_t iolen = 0;
 
 	PFS_ASSERT(off + len <= mnt->mnt_blksize);
-	iolen = pfs_blkio_execute(mnt, data, blkno, off, len,
+	iolen = pfs_blkio_execute(mnt, iov, iovcnt, blkno, off, len,
 	    pfs_blkio_read_segment, flags);
 	return iolen;
 }
 
 ssize_t
-pfs_blkio_write(pfs_mount_t *mnt, char *data, pfs_blkno_t blkno,
-    off_t off, ssize_t len, int flags)
+pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
+    pfs_blkno_t blkno, off_t off, ssize_t len, int flags)
 {
 	ssize_t iolen = 0;
 	void *zerobuf = NULL;
 	int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 	int cap = pfsdev_get_cap(mnt->mnt_ioch_desc);
+	struct iovec tmpiov = {0, 0}, *tmpiovp;
+	int tmpiovcnt;
 
 	PFS_ASSERT(off + len <= mnt->mnt_blksize);
-	if (data == NULL) {
-		if (cap & DEV_CAP_ZERO) 
+	if (iov == NULL || *iov == NULL) {
+		if (cap & DEV_CAP_ZERO)
 			flags |= PFS_IO_WRITE_ZERO;
 		else if (!(flags & PFS_IO_WRITE_ZERO)) {
 			zerobuf = pfs_dma_zalloc("M_ZERO_BUF",
 				PFS_CACHELINE_SIZE, len, socket);
 			PFS_VERIFY(zerobuf != NULL);
-			data = (char *)zerobuf;
+			tmpiov.iov_base = zerobuf;
+			tmpiov.iov_len = len;
 			flags |= PFS_IO_DMA_ON;
 		}
+		tmpiovp = &tmpiov;
+		iov = &tmpiovp;
+		tmpiovcnt = 1;
+		iovcnt = &tmpiovcnt;
 	}
-	iolen = pfs_blkio_execute(mnt, data, blkno, off, len,
+
+	iolen = pfs_blkio_execute(mnt, iov, iovcnt, blkno, off, len,
 	    pfs_blkio_write_segment, flags);
 
 	if (zerobuf) {

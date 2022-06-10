@@ -17,6 +17,7 @@
 #define	_PFS_UTIL_H_
 
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <stdint.h>
 #include <stdarg.h>
 
@@ -92,5 +93,32 @@ int	pfs_printf(pfs_printer_t *pr, const char *fmt, ...);
 int pfs_ratecheck(struct timeval *lasttime, const struct timeval *mininterval);
 
 #define arraysize(a)	(sizeof(a) / sizeof(a[0]))
+
+static inline void
+forward_iovec_iter(struct iovec **it, int *iovcnt, int len)
+{
+	while (len > 0) {
+		if ((*it)->iov_len <= len) {
+			len -= (*it)->iov_len;
+			*iovcnt = *iovcnt - 1;
+			it++;
+		} else {
+			(*it)->iov_base = ((char *)(*it)->iov_base) + len;
+			(*it)->iov_len -= len;
+			len = 0;
+			break;
+		}
+	}
+}
+
+static inline size_t
+iovec_bytes(const struct iovec *iov, int cnt)
+{
+    size_t total = 0;
+    while (cnt-- > 0) {
+        total += iov[cnt].iov_len;
+    }
+    return total;
+}
 
 #endif

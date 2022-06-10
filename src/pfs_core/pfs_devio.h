@@ -17,6 +17,7 @@
 #define _PFS_DEVIO_H_
 
 #include <sys/queue.h>
+#include <sys/uio.h>
 #include <libaio.h>
 
 #include <stdint.h>
@@ -75,6 +76,8 @@ enum {
 	IO_ZERO		= 0x0040
 };
 
+#define PFSDEV_IOV_MAX	128
+
 typedef struct pfs_dev pfs_dev_t;
 typedef struct pfs_devio pfs_devio_t;
 typedef struct pfs_ioq pfs_ioq_t;
@@ -87,7 +90,8 @@ typedef struct pfs_devio {
 	};
 	pfs_dev_t 	*io_dev;
 	pfs_ioq_t	*io_queue;
-	void		*io_buf;
+	struct iovec 	io_iov[PFSDEV_IOV_MAX];
+	int		io_iovcnt;
 	uint64_t	io_len;
 	uint64_t	io_bda;
 	int		io_op;
@@ -160,6 +164,10 @@ int	pfsdev_flush(int devi);
 int	pfsdev_pread_flags(int devi, void *buf, size_t len, uint64_t bda,
 	    int flags);
 int	pfsdev_pwrite_flags(int devi, void *buf, size_t len, uint64_t bda,
+	    int flags);
+int	pfsdev_preadv_flags(int devi, struct iovec *iov, int iovcnt, size_t len, uint64_t bda,
+	    int flags);
+int	pfsdev_pwritev_flags(int devi, struct iovec *iov, int iovcnt, size_t len, uint64_t bda,
 	    int flags);
 int	pfsdev_wait_io(int devi);
 int	pfsdev_get_socket_id(int devi);

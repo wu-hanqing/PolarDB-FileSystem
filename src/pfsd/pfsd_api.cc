@@ -288,14 +288,17 @@ _pfsd_pread_svr(pfs_mount_t *mnt, pfs_inode_t *in, void *buf, size_t len,
     off_t offset, uint64_t btime)
 {
 	ssize_t rlen = -1;
+	struct iovec iov;
 
 	if (len == 0)
 		return 0;
 
 	int err;
+	iov.iov_base = buf;
+	iov.iov_len = len;
 	tls_read_begin(mnt);
 	pfs_inode_lock(in);
-	rlen = pfs_file_read(in, buf, len, offset, true, btime, PFS_IO_DMA_OFF);
+	rlen = pfs_file_read(in, &iov, 1, len, offset, true, btime, PFS_IO_DMA_OFF);
 	err = rlen < 0 ? rlen : 0;
 	pfs_inode_unlock(in);
 	tls_read_end(err);
@@ -359,13 +362,16 @@ pfsd_file_xpwrite(pfs_mount_t *mnt, pfs_inode_t *in, int flags, const void *buf,
 	ssize_t wlen;
 	int err;
 	off_t off2 = off;
+	struct iovec iov;
 
 	if (len <= 0)
 		return 0;
 
+	iov.iov_base = (void *)buf;
+	iov.iov_len = len;
 	MNT_STAT_BEGIN();
 	pfs_inode_lock(in);
-	wlen = pfs_file_write(in, buf, len, &off2, true, btime, PFS_IO_DMA_OFF);
+	wlen = pfs_file_write(in, &iov, 1, len, &off2, true, btime, PFS_IO_DMA_OFF);
 	err = wlen < 0 ? wlen : 0;
 	pfs_inode_unlock(in);
 

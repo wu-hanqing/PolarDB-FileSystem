@@ -30,6 +30,8 @@
 #include "pfs_stat.h"
 #include "pfs_config.h"
 
+#define io_buf io_iov[0].iov_base
+
 #define PFS_MAX_CACHED_DEVIO 128
 
 uint64_t		pfs_devs_epoch;
@@ -47,7 +49,7 @@ extern char pfs_trace_pbdname[PFS_MAX_PBDLEN];
 extern struct pfs_devops pfs_diskdev_ops;
 extern struct pfs_devops pfs_spdk_dev_ops;
 static struct pfs_devops *pfs_dev_ops[] = {
-	&pfs_diskdev_ops,
+//	&pfs_diskdev_ops,
 	&pfs_spdk_dev_ops,
 	NULL,
 };
@@ -392,14 +394,19 @@ pfs_io_submit(pfs_devio_t *io)
 }
 
 static pfs_devio_t *
-pfs_io_create(pfs_dev_t *dev, int op, void *buf, size_t len, uint64_t bda,
+pfs_io_create(pfs_dev_t *dev, int op, struct iovec *iov, int iovcnt, size_t len, uint64_t bda,
     int flags)
 {
 	pfs_devio_t *io;
 
 	io = pfs_io_alloc();
 	io->io_dev = dev;
-	io->io_buf = buf;
+	if (iov) {
+		memcpy(io->io_iov, iov, sizeof(struct iovec) * iovcnt);
+		io->io_iovcnt = iovcnt;
+	} else {
+		io->io_iovcnt = 0;
+	}
 	io->io_len = len;
 	io->io_bda = bda;
 	io->io_op = op;
@@ -548,7 +555,7 @@ pfsdev_trim(int devi, uint64_t bda)
 	PFS_ASSERT(dev != NULL && dev_writable(dev));
 	PFS_ASSERT((bda % PFS_BLOCK_SIZE) == 0);
 
-	io = pfs_io_create(dev, PFSDEV_REQ_TRIM, NULL, PFSDEV_TRIMSIZE, bda,
+	io = pfs_io_create(dev, PFSDEV_REQ_TRIM, NULL, 0, PFSDEV_TRIMSIZE, bda,
 	    IO_WAIT);
 	PFS_VERIFY(io != NULL);
 
@@ -566,14 +573,14 @@ pfsdev_flush(int devi)
 	PFS_ASSERT(dev != NULL);
 	if (!dev->d_ops->dop_has_cache(dev))
 		return 0;
-	io = pfs_io_create(dev, PFSDEV_REQ_FLUSH, NULL, 0, 0, IO_WAIT);
+	io = pfs_io_create(dev, PFSDEV_REQ_FLUSH, NULL, 0, 0, 0, IO_WAIT);
 	PFS_VERIFY(io != NULL);
 
 	return pfsdev_do_io(dev, io);
 }
 
 int
-pfsdev_pread_flags(int devi, void *buf, size_t len, uint64_t bda, int flags)
+pfsdev_preadv_flags(int devi, struct iovec *iov, int iovcnt, size_t len, uint64_t bda, int flags)
 {
 	pfs_dev_t *dev;
 	pfs_devio_t *io;
@@ -586,14 +593,25 @@ pfsdev_pread_flags(int devi, void *buf, size_t len, uint64_t bda, int flags)
 	PFS_ASSERT((bda & (bsize - 1)) == 0);
 	PFS_ASSERT(len > 0 && (len & (bsize-1)) == 0);
 
-	io = pfs_io_create(dev, PFSDEV_REQ_RD, buf, len, bda, flags);
+	io = pfs_io_create(dev, PFSDEV_REQ_RD, iov, iovcnt, len, bda, flags);
 	PFS_VERIFY(io != NULL);
 
 	return pfsdev_do_io(dev, io);
 }
 
 int
-pfsdev_pwrite_flags(int devi, void *buf, size_t len, uint64_t bda, int flags)
+pfsdev_pread_flags(int devi, void *buf, size_t len, uint64_t bda, int flags)
+{
+	struct iovec iov;
+
+	iov.iov_base = buf;
+	iov.iov_len = len;
+	return pfsdev_preadv_flags(devi, &iov, 1, len, bda, flags);
+}
+
+int
+pfsdev_pwritev_flags(int devi, struct iovec *iov, int iovcnt,
+	size_t len, uint64_t bda, int flags)
 {
 	pfs_dev_t *dev;
 	pfs_devio_t *io;
@@ -606,10 +624,20 @@ pfsdev_pwrite_flags(int devi, void *buf, size_t len, uint64_t bda, int flags)
 	PFS_ASSERT((bda & (bsize - 1)) == 0);
 	PFS_ASSERT(len > 0 && (len & (bsize-1)) == 0);
 
-	io = pfs_io_create(dev, PFSDEV_REQ_WR, buf, len, bda, flags);
+	io = pfs_io_create(dev, PFSDEV_REQ_WR, iov, iovcnt, len, bda, flags);
 	PFS_VERIFY(io != NULL);
 
 	return pfsdev_do_io(dev, io);
+}
+
+int
+pfsdev_pwrite_flags(int devi, void *buf, size_t len, uint64_t bda, int flags)
+{
+	struct iovec iov;
+
+	iov.iov_base = buf;
+	iov.iov_len = len;
+	return pfsdev_pwritev_flags(devi, &iov, 1, len, bda, flags);
 }
 
 int

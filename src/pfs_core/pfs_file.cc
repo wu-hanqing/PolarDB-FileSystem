@@ -199,6 +199,8 @@ static __thread int	fdtbl_rdlock_count;
 int64_t file_shrink_size = (10L << 30);
 PFS_OPTION_REG(file_shrink_size, pfs_check_ival_shrink_size);
 
+#define TMP_VEC_LEN 128
+
 /**
  * We create a forward linked list to save the closed fd.
  *
@@ -583,11 +585,24 @@ out:
 	return err;
 }
 
-ssize_t
-pfs_file_read(pfs_inode_t *in, void *buf, size_t len, off_t offset,
-    bool locked, uint64_t btime, int flags)
+static void
+iovec_memset(struct iovec *iov, char c, int len)
 {
-	char		*data = (char *)buf;
+	int i = 0;
+	int tmp = 0;
+
+	while (len > 0) {
+		tmp = RTE_MIN(iov[i].iov_len, len);
+		memset(iov[i].iov_base, c, tmp);
+		len -= tmp;
+		i++;
+	}
+}
+
+ssize_t
+pfs_file_read(pfs_inode_t *in, const struct iovec *_iov, int iovcnt, 
+	size_t len, off_t offset, bool locked, uint64_t btime, int flags)
+{
 	pfs_mount_t	*mnt = in->in_mnt;
 	uint64_t	blksize = mnt->mnt_blksize;
 	ssize_t		rlen, rsum, left;
@@ -596,6 +611,25 @@ pfs_file_read(pfs_inode_t *in, void *buf, size_t len, off_t offset,
 	off_t		blkoff, dbhoff;	/* dblk hole offset */
 	size_t		fsize;
 	int 		err;
+	struct iovec iov_space[TMP_VEC_LEN], *iov = NULL, *iov_iter = NULL;
+
+	if (iovcnt > TMP_VEC_LEN) {
+		if (locked)
+			pfs_inode_unlock(in);
+		iov = (struct iovec *) malloc(sizeof(struct iovec) * iovcnt);
+		if (iov == NULL) {
+			pfs_etrace("can not allocate iov");
+			if (locked)
+				pfs_inode_lock(in);
+			return -ENOMEM;
+		}
+		memcpy(iov, _iov, sizeof(struct iovec) * iovcnt);
+		if (locked)
+			pfs_inode_lock(in);
+	} else {
+		iov = iov_space;
+		memcpy(iov, _iov, sizeof(struct iovec) * iovcnt);
+	}
 
 	if (locked) {
 		err = pfs_inode_sync_first(in, PFS_INODET_FILE, btime, false);
@@ -610,6 +644,7 @@ pfs_file_read(pfs_inode_t *in, void *buf, size_t len, off_t offset,
 	else if ((ssize_t)(offset + len) >= (ssize_t)fsize)
 		len = fsize - offset;
 
+	iov_iter = iov;
 	for (rsum = 0; rsum < (ssize_t)len; rsum += rlen, offset += rlen) {
 		left = len - rsum;
 		blkid = fblkid(offset, blksize);
@@ -628,6 +663,8 @@ pfs_file_read(pfs_inode_t *in, void *buf, size_t len, off_t offset,
 			 */
 			pfs_etrace("blkid %llu mapps to %lld\n in read",
 			    blkid, dblkno);
+			if (iov != iov_space)
+				free(iov);
 			ERR_RETVAL(EAGAIN);
 		}
 		if (locked)
@@ -642,25 +679,35 @@ pfs_file_read(pfs_inode_t *in, void *buf, size_t len, off_t offset,
 			PFS_ASSERT(dblkno == 0 ||
 			    pfs_version_has_features(mnt, PFS_FEATURE_BLKHOLE));
 			rlen = MIN(blksize - blkoff, left);
-			memset(data+rsum, 0, rlen);
+			iovec_memset(iov_iter, 0, rlen);
+			forward_iovec_iter(&iov_iter, &iovcnt, rlen);
 		} else {
 			rlen = MIN(MIN(dbhoff, blksize) - blkoff, left);
-			rlen = pfs_blkio_read(mnt, data+rsum, dblkno,
+			rlen = pfs_blkio_read(mnt, &iov_iter, &iovcnt, dblkno,
 			    blkoff, rlen, flags);
 		}
 
 		if (locked)
 			pfs_inode_lock(in);
-		if (rlen < 0)
+		if (rlen < 0) {
+			if (iov != iov_space)
+				free(iov);
 			return rlen;
+		}
+
 		//If we do not need further read then we do not need sync.
 		if (locked && ((rsum + rlen) < (ssize_t)len)) {
 			err = pfs_inode_sync(in, PFS_INODET_FILE, btime, false);
-			if (err < 0)
+			if (err < 0) {
+				if (iov != iov_space)
+					free(iov);
 				return err;
+			}
 		}
 	}
 
+	if (iov != iov_space)
+		free(iov);
 	return rsum;
 }
 
@@ -678,10 +725,10 @@ pfs_file_read(pfs_inode_t *in, void *buf, size_t len, off_t offset,
  * journal.
  */
 ssize_t
-pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
-    bool locked, uint64_t btime, int flags)
+pfs_file_write(pfs_inode_t *in, const struct iovec *_iov, int iovcnt,
+    size_t len, off_t *off, bool locked, uint64_t btime, int flags)
 {
-	char		*data = (char *)buf, *pdata;
+	PFS_ASSERT(_iov != NULL || (flags & PFS_IO_WRITE_ZERO));
 	pfs_mount_t	*mnt = in->in_mnt;
 	uint64_t	blksize = mnt->mnt_blksize;
 	int		err = 0;
@@ -690,11 +737,34 @@ pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 	pfs_blkid_t	blkid;
 	off_t		offset, blkoff, dbhoff, woff;
 	int		filling_hole = 0;
+	struct iovec iov_space[TMP_VEC_LEN], *iov = NULL, *iov_iter = NULL,
+		 *iov_iter2 = NULL;
+
+	if (iovcnt > TMP_VEC_LEN) {
+		if (locked)
+			pfs_inode_unlock(in);
+		iov = (struct iovec *)malloc(sizeof(struct iovec) * iovcnt);
+		if (iov == NULL) {
+			pfs_etrace("can not allocate iov");
+			if (locked)
+				pfs_inode_lock(in);
+			return -ENOMEM;
+		}
+		memcpy(iov, _iov, sizeof(struct iovec) * iovcnt);
+		if (locked)
+			pfs_inode_lock(in);
+	} else {
+		iov = iov_space;
+		memcpy(iov, _iov, sizeof(struct iovec) * iovcnt);
+	}
 
 	if (locked) {
 		err = pfs_inode_sync_first(in, PFS_INODET_FILE, btime, false);
-		if (err)
+		if (err) {
+			if (iov != iov_space)
+				free(iov);
 			return err;
+		}
 	} else {
 		flags |= PFS_IO_NO_LOCK;
 	}
@@ -704,6 +774,7 @@ pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 	if (offset == OFFSET_FILE_SIZE)
 		offset = (off_t)fsize;
 	err = 0;
+	iov_iter = iov;
 	for (wsum = 0; wsum < (ssize_t)len; wsum += wlen, offset += wlen) {
 		left = len - wsum;
 		blkid = fblkid(offset, blksize);
@@ -719,9 +790,11 @@ pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 			 */
 			pfs_etrace("blkid %llu mapps to %lld in write\n",
 			    blkid, dblkno);
+			if (iov != iov_space)
+				free(iov);
 			ERR_RETVAL(EAGAIN);
 		}
-
+		iov_iter2 = NULL;
 		filling_hole = 0;
 		if (dbhoff < blkoff) {
 			/*
@@ -735,7 +808,6 @@ pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 			 */
 			woff = dbhoff;
 			wlen = blkoff - dbhoff;
-			pdata = NULL;
 			dbhoff = blkoff;
 			filling_hole = 1;
 			pfs_inode_writemodify_shrink_dblk_hole(in, blkid,
@@ -743,10 +815,8 @@ pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 		} else {
 			woff = blkoff;
 			wlen = MIN(blksize - blkoff, left);
-			if (data)
-				pdata = data + wsum;
-			else
-				pdata = NULL;
+			if (!(flags & PFS_IO_WRITE_ZERO))
+				iov_iter2 = iov_iter;
 			if (dbhoff < blkoff + wlen) {
 				dbhoff = blkoff + wlen;
 				pfs_inode_writemodify_shrink_dblk_hole(in, blkid,
@@ -766,25 +836,33 @@ pfs_file_write(pfs_inode_t *in, const void *buf, size_t len, off_t *off,
 		if (locked)
 			pfs_inode_unlock(in);
 
-		wlen = pfs_blkio_write(mnt, pdata, dblkno, woff, wlen, flags);
+		wlen = pfs_blkio_write(mnt, &iov_iter2, &iovcnt, dblkno, woff, wlen, flags);
 
 		if (locked)
 			pfs_inode_lock(in);
 
-		if (wlen < 0)
+		if (wlen < 0) {
+			if (iov != iov_space)
+				free(iov);
 			return wlen;
+		}
 		/*
 		 * Filling block hole shouldn't update offset.
 		 */
-		if (filling_hole && pdata == NULL)
+		if (filling_hole)
 			wlen = 0;
 		if (locked) {
 			err = pfs_inode_sync(in, PFS_INODET_FILE, btime, false);
-			if (err)
+			if (err) {
+				if (iov != iov_space)
+					free(iov);
 				return err;
+			}
 		}
 	}
 	*off = offset;
+	if (iov != iov_space)
+		free(iov);
 	return wsum;
 }
 
@@ -1027,7 +1105,8 @@ pfs_file_xftruncate(pfs_file_t *file, off_t len)
 }
 
 ssize_t
-pfs_file_xpread(pfs_file_t *file, void *buf, size_t len, off_t off, int flags)
+pfs_file_xpread(pfs_file_t *file, const struct iovec *iov, int iovcnt,
+	size_t len, off_t off, int flags)
 {
 	pfs_inode_t *in = file->f_inode;
 	pfs_mount_t *mnt = in->in_mnt;
@@ -1044,7 +1123,7 @@ pfs_file_xpread(pfs_file_t *file, void *buf, size_t len, off_t off, int flags)
 	rlen = -1;
 	tls_read_begin(mnt);
 	pfs_inode_lock(in);
-	rlen = pfs_file_read(in, buf, len, off2, true, file->f_btime, flags);
+	rlen = pfs_file_read(in, iov, iovcnt, len, off2, true, file->f_btime, flags);
 	err = rlen < 0 ? rlen : 0;
 	pfs_inode_unlock(in);
 	tls_read_end(err);
@@ -1056,8 +1135,8 @@ pfs_file_xpread(pfs_file_t *file, void *buf, size_t len, off_t off, int flags)
 }
 
 ssize_t
-pfs_file_xpwrite(pfs_file_t *file, const void *buf, size_t len, off_t off,
-	int flags)
+pfs_file_xpwrite(pfs_file_t *file, const struct iovec *iov, int iovcnt,
+	size_t len, off_t off, int flags)
 {
 	pfs_inode_t *in = file->f_inode;
 	pfs_mount_t *mnt = in->in_mnt;
@@ -1087,7 +1166,7 @@ pfs_file_xpwrite(pfs_file_t *file, const void *buf, size_t len, off_t off,
 	 */
 	// tls_read_begin(mnt);
 	pfs_inode_lock(in);
-	wlen = pfs_file_write(in, buf, len, &off2, true, file->f_btime, flags);
+	wlen = pfs_file_write(in, iov, iovcnt, len, &off2, true, file->f_btime, flags);
 	err = wlen < 0 ? wlen : 0;
 	pfs_inode_unlock(in);
 	// tls_read_end(mnt);
@@ -1221,9 +1300,12 @@ pfs_file_pread(pfs_file_t *file, void *buf, size_t len, off_t off, int flags)
 {
 	pfs_inode_t *in = file->f_inode;
 	ssize_t n;
+	struct iovec iov;
 	MNT_STAT_BEGIN();
 	pfs_tls_set_stat_file_type(file->f_type);
-	n = pfs_file_read(in, buf, len, off, false, INNER_FILE_BTIME, flags);
+	iov.iov_base = buf;
+	iov.iov_len = len;
+	n = pfs_file_read(in, &iov, 1, len, off, false, INNER_FILE_BTIME, flags);
 	MNT_STAT_END(MNT_STAT_FILE_READ);
 	MNT_STAT_API_END_BANDWIDTH(MNT_STAT_API_PREAD, len);
 	return n;
@@ -1233,11 +1315,14 @@ ssize_t
 pfs_file_pwrite(pfs_file_t *file, const void *buf, size_t len, off_t off,
 	int flags)
 {
+	struct iovec iov;
 	pfs_inode_t *in = file->f_inode;
 	ssize_t n;
 	MNT_STAT_BEGIN();
 	pfs_tls_set_stat_file_type(file->f_type);
-	n = pfs_file_write(in, buf, len, &off, false, INNER_FILE_BTIME, flags);
+	iov.iov_base = (void *)buf;
+	iov.iov_len = len;
+	n = pfs_file_write(in, &iov, 1, len, &off, false, INNER_FILE_BTIME, flags);
 	MNT_STAT_END(MNT_STAT_FILE_WRITE);
 	MNT_STAT_API_END_BANDWIDTH(MNT_STAT_API_PWRITE, len);
 	return n;

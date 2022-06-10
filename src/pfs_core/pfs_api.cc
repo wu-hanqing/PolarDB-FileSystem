@@ -375,7 +375,7 @@ _pfs_close(int fd)
 }
 
 static ssize_t
-_pfs_read(int fd, void *buf, size_t len, int flags)
+_pfs_readv(int fd, const struct iovec *iov, int iovcnt, size_t len, int flags)
 {
 	pfs_mount_t *mnt = NULL;
 	pfs_file_t *file = NULL;
@@ -387,7 +387,7 @@ _pfs_read(int fd, void *buf, size_t len, int flags)
 	GET_MOUNT_FILE(fd, RDLOCK_FLAG, &mnt, &file);
 
 	mutex_lock(&file->f_offset_lock);
-	rlen = pfs_file_xpread(file, buf, len, OFFSET_FILE_POS, flags);
+	rlen = pfs_file_xpread(file, iov, iovcnt, len, OFFSET_FILE_POS, flags);
 	mutex_unlock(&file->f_offset_lock);
 
 	PUT_MOUNT_FILE(mnt, file);
@@ -395,7 +395,7 @@ _pfs_read(int fd, void *buf, size_t len, int flags)
 }
 
 static ssize_t
-_pfs_write(int fd, const void *buf, size_t len, int flags)
+_pfs_writev(int fd, const iovec *iov, int iovcnt, size_t len, int flags)
 {
 	int err;
 	pfs_mount_t *mnt = NULL;
@@ -423,7 +423,7 @@ _pfs_write(int fd, const void *buf, size_t len, int flags)
 		goto finish;
 	}
 
-	wlen = pfs_file_xpwrite(file, buf, len, OFFSET_FILE_POS, flags);
+	wlen = pfs_file_xpwrite(file, iov, iovcnt, len, OFFSET_FILE_POS, flags);
 	mutex_unlock(&file->f_offset_lock);
 
 	PUT_MOUNT_FILE(mnt, file);
@@ -435,7 +435,7 @@ finish:
 }
 
 static ssize_t
-_pfs_pread(int fd, void *buf, size_t len, off_t offset, int flags)
+_pfs_preadv(int fd, const struct iovec *iov, int iovcnt, size_t len, off_t offset, int flags)
 {
 	pfs_mount_t *mnt = NULL;
 	pfs_file_t *file = NULL;
@@ -446,7 +446,7 @@ _pfs_pread(int fd, void *buf, size_t len, off_t offset, int flags)
 
 	GET_MOUNT_FILE(fd, RDLOCK_FLAG, &mnt, &file);
 
-	rlen = pfs_file_xpread(file, buf, len, offset, flags);
+	rlen = pfs_file_xpread(file, iov, 1, len, offset, flags);
 
 	PUT_MOUNT_FILE(mnt, file);
 	return rlen;
@@ -460,16 +460,19 @@ pfs_file_pzero(pfs_file_t *file, size_t len, off_t off)
 	size_t total = 0;
  	ssize_t wlen = 0;
 	int err = 0;
+	struct iovec iov;
 
 	buf = (char *)pfs_dma_zalloc("fill_zero", PFS_CACHELINE_SIZE, buflen,
 		SOCKET_ID_ANY);
 	if (buf == NULL) {
 		return -ENOMEM;
 	}
+	iov.iov_base = buf;
+	iov.iov_len = len;
 
 	while (len) {
 		wlen = MIN(len, buflen);
-		wlen = pfs_file_xpwrite(file, buf, wlen, off, PFS_IO_DMA_ON);
+		wlen = pfs_file_xpwrite(file, &iov, 1, wlen, off, PFS_IO_DMA_ON);
 		if (wlen < 0) {
 			err = wlen;
 			break;
@@ -485,7 +488,7 @@ pfs_file_pzero(pfs_file_t *file, size_t len, off_t off)
 }
 
 static ssize_t
-_pfs_pwrite(int fd, const void *buf, size_t len, off_t offset, int flags)
+_pfs_pwritev(int fd, const struct iovec *iov, int iovcnt, size_t len, off_t offset, int flags)
 {
 	int err;
 	pfs_mount_t *mnt = NULL;
@@ -508,11 +511,11 @@ _pfs_pwrite(int fd, const void *buf, size_t len, off_t offset, int flags)
 	}
 
 	if (!(flags & PFS_IO_WRITE_ZERO)) {
-		wlen = pfs_file_xpwrite(file, buf, len, offset, flags);
+		wlen = pfs_file_xpwrite(file, iov, iovcnt, len, offset, flags);
 	} else {
 		cap = pfsdev_get_cap(mnt->mnt_ioch_desc);
 		if (cap & DEV_CAP_ZERO)
-			wlen = pfs_file_xpwrite(file, buf, len, offset, flags);
+			wlen = pfs_file_xpwrite(file, NULL, 0, len, offset, flags);
 		else
 			wlen = pfs_file_pzero(file, len, offset);
 	}
@@ -1003,21 +1006,21 @@ pfs_open(const char *pbdpath, int flags, mode_t mode)
 }
 
 ssize_t
-pfs_read_flags(int fd, void *buf, size_t len, int flags)
+pfs_readv_flags(int fd, const struct iovec *iov, int iovcnt, size_t len, int flags)
 {
 	int err = -EAGAIN;
 	ssize_t rlen = -1;
 	MNT_STAT_API_BEGIN(MNT_STAT_API_READ);
 	if (!PFS_FD_ISVALID(fd))
 		err = -EBADF;
-	else if (!buf || (ssize_t)len < 0)
+	else if (!iov || (ssize_t)len < 0)
 		err = -EINVAL;
-	API_ENTER(VERB, "%d, %p, %lu", fd, buf, len);
+	API_ENTER(VERB, "%d, %p, %lu", fd, iov, len);
 
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
 		PFS_STAT_LATENCY_ENTRY();
-		rlen = _pfs_read(fd, buf, len, flags);
+		rlen = _pfs_readv(fd, iov, iovcnt, len, flags);
 		err = rlen < 0 ? (int)rlen : 0;
 		PFS_STAT_LATENCY(STAT_PFS_API_READ_DONE);
 	}
@@ -1034,31 +1037,48 @@ pfs_read_flags(int fd, void *buf, size_t len, int flags)
 ssize_t
 pfs_read(int fd, void *buf, size_t len)
 {
-	return pfs_read_flags(fd, buf, len, PFS_IO_DMA_OFF);
+	struct iovec iov = { buf, len };
+	return pfs_readv_flags(fd, &iov, 1, len, PFS_IO_DMA_OFF);
+}
+
+ssize_t
+pfs_readv(int fd, const struct iovec *iov, int iovcnt)
+{
+	size_t len = iovec_bytes(iov, iovcnt);
+	return pfs_readv_flags(fd, iov, iovcnt, len, PFS_IO_DMA_OFF);
 }
 
 ssize_t
 pfs_read_dma(int fd, void *buf, size_t len)
 {
-	return pfs_read_flags(fd, buf, len, PFS_IO_DMA_ON);
+	struct iovec iov = { buf, len };
+	return pfs_readv_flags(fd, &iov, 1, len, PFS_IO_DMA_ON);
 }
 
 ssize_t
-pfs_write_flags(int fd, const void *buf, size_t len, int flags)
+pfs_readv_dma(int fd, const struct iovec *iov, int iovcnt)
+{
+	size_t len = iovec_bytes(iov, iovcnt);
+	return pfs_readv_flags(fd, iov, iovcnt, len, PFS_IO_DMA_ON);
+}
+
+ssize_t
+pfs_writev_flags(int fd, const struct iovec *iov, int iovcnt,
+	size_t len, int flags)
 {
 	int err = -EAGAIN;
 	ssize_t wlen = -1;
 	bool fdok = PFS_FD_ISVALID(fd);
 	bool write_zero = !!(flags & PFS_IO_WRITE_ZERO);
 	MNT_STAT_API_BEGIN(MNT_STAT_API_WRITE);
-	if (!fdok || (!write_zero && !buf))
+	if (!fdok || (!write_zero && !iov))
 		err = !fdok ? -EBADF : -EINVAL;
-	API_ENTER(VERB, "%d, %p, %lu, %x", fd, buf, len, flags);
+	API_ENTER(VERB, "%d, %p, %lu, %x", fd, iov, len, flags);
 
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
 		PFS_STAT_LATENCY_ENTRY();
-		wlen = _pfs_write(fd, buf, len, flags);
+		wlen = _pfs_writev(fd, iov, iovcnt, len, flags);
 		err = wlen < 0 ? (int)wlen : 0;
 		PFS_STAT_LATENCY(STAT_PFS_API_WRITE_DONE);
 	}
@@ -1075,39 +1095,39 @@ pfs_write_flags(int fd, const void *buf, size_t len, int flags)
 ssize_t
 pfs_write(int fd, const void *buf, size_t len)
 {
-	return pfs_write_flags(fd, buf, len, PFS_IO_DMA_OFF);
+	struct iovec iov = { (void *)buf, len };
+	return pfs_writev_flags(fd, &iov, 1, len, PFS_IO_DMA_OFF);
 }
 
 ssize_t
 pfs_write_zero(int fd, size_t len)
 {
-	return pfs_write_flags(fd, NULL, len, PFS_IO_WRITE_ZERO);
+	return pfs_writev_flags(fd, NULL, 0, len, PFS_IO_WRITE_ZERO);
 }
 
 ssize_t
 pfs_write_dma(int fd, const void *buf, size_t len)
 {
-	return pfs_write_flags(fd, buf, len, PFS_IO_DMA_ON);
+	struct iovec iov = { (void *)buf, len };
+	return pfs_writev_flags(fd, &iov, 1, len, PFS_IO_DMA_ON);
 }
 
 static ssize_t
-pfs_pread_flags(int fd, void *buf, size_t len, off_t offset, int flags)
+pfs_preadv_flags(int fd, const struct iovec *iov, int iovcnt, size_t len, off_t offset, int flags)
 {
 	int err = -EAGAIN;
 	ssize_t rlen = -1;
 	MNT_STAT_API_BEGIN(MNT_STAT_API_PREAD);
 	if (!PFS_FD_ISVALID(fd))
 		err = -EBADF;
-	else if (!buf)
-		err = -EINVAL;
 	else if (offset < 0 || (ssize_t)(offset + len) < 0)
 		err = -EINVAL;
-	API_ENTER(VERB, "%d, %p, %lu, %ld", fd, buf, len, offset);
+	API_ENTER(VERB, "%d, %p, %lu, %ld", fd, iov, len, offset);
 
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
 		PFS_STAT_LATENCY_ENTRY();
-		rlen = _pfs_pread(fd, buf, len, offset, flags);
+		rlen = _pfs_preadv(fd, iov, iovcnt, len, offset, flags);
 		err = rlen < 0 ? (int)rlen : 0;
 		PFS_STAT_LATENCY(STAT_PFS_API_PREAD_DONE);
 	}
@@ -1124,39 +1144,65 @@ pfs_pread_flags(int fd, void *buf, size_t len, off_t offset, int flags)
 ssize_t
 pfs_pread(int fd, void *buf, size_t len, off_t offset)
 {
-	if (offset < 0) {
+	struct iovec iov = { buf, len };
+
+	if (offset < 0 || buf == NULL) {
 		errno = EINVAL;
 		return -1;
 	}
-	return pfs_pread_flags(fd, buf, len, offset, PFS_IO_DMA_OFF);
+	return pfs_preadv_flags(fd, &iov, 1, len, offset, PFS_IO_DMA_OFF);
 }
 
 ssize_t
-pfs_pread_dma(int fd, void *buf, size_t len, off_t offset)
+pfs_preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 {
 	if (offset < 0) {
 		errno = EINVAL;
 		return -1;
 	}
-	return pfs_pread_flags(fd, buf, len, offset, PFS_IO_DMA_ON);
+	size_t len = iovec_bytes(iov, iovcnt);
+	return pfs_preadv_flags(fd, iov, iovcnt, len, offset, PFS_IO_DMA_OFF);
+}
+
+ssize_t
+pfs_pread_dma(int fd, void *buf, size_t len, off_t offset)
+{
+	struct iovec iov = { buf, len };
+	if (offset < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+	return pfs_preadv_flags(fd, &iov, 1, len, offset, PFS_IO_DMA_ON);
+}
+
+ssize_t
+pfs_preadv_dma(int fd, const struct iovec *iov, int iovcnt, off_t offset)
+{
+	if (offset < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+	size_t len = iovec_bytes(iov, iovcnt);
+	return pfs_preadv_flags(fd, iov, iovcnt, len, offset, PFS_IO_DMA_ON);
 }
 
 static ssize_t
-pfs_pwrite_flags(int fd, const void *buf, size_t len, off_t offset, int flags)
+pfs_pwritev_flags(int fd, const struct iovec *iov, int iovcnt,
+	size_t len, off_t offset, int flags)
 {
 	int err = -EAGAIN;
 	ssize_t wlen = -1;
 	bool fdok = PFS_FD_ISVALID(fd);
 	bool write_zero = !!(flags & PFS_IO_WRITE_ZERO);
 	MNT_STAT_API_BEGIN(MNT_STAT_API_PWRITE);
-	if (!fdok || (!write_zero && !buf) || offset < 0)
+	if (!fdok || (!write_zero && !iov) || offset < 0)
 		err = !fdok ? -EBADF : -EINVAL;
-	API_ENTER(VERB, "%d, %p, %lu, %ld", fd, buf, len, offset);
+	API_ENTER(VERB, "%d, %p, %lu, %ld", fd, iov, len, offset);
 
 	fd = PFS_FD_RAW(fd);
 	while (err == -EAGAIN) {
 		PFS_STAT_LATENCY_ENTRY();
-		wlen = _pfs_pwrite(fd, buf, len, offset, flags);
+		wlen = _pfs_pwritev(fd, iov, iovcnt, len, offset, flags);
 		err = wlen < 0 ? (int)wlen : 0;
 		PFS_STAT_LATENCY(STAT_PFS_API_PWRITE_DONE);
 	}
@@ -1173,17 +1219,43 @@ pfs_pwrite_flags(int fd, const void *buf, size_t len, off_t offset, int flags)
 ssize_t
 pfs_pwrite(int fd, const void *buf, size_t len, off_t offset)
 {
+	struct iovec iov = { (void *)buf, len };
 	if (offset < 0) {
 		errno = EINVAL;
 		return -1;
 	}
-	return pfs_pwrite_flags(fd, buf, len, offset, PFS_IO_DMA_OFF);
+	return pfs_pwritev_flags(fd, &iov, 1, len, offset, PFS_IO_DMA_OFF);
+}
+
+ssize_t
+pfs_pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
+{
+	if (offset < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	size_t len = iovec_bytes(iov, iovcnt);
+	return pfs_pwritev_flags(fd, iov, iovcnt, len, offset, PFS_IO_DMA_OFF);
 }
 
 ssize_t
 pfs_pwrite_dma(int fd, const void *buf, size_t len, off_t offset)
 {
-	return pfs_pwrite_flags(fd, buf, len, offset, PFS_IO_DMA_ON);
+	struct iovec iov = { (void *)buf, len };
+	return pfs_pwritev_flags(fd, &iov, 1, len, offset, PFS_IO_DMA_ON);
+}
+
+ssize_t
+pfs_pwritev_dma(int fd, const struct iovec *iov, int iovcnt, off_t offset)
+{
+	if (offset < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	size_t len = iovec_bytes(iov, iovcnt);
+	return pfs_pwritev_flags(fd, iov, iovcnt, len, offset, PFS_IO_DMA_ON);
 }
 
 ssize_t
@@ -1193,7 +1265,7 @@ pfs_pwrite_zero(int fd, size_t len, off_t offset)
 		errno = EINVAL;
 		return -1;
 	}
-	return pfs_pwrite_flags(fd, NULL, len, offset, PFS_IO_WRITE_ZERO);
+	return pfs_pwritev_flags(fd, NULL, 0, len, offset, PFS_IO_WRITE_ZERO);
 }
 
 int
