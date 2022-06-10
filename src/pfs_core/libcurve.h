@@ -426,6 +426,15 @@ struct OpenFlags {
     OpenFlags() : exclusive(true) {}
 };
 
+enum CurveOpenFlags {
+    CURVE_EXCLUSIVE = 1 << 0,
+    CURVE_SHARED = 1 << 1,
+    CURVE_RDWR = 1 << 2,
+    CURVE_RDONLY = 1 << 3,
+    CURVE_WRONLY = 1 << 4,
+    CURVE_FORCE_WRITE = 1 << 5,
+};
+
 class CurveClient {
  public:
     CurveClient();
@@ -451,6 +460,8 @@ class CurveClient {
      */
     virtual int Open(const std::string& filename,
                      const OpenFlags& openflags);
+
+    virtual int Open(const std::string& filename, int flags);
 
     /**
      * 重新打开文件
