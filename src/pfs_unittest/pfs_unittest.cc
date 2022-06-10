@@ -19,6 +19,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include "pfs_testenv.h"
+#include "pfs_spdk.h"
 
 using namespace std;
 
@@ -51,5 +52,9 @@ int main(int argc, char **argv)
 			);
 	::testing::InitGoogleTest(&argc, argv);
 
+	if (pfs_spdk_setup()) {
+		cerr << "can not init spdk";
+		return 1;
+	}
 	return RUN_ALL_TESTS();
 }
