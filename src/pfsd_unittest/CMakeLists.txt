@@ -57,3 +57,19 @@ add_dependencies(pfs-tools
     pfsd
 )
 
+add_executable(
+	sdk_demo
+	sdk_demo.cc
+)
+
+target_link_libraries(sdk_demo
+    gtest
+    -Wl,--start-group
+    -Wl,--no-as-needed
+    pfs
+    pfsd
+    pthread
+    -Wl,--end-group
+)
+
+
