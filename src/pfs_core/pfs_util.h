@@ -95,20 +95,24 @@ int pfs_ratecheck(struct timeval *lasttime, const struct timeval *mininterval);
 #define arraysize(a)	(sizeof(a) / sizeof(a[0]))
 
 static inline void
-forward_iovec_iter(struct iovec **it, int *iovcnt, int len)
+forward_iovec_iter(struct iovec **itp, int *iovcnt, int len)
 {
+	struct iovec *it = *itp;
+
 	while (len > 0) {
-		if ((*it)->iov_len <= len) {
-			len -= (*it)->iov_len;
+		if (it->iov_len <= len) {
+			it->iov_base = ((char *)it->iov_base) + it->iov_len;
+			len -= it->iov_len;
 			*iovcnt = *iovcnt - 1;
 			it++;
 		} else {
-			(*it)->iov_base = ((char *)(*it)->iov_base) + len;
-			(*it)->iov_len -= len;
+			it->iov_base = ((char *)it->iov_base) + len;
+			it->iov_len -= len;
 			len = 0;
 			break;
 		}
 	}
+	*itp = it;
 }
 
 static inline size_t
@@ -120,5 +124,8 @@ iovec_bytes(const struct iovec *iov, int cnt)
     }
     return total;
 }
+
+void pfs_copy_from_buf_to_iovec(struct iovec *iovec, const void *_buf, size_t len);
+void pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, size_t len);
 
 #endif

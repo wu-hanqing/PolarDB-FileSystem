@@ -427,6 +427,35 @@ TEST_F(FileTest, pfs_pwrite)
     CHECK_FILESIZE(fd_, 4*1024*1024+1);
 }
 
+TEST_F(FileTest, pfs_pwritev)
+{
+    ssize_t len;
+    struct iovec iov[2];
+
+    iov[0].iov_base = (void *)"hello";
+    iov[0].iov_len = 5;
+    iov[1].iov_base = (void *)"world";
+    iov[1].iov_len = 5;
+    len = pfs_pwritev(fd_, iov, 2, 1);
+    CHECK_RET(10, len);
+
+    char buf0[10];
+    len = pfs_pread(fd_, buf0, 10, 1);
+    CHECK_RET(10, len);
+    
+    char buf[5];
+    char buf2[5];
+
+    iov[0].iov_base = buf;
+    iov[0].iov_len = 5;
+    iov[1].iov_base = buf2;
+    iov[1].iov_len = 5;
+    len = pfs_preadv(fd_, iov, 2, 1);
+    CHECK_RET(10, len);
+    EXPECT_EQ(memcmp(buf, "hello", 5), 0);
+    EXPECT_EQ(memcmp(buf2, "world", 5), 0);
+}
+
 TEST_F(FileTest, pfs_pwrite_zero)
 {
     ssize_t len;

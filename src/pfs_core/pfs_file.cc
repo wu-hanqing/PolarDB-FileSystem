@@ -737,8 +737,8 @@ pfs_file_write(pfs_inode_t *in, const struct iovec *_iov, int iovcnt,
 	pfs_blkid_t	blkid;
 	off_t		offset, blkoff, dbhoff, woff;
 	int		filling_hole = 0;
-	struct iovec iov_space[TMP_VEC_LEN], *iov = NULL, *iov_iter = NULL,
-		 *iov_iter2 = NULL;
+	int		update_iter = 0;
+	struct iovec iov_space[TMP_VEC_LEN], *iov = NULL, *iov_iter = NULL;
 
 	if (iovcnt > TMP_VEC_LEN) {
 		if (locked)
@@ -794,7 +794,7 @@ pfs_file_write(pfs_inode_t *in, const struct iovec *_iov, int iovcnt,
 				free(iov);
 			ERR_RETVAL(EAGAIN);
 		}
-		iov_iter2 = NULL;
+		update_iter = 0;
 		filling_hole = 0;
 		if (dbhoff < blkoff) {
 			/*
@@ -816,7 +816,7 @@ pfs_file_write(pfs_inode_t *in, const struct iovec *_iov, int iovcnt,
 			woff = blkoff;
 			wlen = MIN(blksize - blkoff, left);
 			if (!(flags & PFS_IO_WRITE_ZERO))
-				iov_iter2 = iov_iter;
+				update_iter = 1;
 			if (dbhoff < blkoff + wlen) {
 				dbhoff = blkoff + wlen;
 				pfs_inode_writemodify_shrink_dblk_hole(in, blkid,
@@ -836,7 +836,9 @@ pfs_file_write(pfs_inode_t *in, const struct iovec *_iov, int iovcnt,
 		if (locked)
 			pfs_inode_unlock(in);
 
-		wlen = pfs_blkio_write(mnt, &iov_iter2, &iovcnt, dblkno, woff, wlen, flags);
+		wlen = pfs_blkio_write(mnt, update_iter ?  &iov_iter : NULL,
+				update_iter ? &iovcnt : NULL, dblkno, woff,
+				wlen, flags);
 
 		if (locked)
 			pfs_inode_lock(in);

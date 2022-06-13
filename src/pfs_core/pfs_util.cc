@@ -28,6 +28,8 @@
 #include "pfs_memory.h"
 #include "pfs_trace.h"
 
+#include "rte_memcpy.h"
+
 /*-
  *  COPYRIGHT (C) 1986 Gary S. Brown.  You may use this program, or
  *  code or tables extracted from it, as desired without restriction.
@@ -306,3 +308,32 @@ pfs_ratecheck(struct timeval *lasttime, const struct timeval *mininterval)
 	return (rv);
 }
 
+void pfs_copy_from_buf_to_iovec(struct iovec *iovec, const void *_buf, size_t len)
+{
+    const char *buf = (const char *)_buf;
+    int i = 0;
+    int cpbytes = 0;
+
+    while (len > 0) {
+        cpbytes = RTE_MIN(iovec[i].iov_len, len);
+        rte_memcpy(iovec[i].iov_base, buf, cpbytes);
+        buf += cpbytes;
+        len -= cpbytes;
+        i++;
+    }
+}
+
+void pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, size_t len)
+{
+    char *buf = (char *)_buf;
+    int i = 0;
+    int cpbytes = 0;
+
+    while (len > 0) {
+        cpbytes = RTE_MIN(iovec[i].iov_len, len);
+        rte_memcpy(buf, iovec[i].iov_base, cpbytes);
+        buf += cpbytes;
+        len -= cpbytes;
+        i++;
+    }
+}

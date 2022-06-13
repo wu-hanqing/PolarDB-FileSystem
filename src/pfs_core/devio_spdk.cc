@@ -672,36 +672,6 @@ pfs_spdk_dev_io_pread(void *arg)
     }
 }
 
-static void copy_from_dma_buffer(struct iovec *iovec, const void *_dma, size_t len)
-{
-    const char *dma = (const char *)_dma;
-    int i = 0;
-    int cpbytes = 0;
-
-    while (len > 0) {
-        cpbytes = RTE_MIN(iovec[i].iov_len, len);
-        rte_memcpy(iovec[i].iov_base, dma, cpbytes);
-        dma += cpbytes;
-        len -= cpbytes;
-        i++;
-    }
-}
-
-static void copy_to_dma_buffer(void *_dma, struct iovec *iovec, size_t len)
-{
-    char *dma = (char *)_dma;
-    int i = 0;
-    int cpbytes = 0;
-
-    while (len > 0) {
-        cpbytes = RTE_MIN(iovec[i].iov_len, len);
-        rte_memcpy(dma, iovec[i].iov_base, cpbytes);
-        dma += cpbytes;
-        len -= cpbytes;
-        i++;
-    }
-}
-
 static void
 pfs_spdk_dev_io_fini_pread(void *arg)
 {
@@ -709,7 +679,7 @@ pfs_spdk_dev_io_fini_pread(void *arg)
     pfs_devio_t *io = iocb->cb_pfs_io;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)io->io_queue;
     if (io->io_error == 0 && !(io->io_flags & IO_DMABUF)) {
-        copy_from_dma_buffer(io->io_iov, iocb->cb_dma_buf, io->io_len);
+        pfs_copy_from_buf_to_iovec(io->io_iov, iocb->cb_dma_buf, io->io_len);
     }
     pfs_spdk_dev_deq_inflight_io(dkioq, io);
     pfs_spdk_dev_enq_complete_io(dkioq, io);
@@ -739,7 +709,7 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
             }
             return -ENOBUFS;
         }
-        copy_to_dma_buffer(iocb->cb_dma_buf, io->io_iov, io->io_len);
+        pfs_copy_from_iovec_to_buf(iocb->cb_dma_buf, io->io_iov, io->io_len);
     } else {
         iocb->cb_dma_buf = NULL;
     }

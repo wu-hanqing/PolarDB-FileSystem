@@ -134,8 +134,7 @@ pfs_blkio_read_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 		err = pfsdev_pread_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
 		if (err < 0)
 			return err;
-		char *buf = (char *)iov[0].iov_base;
-		rte_memcpy(buf, &albuf[bda - albda], len);
+		pfs_copy_from_buf_to_iovec(iov, &albuf[bda - albda], len);
 		return 0;
 	}
 
@@ -151,7 +150,6 @@ pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 	int err;
 
 	if (allen != len) {
-		char *buf = (char *)iov[0].iov_base;
 		PFS_ASSERT(albuf != NULL);
 		PFS_INC_COUNTER(STAT_PFS_UnAligned_W_4K);
 		err = pfsdev_pread_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
@@ -160,7 +158,7 @@ pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 		if (ioflags & IO_ZERO)
 			memset(&albuf[bda - albda], 0, len);
 		else
-			rte_memcpy(&albuf[bda - albda], buf, len);
+			pfs_copy_from_iovec_to_buf(&albuf[bda - albda], iov, len);
 		err = pfsdev_pwrite_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
 		return err;
 	}

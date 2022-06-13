@@ -17,14 +17,15 @@
 #define	_PFS_BLKIO_H_
 
 #include <sys/queue.h>
+#include <sys/uio.h>
 
 #include "pfs_impl.h"
 
 typedef struct pfs_mount pfs_mount_t;
 
-ssize_t	pfs_blkio_read(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
-	    pfs_blkno_t blkno, off_t off, ssize_t len, int is_dma = 0);
-ssize_t	pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
-	    pfs_blkno_t blkno, off_t off, ssize_t len, int is_dma = 0);
+ssize_t pfs_blkio_read(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
+		pfs_blkno_t blkno, off_t off, ssize_t len, int flags);
+ssize_t pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
+		pfs_blkno_t blkno, off_t off, ssize_t len, int flags);
 
 #endif

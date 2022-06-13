@@ -446,7 +446,7 @@ _pfs_preadv(int fd, const struct iovec *iov, int iovcnt, size_t len, off_t offse
 
 	GET_MOUNT_FILE(fd, RDLOCK_FLAG, &mnt, &file);
 
-	rlen = pfs_file_xpread(file, iov, 1, len, offset, flags);
+	rlen = pfs_file_xpread(file, iov, iovcnt, len, offset, flags);
 
 	PUT_MOUNT_FILE(mnt, file);
 	return rlen;
@@ -1109,6 +1109,13 @@ pfs_write(int fd, const void *buf, size_t len)
 	}
 	struct iovec iov = { (void *)buf, len };
 	return pfs_writev_flags(fd, &iov, 1, len, PFS_IO_DMA_OFF);
+}
+
+ssize_t
+pfs_writev(int fd, const struct iovec *iov, int iovcnt)
+{
+	size_t len = iovec_bytes(iov, iovcnt);
+	return pfs_writev_flags(fd, iov, iovcnt, len, PFS_IO_DMA_OFF);
 }
 
 ssize_t
