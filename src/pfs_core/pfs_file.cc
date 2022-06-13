@@ -616,7 +616,7 @@ pfs_file_read(pfs_inode_t *in, const struct iovec *_iov, int iovcnt,
 	if (iovcnt > TMP_VEC_LEN) {
 		if (locked)
 			pfs_inode_unlock(in);
-		iov = (struct iovec *) malloc(sizeof(struct iovec) * iovcnt);
+		iov = (struct iovec *)pfs_mem_dalloc(sizeof(struct iovec) * iovcnt, M_DEV_IOVEC);
 		if (iov == NULL) {
 			pfs_etrace("can not allocate iov");
 			if (locked)
@@ -743,7 +743,7 @@ pfs_file_write(pfs_inode_t *in, const struct iovec *_iov, int iovcnt,
 	if (iovcnt > TMP_VEC_LEN) {
 		if (locked)
 			pfs_inode_unlock(in);
-		iov = (struct iovec *)malloc(sizeof(struct iovec) * iovcnt);
+		iov = (struct iovec *)pfs_mem_dalloc(sizeof(struct iovec) * iovcnt, M_DEV_IOVEC);
 		if (iov == NULL) {
 			pfs_etrace("can not allocate iov");
 			if (locked)

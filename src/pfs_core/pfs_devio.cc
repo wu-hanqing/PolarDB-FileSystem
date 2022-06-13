@@ -402,9 +402,15 @@ pfs_io_create(pfs_dev_t *dev, int op, struct iovec *iov, int iovcnt, size_t len,
 	io = pfs_io_alloc();
 	io->io_dev = dev;
 	if (iov) {
+		if (iovcnt > PFSDEV_IOV_MAX) {
+			io->io_iov = (struct iovec *)pfs_mem_dalloc(sizeof(struct iovec) * iovcnt, M_DEV_IOVEC);
+		} else {
+			io->io_iov = io->io_iovspace;
+		}
 		memcpy(io->io_iov, iov, sizeof(struct iovec) * iovcnt);
 		io->io_iovcnt = iovcnt;
 	} else {
+		io->io_iov = NULL;
 		io->io_iovcnt = 0;
 	}
 	io->io_len = len;
@@ -443,6 +449,10 @@ pfs_io_destroy(pfs_devio_t *io)
 	PFS_ASSERT(io->io_private == NULL);	/* no held private info */
 	PFS_ASSERT(io->io_queue != NULL);	/* each io must be submitted */
 
+	if (io->io_iov != io->io_iovspace) {
+		pfs_mem_free(io->io_iov, M_DEV_IOVEC);
+		io->io_iov = NULL;
+	}
 	if (tls_free_devio_num < PFS_MAX_CACHED_DEVIO) {
 		SLIST_INSERT_HEAD(&tls_free_devio, io, io_free);
 		tls_free_devio_num++;

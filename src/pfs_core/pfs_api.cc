@@ -1037,6 +1037,10 @@ pfs_readv_flags(int fd, const struct iovec *iov, int iovcnt, size_t len, int fla
 ssize_t
 pfs_read(int fd, void *buf, size_t len)
 {
+	if (buf == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 	struct iovec iov = { buf, len };
 	return pfs_readv_flags(fd, &iov, 1, len, PFS_IO_DMA_OFF);
 }
@@ -1051,6 +1055,10 @@ pfs_readv(int fd, const struct iovec *iov, int iovcnt)
 ssize_t
 pfs_read_dma(int fd, void *buf, size_t len)
 {
+	if (buf == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 	struct iovec iov = { buf, len };
 	return pfs_readv_flags(fd, &iov, 1, len, PFS_IO_DMA_ON);
 }
@@ -1095,6 +1103,10 @@ pfs_writev_flags(int fd, const struct iovec *iov, int iovcnt,
 ssize_t
 pfs_write(int fd, const void *buf, size_t len)
 {
+	if (buf == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 	struct iovec iov = { (void *)buf, len };
 	return pfs_writev_flags(fd, &iov, 1, len, PFS_IO_DMA_OFF);
 }
@@ -1108,6 +1120,10 @@ pfs_write_zero(int fd, size_t len)
 ssize_t
 pfs_write_dma(int fd, const void *buf, size_t len)
 {
+	if (buf == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 	struct iovec iov = { (void *)buf, len };
 	return pfs_writev_flags(fd, &iov, 1, len, PFS_IO_DMA_ON);
 }
@@ -1168,7 +1184,7 @@ ssize_t
 pfs_pread_dma(int fd, void *buf, size_t len, off_t offset)
 {
 	struct iovec iov = { buf, len };
-	if (offset < 0) {
+	if (offset < 0 || buf == NULL) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1220,7 +1236,7 @@ ssize_t
 pfs_pwrite(int fd, const void *buf, size_t len, off_t offset)
 {
 	struct iovec iov = { (void *)buf, len };
-	if (offset < 0) {
+	if (buf == NULL || offset < 0) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1242,6 +1258,11 @@ pfs_pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 ssize_t
 pfs_pwrite_dma(int fd, const void *buf, size_t len, off_t offset)
 {
+	if (offset < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	struct iovec iov = { (void *)buf, len };
 	return pfs_pwritev_flags(fd, &iov, 1, len, offset, PFS_IO_DMA_ON);
 }

@@ -82,12 +82,14 @@ enum {
 	M_RANGE_LOCK,
 	M_LOCKTABLE,
 	M_LOCKITEM,
+	M_DEV_IOVEC,
 	M_NTYPE
 };
 
 typedef struct admin_buf admin_buf_t;
 
 void * 	pfs_mem_malloc(size_t size, int type);
+void * 	pfs_mem_dalloc(size_t size, int type);
 void 	pfs_mem_free(void *ptr, int type);
 void * 	pfs_mem_realloc(void *ptr, size_t newsize, int type);
 int 	pfs_mem_memalign(void **pp, size_t alignment, size_t size, int type);

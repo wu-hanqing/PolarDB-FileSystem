@@ -96,6 +96,7 @@ static pfs_memtype_t	pfs_mem_type[M_NTYPE] = {
 	MEMTYPE_ENTRY(M_RANGE_LOCK),
 	MEMTYPE_ENTRY(M_LOCKTABLE),
 	MEMTYPE_ENTRY(M_LOCKITEM),
+	MEMTYPE_ENTRY(M_DEV_IOVEC)
 };
 
 static inline const char *
@@ -144,6 +145,22 @@ pfs_mem_malloc(size_t size, int type)
 		return NULL;
 	}
 	memset(ptr, 0, size);
+	memtype_inc(type, 1, malloc_usable_size(ptr));
+
+	return ptr;
+}
+
+void *
+pfs_mem_dalloc(size_t size, int type)
+{
+	void *ptr;
+
+	ptr = malloc(size);
+	if (ptr == NULL) {
+		pfs_etrace("malloc failed: type %s, size %zu\n",
+		    memtype_name(type), size);
+		return NULL;
+	}
 	memtype_inc(type, 1, malloc_usable_size(ptr));
 
 	return ptr;

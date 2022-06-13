@@ -90,7 +90,8 @@ typedef struct pfs_devio {
 	};
 	pfs_dev_t 	*io_dev;
 	pfs_ioq_t	*io_queue;
-	struct iovec 	io_iov[PFSDEV_IOV_MAX];
+	struct iovec	io_iovspace[PFSDEV_IOV_MAX];
+	struct iovec	*io_iov;
 	int		io_iovcnt;
 	uint64_t	io_len;
 	uint64_t	io_bda;
