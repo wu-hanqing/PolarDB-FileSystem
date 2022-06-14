@@ -108,6 +108,15 @@ enum LIBCURVE_ERROR {
     UNKNOWN                 = 100
 };
 
+enum CurveOpenFlags {
+    CURVE_EXCLUSIVE = 1 << 0,
+    CURVE_SHARED = 1 << 1,
+    CURVE_RDWR = 1 << 2,
+    CURVE_RDONLY = 1 << 3,
+    CURVE_WRONLY = 1 << 4,
+    CURVE_FORCE_WRITE = 1 << 5,
+};
+
 const char* ErrorNum2ErrorName(LIBCURVE_ERROR err);
 
 typedef enum LIBCURVE_OP {
@@ -424,15 +433,6 @@ struct OpenFlags {
     bool exclusive;
 
     OpenFlags() : exclusive(true) {}
-};
-
-enum CurveOpenFlags {
-    CURVE_EXCLUSIVE = 1 << 0,
-    CURVE_SHARED = 1 << 1,
-    CURVE_RDWR = 1 << 2,
-    CURVE_RDONLY = 1 << 3,
-    CURVE_WRONLY = 1 << 4,
-    CURVE_FORCE_WRITE = 1 << 5,
 };
 
 class CurveClient {
