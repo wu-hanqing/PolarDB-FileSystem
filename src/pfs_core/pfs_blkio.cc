@@ -139,6 +139,7 @@ pfs_blkio_read_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 	}
 
 	PFS_ASSERT(albda == bda);
+	pfs_reset_iovcnt(iov, len, &iovcnt);
 	err = pfsdev_preadv_flags(iodesc, iov, iovcnt, len, bda, ioflags);
 	return err;
 }
@@ -164,6 +165,7 @@ pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 	}
 
 	PFS_ASSERT(albda == bda);
+	pfs_reset_iovcnt(iov, len, &iovcnt);
 	err = pfsdev_pwritev_flags(iodesc, iov, iovcnt, len, bda, ioflags);
 	return err;
 }

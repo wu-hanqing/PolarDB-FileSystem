@@ -27,6 +27,8 @@ using std::string;
 #include "pfs_testenv.h"
 #include "pfs_api.h"
 
+#include <rte_malloc.h>
+
 #define OFF_MAX ~((off_t)1 << (sizeof(off_t) * 8 - 1))
 #define OFF_MIN  ((off_t)1 << (sizeof(off_t) * 8 - 1))
 
@@ -455,6 +457,41 @@ TEST_F(FileTest, pfs_pwritev)
     EXPECT_EQ(memcmp(buf, "hello", 5), 0);
     EXPECT_EQ(memcmp(buf2, "world", 5), 0);
 }
+
+TEST_F(FileTest, pfs_pwritev_dma)
+{
+    ssize_t len;
+    struct iovec iov[2];
+
+    iov[0].iov_base = rte_malloc("", 127, 64);
+    memset(iov[0].iov_base, 'a', 127);
+    iov[0].iov_len = 127;
+    iov[1].iov_base = rte_malloc("", 4096, 64);
+    memset(iov[1].iov_base, 'b', 4096);
+    iov[1].iov_len = 4096;
+    len = pfs_pwritev_dma(fd_, iov, 2, 1);
+    CHECK_RET(127 + 4096, len);
+
+    char buf0[127+4096];
+    len = pfs_pread(fd_, buf0, 127+4096, 1);
+    CHECK_RET(127+4096, len);
+    
+    for (int i = 0; i < 127; ++i)
+	EXPECT_EQ(buf0[i], 'a');
+    for (int i = 127; i < 4096 + 127; ++i)
+	EXPECT_EQ(buf0[i], 'b');
+
+    len = pfs_preadv(fd_, iov, 2, 1);
+    CHECK_RET(127+4096, len);
+    for (int i = 0; i < 127; ++i)
+	EXPECT_EQ(buf0[i], 'a');
+    for (int i = 127; i < 4096 + 127; ++i)
+	EXPECT_EQ(buf0[i], 'b');
+
+    rte_free(iov[0].iov_base);
+    rte_free(iov[1].iov_base);
+}
+
 
 TEST_F(FileTest, pfs_pwrite_zero)
 {
