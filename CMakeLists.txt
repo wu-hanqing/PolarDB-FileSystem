@@ -196,6 +196,7 @@ file(GLOB pfsd_HEADERS
      ${PROJECT_SOURCE_DIR}/src/pfs_sdk/pfsd_sdk_log.h
      ${PROJECT_SOURCE_DIR}/src/pfs_core/pfs_api.h
      ${PROJECT_SOURCE_DIR}/src/pfs_core/pfs_trace_func.h
+     ${PROJECT_SOURCE_DIR}/src/pfs_core/pfs_spdk.h
      ${PROJECT_SOURCE_DIR}/src/pfsd/pfsd.h
 )
 
