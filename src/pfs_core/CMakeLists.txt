@@ -63,3 +63,5 @@ target_link_libraries(pfs
   gflags aio rt pthread
 )
 
+install(TARGETS pfs ARCHIVE DESTINATION "${PKG_DIR}/lib")
+
