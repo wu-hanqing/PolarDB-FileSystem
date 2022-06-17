@@ -276,10 +276,14 @@ pfs_spdk_bdev_init_start(void *arg)
     std::string json_file;
 
     json_file = g_spdk_temp_config_file;
-    if (json_file.empty() && FLAGS_spdk_json_config_file.empty())
-        pfs_etrace("json config file is not set!");
-    else
+    if (json_file.empty()) {
+        if (FLAGS_spdk_json_config_file.empty())
+            pfs_etrace("json config file is not set!");
+        else
+            json_file = FLAGS_spdk_json_config_file;
         pfs_itrace("json config file: %s", json_file.c_str());
+    }
+
     if (FLAGS_spdk_rpc_addr.empty())
         pfs_etrace("spdk rpc address is not set!");
     else
