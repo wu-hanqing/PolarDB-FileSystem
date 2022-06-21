@@ -1119,6 +1119,13 @@ pfs_writev(int fd, const struct iovec *iov, int iovcnt)
 }
 
 ssize_t
+pfs_writev_dma(int fd, const struct iovec *iov, int iovcnt)
+{
+	size_t len = iovec_bytes(iov, iovcnt);
+	return pfs_writev_flags(fd, iov, iovcnt, len, PFS_IO_DMA_ON);
+}
+
+ssize_t
 pfs_write_zero(int fd, size_t len)
 {
 	return pfs_writev_flags(fd, NULL, 0, len, PFS_IO_WRITE_ZERO);
