@@ -1,5 +1,5 @@
 #include "pfs_tls.h"
-#ifdef PFS_USE_BTHREAD
+#if PFS_USE_BTHREAD
 #include <bthread/butex.h>
 #else
 #include <atomic>
@@ -14,7 +14,7 @@ pfs_thread_id_t pfs_current_id(void)
 	return (struct pfs_tid *)(uintptr_t)tls;
 }
 
-#ifdef PFS_USE_BTHREAD
+#if PFS_USE_BTHREAD
 using namespace bthread;
 void pfs_event_init(pfs_event_t *e)
 {
