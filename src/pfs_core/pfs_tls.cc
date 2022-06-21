@@ -16,7 +16,6 @@
 #include <sys/queue.h>
 
 #include <errno.h>
-#include <pthread.h>
 
 #include "pfs_impl.h"
 #include "pfs_tls.h"
@@ -46,7 +45,8 @@
  * exploy longjmp to return to our starting point, alougth it is not elegant.
  */
 
-static pthread_key_t	pfs_tls_key;
+static pfs_key_t	pfs_tls_key;
+static pthread_key_t pfs_g_tls_key;
 
 static pfs_tls_t *
 pfs_tls_create()
@@ -65,13 +65,11 @@ pfs_tls_create()
 	tls->tls_stat_ver = 0;
 	tls->tls_stat_api_type = MNT_STAT_BASE;
 	tls->tls_stat_file_type = FILE_PFS_INITED;
-	pfs_mntstat_nthreads_change(1);
+	pfs_mntstat_bthreads_change(1);
 
 	for (int i = 0; i < PFS_MAX_NCHD; i++) {
 		tls->tls_ioqueue[i] = NULL;
 	}
-	tls->tls_rlqe = NULL;
-	tls->tls_rlqe_count = 0;
 
 	return tls;
 }
@@ -98,6 +96,38 @@ pfs_tls_destroy(void *data)
 			tls->tls_ioqueue[i] = NULL;
 		}
 	}
+	pfs_mem_free(tls, M_TLS);
+	pfs_mntstat_bthreads_change(-1);
+}
+
+static pfs_g_tls_t *
+pfs_g_tls_create()
+{
+	pfs_g_tls_t *tls;
+
+	tls = (pfs_g_tls_t *)pfs_mem_malloc(sizeof(*tls), M_TLS);
+	PFS_ASSERT(tls != NULL);
+
+	memset(tls, 0, sizeof(*tls));
+	pfs_mntstat_nthreads_change(1);
+
+	tls->tls_rlqe = 0;
+	tls->tls_rlqe_count = 0;
+	tls->tls_locktable_items = NULL;
+ 	tls->tls_locktable_item_count = 0;
+
+	return tls;
+}
+
+static void
+pfs_g_tls_destroy(void *data)
+{
+	pfs_g_tls_t *tls = (pfs_g_tls_t *)data;
+
+	if (tls == NULL) {
+		pfs_spdk_thread_exit();
+		return;
+	}
 	pfs_rangelock_thread_exit();
 	pfs_locktable_thread_exit();
 	pfs_spdk_thread_exit();
@@ -115,14 +145,16 @@ init_pfs_tls()
 	 * Create the tls key even before entering into main, to
 	 * provide context for each comming thread.
 	 */
-	err = pthread_key_create(&pfs_tls_key, pfs_tls_destroy);
+	err = pfs_key_create(&pfs_tls_key, pfs_tls_destroy);
+	PFS_VERIFY(err == 0);
+	err = pthread_key_create(&pfs_g_tls_key, pfs_g_tls_destroy);
 	PFS_VERIFY(err == 0);
 }
 
 void
 pfs_tls_fini()
 {
-	pthread_key_delete(pfs_tls_key);
+	pfs_key_delete(pfs_tls_key);
 }
 
 pfs_tls_t *
@@ -131,10 +163,25 @@ pfs_current_tls()
 	int err;
 	pfs_tls_t *tls;
 
-	tls = (pfs_tls_t *)pthread_getspecific(pfs_tls_key);
+	tls = (pfs_tls_t *)pfs_getspecific(pfs_tls_key);
 	if (tls == NULL) {
 		tls = pfs_tls_create();
-		err = pthread_setspecific(pfs_tls_key, tls);
+		err = pfs_setspecific(pfs_tls_key, tls);
+		PFS_VERIFY(err == 0);
+	}
+	return tls;
+}
+
+pfs_g_tls_t *
+pfs_current_g_tls()
+{
+	int err;
+	pfs_g_tls_t *tls;
+
+	tls = (pfs_g_tls_t *)pthread_getspecific(pfs_g_tls_key);
+	if (tls == NULL) {
+		tls = pfs_g_tls_create();
+		err = pthread_setspecific(pfs_g_tls_key, tls);
 		PFS_VERIFY(err == 0);
 	}
 	return tls;

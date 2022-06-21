@@ -107,7 +107,7 @@ typedef struct pfs_spdk_ioq {
     TAILQ_HEAD(, pfs_devio) dkq_complete_queue;
 
     pfs_spdk_iocb_t *dkq_done_q __rte_aligned(RTE_CACHE_LINE_SIZE);
-    sem_t       dkq_done_sem;
+    pfs_event_t dkq_done_ev;
     char	dkq_pad[RTE_CACHE_LINE_SIZE];
 } pfs_spdk_ioq_t;
 
@@ -192,7 +192,7 @@ pfs_spdk_dev_destroy_ioq(pfs_ioq_t *ioq)
     PFS_ASSERT(dkioq->dkq_complete_count == 0);
     PFS_ASSERT(TAILQ_EMPTY(&dkioq->dkq_complete_queue));
 
-    sem_destroy(&dkioq->dkq_done_sem);
+    pfs_event_destroy(&dkioq->dkq_done_ev);
     pfs_mem_free(dkioq, M_SPDK_DEV_IOQ);
 }
 
@@ -216,7 +216,7 @@ pfs_spdk_dev_create_ioq(pfs_dev_t *dev)
     dkioq->dkq_complete_count = 0;
     TAILQ_INIT(&dkioq->dkq_inflight_queue);
     TAILQ_INIT(&dkioq->dkq_complete_queue);
-    sem_init(&dkioq->dkq_done_sem, 0, 0);
+    pfs_event_init(&dkioq->dkq_done_ev);
     return (pfs_ioq_t *)dkioq;
 }
 
@@ -578,7 +578,6 @@ pfs_spdk_dev_io_done(struct spdk_bdev_io *bdev_io,
     pfs_spdk_iocb_t *tmp = NULL;
     pfs_devio_t *io = iocb->cb_pfs_io;
     pfs_spdk_ioq_t *dkioq = iocb->cb_ioq;
-    int count;
 
     PFS_ASSERT(io->io_error == PFSDEV_IO_DFTERR);
     io->io_error = success ? 0 : -EIO;
@@ -595,9 +594,7 @@ pfs_spdk_dev_io_done(struct spdk_bdev_io *bdev_io,
     }
 
     /* This works like WIN32 event, we don't repeatly set semaphore */
-    sem_getvalue(&dkioq->dkq_done_sem, &count);
-    if (count == 0)
-        sem_post(&dkioq->dkq_done_sem);
+    pfs_event_set(&dkioq->dkq_done_ev);
     spdk_bdev_free_io(bdev_io);
 }
 
@@ -1003,7 +1000,7 @@ pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
                 break;
             }
 
-            while (-1 == sem_wait(&dkioq->dkq_done_sem) && errno == EINTR) {}
+            pfs_event_wait(&dkioq->dkq_done_ev);
 
             for (iocb = __atomic_exchange_n(&dkioq->dkq_done_q, NULL,
                     __ATOMIC_ACQUIRE); iocb; iocb = next) {

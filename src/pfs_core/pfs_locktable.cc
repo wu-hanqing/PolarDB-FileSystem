@@ -38,7 +38,10 @@
 
 struct locktable_item {
 	struct rangelock li_rl;
-	LIST_ENTRY(locktable_item) li_link;
+	union {
+		LIST_ENTRY(locktable_item) li_link;
+		struct locktable_item *li_next;
+    	};
 	uint64_t li_blkno;
 	int li_refcount;
 };
@@ -60,21 +63,27 @@ static pthread_once_t once_control = PTHREAD_ONCE_INIT;
 static inline struct locktable_item *
 item_alloc_from_local(void)
 {
-	pfs_tls_t *tls = pfs_current_tls();
-	if (tls->tls_locktable_item_count == 0)
+	pfs_g_tls_t *tls = pfs_current_g_tls();
+	struct locktable_item *li;
+
+	if ((li = tls->tls_locktable_items) == NULL)
 		return NULL;
 
-	return tls->tls_locktable_items[--tls->tls_locktable_item_count];
+	tls->tls_locktable_items = li->li_next;
+	tls->tls_locktable_item_count--;
+	return li;
 }
 
 static inline bool
 item_free_to_local(struct locktable_item *li)
 {
-	pfs_tls_t *tls = pfs_current_tls();
-	if (tls->tls_locktable_item_count == arraysize(tls->tls_locktable_items))
+	pfs_g_tls_t *tls = pfs_current_g_tls();
+	if (tls->tls_locktable_item_count == 128)
 		return false;
 
-	tls->tls_locktable_items[tls->tls_locktable_item_count++] = li;
+	li->li_next = tls->tls_locktable_items;
+	tls->tls_locktable_items = li;
+	tls->tls_locktable_item_count++;
 	return true;
 }
 
@@ -237,10 +246,15 @@ pfs_locktable_put_rangelock(struct locktable *lt, uint64_t blkno,
 void
 pfs_locktable_thread_exit(void)
 {
-	pfs_tls_t *tls = pfs_current_tls();
-	while (tls->tls_locktable_item_count) {
-		item_free(
-		  tls->tls_locktable_items[--tls->tls_locktable_item_count]
-		);
+	pfs_g_tls_t *tls = pfs_current_g_tls();
+	struct locktable_item *p, *next;
+
+	p = tls->tls_locktable_items;
+	while (p) {
+		next = p->li_next;
+		item_free(p);
+		p = next;
 	}
+	tls->tls_locktable_items = NULL;
+	tls->tls_locktable_item_count = 0;
 }

@@ -25,7 +25,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -104,7 +103,7 @@ typedef struct admin_event {
 #define	ADMIN_NEVENT	18
 
 typedef struct admin_info {
-	pthread_t	ai_thrid;
+	pfs_thread_t	ai_thrid;
 	char 		ai_sockpath[PFS_MAX_PATHLEN];
 	int		ai_sockfd;
 	int		ai_exitfd;
@@ -247,7 +246,7 @@ conn_handle_command(int clisock, msg_header_t *mh, admin_info_t *ai)
 	ci->ci_msgcmd = msgcmd;	/* structure copy */
 	ci->ci_cmdop = mh->mh_op;
 	ci->ci_stopcmd = false;
-	err = pthread_create(&ci->ci_tid, NULL, pfs_command_entry, (void *)ci);
+	err = pfs_thread_create(&ci->ci_tid, NULL, pfs_command_entry, (void *)ci);
 	if (err) {
 		pfs_etrace("cant create cmmand thread");
 		ERR_GOTO(err, out);
@@ -398,7 +397,7 @@ event_handle_cmddone(admin_event_t *ep, admin_info_t *ai)
 	close(ep->e_fd);
 	admin_clr_event(ai, ep);
 
-	rv = pthread_join(ci->ci_tid, NULL);
+	rv = pfs_thread_join(ci->ci_tid, NULL);
 	PFS_VERIFY(rv == 0);
 	pfs_mem_free(ci, M_CMDINFO);
 }
@@ -616,7 +615,7 @@ pfs_admin_init(const char *pbdname)
 		goto out;
 	}
 
-	err = pthread_create(&ai->ai_thrid, NULL, pfs_admin_entry, (void *)ai);
+	err = pfs_thread_create(&ai->ai_thrid, NULL, pfs_admin_entry, (void *)ai);
 	if (err != 0) {
 		pfs_etrace("create thread failed: %s\n", strerror(err));
 		ai->ai_thrid = 0;
@@ -644,7 +643,7 @@ pfs_admin_fini(admin_info_t *ai, const char *pbdname)
 	if (ai->ai_thrid) {
 		uint64_t val = 1;
 		write(ai->ai_exitfd, &val, sizeof(val));
-		rv = pthread_join(ai->ai_thrid, NULL);
+		rv = pfs_thread_join(ai->ai_thrid, NULL);
 		PFS_VERIFY(rv == 0);
 		ai->ai_thrid = 0;
 	}

@@ -17,8 +17,8 @@
 #define	_PFS_LOG_H_
 
 #include <sys/queue.h>
-#include <pthread.h>
 
+#include "pfs_impl.h"
 #include "pfs_paxos.h"
 #include "pfs_tx.h"
 
@@ -52,8 +52,8 @@ struct log_req;
 TAILQ_HEAD(req_qhead, log_req);
 typedef	struct log_req {
 	TAILQ_ENTRY(log_req) r_next;
-	pthread_mutex_t	r_mtx;
-	pthread_cond_t	r_cond;
+	pfs_mutex_t	r_mtx;
+	pfs_cond_t	r_cond;
 	int		r_type;
 	bool		r_done;
 	int		r_error;
@@ -91,9 +91,9 @@ typedef struct pfs_log {
 	int		log_state;
 	int		log_flags;
 
-	pthread_t	log_tid;	/* log IO thread */
-	pthread_mutex_t	log_mtx;
-	pthread_cond_t	log_cond;
+	pfs_thread_t	log_tid;	/* log IO thread */
+	pfs_mutex_t	log_mtx;
+	pfs_cond_t	log_cond;
 	struct req_qhead log_reqhead;
 
 	pfs_file_t	*log_file;

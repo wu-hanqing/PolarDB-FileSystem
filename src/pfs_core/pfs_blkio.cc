@@ -185,12 +185,12 @@ pfs_block_lock(pfs_mount_t *mnt, int64_t blkno, off_t woff,
 	const size_t dev_bsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
 	off_t lock_start = woff, lock_mid_end = 0, lock_end = woff + wlen;
 	struct rangelock *rl = NULL;
-	pthread_mutex_t *mtx = NULL;
+	pfs_mutex_t *mtx = NULL;
 
 	*cc = 0;
 	rl = pfs_locktable_get_rangelock(mnt->mnt_locktable, blkno);
 	mtx = &rl->rl_mutex;
-	pthread_mutex_lock(mtx);
+	pfs_mutex_lock(mtx);
 	if (lock_start & (dev_bsize-1)) {
 		lock_start = RTE_ALIGN_FLOOR(lock_start, dev_bsize);
 		cookie[*cc] = pfs_rangelock_wlock(rl, lock_start,
@@ -212,7 +212,7 @@ pfs_block_lock(pfs_mount_t *mnt, int64_t blkno, off_t woff,
 			 lock_end, mtx);
 		*cc = *cc + 1;
 	}
-	pthread_mutex_unlock(mtx);
+	pfs_mutex_unlock(mtx);
 	*rlp = rl;
 }
 
@@ -220,14 +220,14 @@ static void
 pfs_block_unlock(pfs_mount_t *mnt, uint64_t blkno,
 	struct rangelock *rl, void **cookie, int cc)
 {
-	pthread_mutex_t *mtx = NULL;
+	pfs_mutex_t *mtx = NULL;
 
 	mtx = &rl->rl_mutex;
-	pthread_mutex_lock(mtx);
+	pfs_mutex_lock(mtx);
 	for (int i = 0; i < cc; ++i) {
 		pfs_rangelock_unlock(rl, cookie[i], mtx);
 	}
-	pthread_mutex_unlock(mtx);
+	pfs_mutex_unlock(mtx);
 	pfs_locktable_put_rangelock(mnt->mnt_locktable, blkno, rl);
 }
 

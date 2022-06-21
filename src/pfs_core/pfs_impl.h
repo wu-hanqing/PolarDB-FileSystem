@@ -28,6 +28,7 @@
 #include "pfs_trace.h"
 #include "pfs_memory.h"
 #include "pfs_util.h"
+#include "pfs_sync.h"
 
 /*
  * Macros for PBD information.
@@ -168,109 +169,112 @@ void	pfs_abort(const char *action, const char *cond, const char *func,
 #endif
 
 static inline void
-mutex_init(pthread_mutex_t *mtx)
+mutex_init(pfs_mutex_t *mtx)
 {
 	int err;
+/*
 	pthread_mutexattr_t attr;
 
 	err = pthread_mutexattr_init(&attr);
 	err |= pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
 	err |= pthread_mutex_init(mtx, &attr);
 	err |= pthread_mutexattr_destroy(&attr);
+*/
+    err = pfs_mutex_init(mtx);
 	PFS_VERIFY(err == 0);
 }
 
 static inline void
-mutex_destroy(pthread_mutex_t *mtx)
+mutex_destroy(pfs_mutex_t *mtx)
 {
-	PFS_ASSERT(pthread_mutex_destroy(mtx) == 0);
+	PFS_ASSERT(pfs_mutex_destroy(mtx) == 0);
 }
 
 static inline void
-mutex_lock(pthread_mutex_t *mtx)
+mutex_lock(pfs_mutex_t *mtx)
 {
-	PFS_ASSERT(pthread_mutex_lock(mtx) == 0);
+	PFS_ASSERT(pfs_mutex_lock(mtx) == 0);
 }
 
 static inline void
-mutex_unlock(pthread_mutex_t *mtx)
+mutex_unlock(pfs_mutex_t *mtx)
 {
-	PFS_ASSERT(pthread_mutex_unlock(mtx) == 0);
+	PFS_ASSERT(pfs_mutex_unlock(mtx) == 0);
 }
 
 static inline void
-cond_init(pthread_cond_t *cnd, const pthread_condattr_t *attr)
+cond_init(pfs_cond_t *cnd, const void *attr)
 {
-	PFS_ASSERT(pthread_cond_init(cnd, attr) == 0);
+	PFS_ASSERT(pfs_cond_init(cnd) == 0);
 }
 
 static inline void
-cond_destroy(pthread_cond_t *cnd)
+cond_destroy(pfs_cond_t *cnd)
 {
-	PFS_ASSERT(pthread_cond_destroy(cnd) == 0);
+	PFS_ASSERT(pfs_cond_destroy(cnd) == 0);
 }
 
 static inline void
-cond_wait(pthread_cond_t *cnd, pthread_mutex_t *mtx)
+cond_wait(pfs_cond_t *cnd, pfs_mutex_t *mtx)
 {
-	PFS_ASSERT(pthread_cond_wait(cnd, mtx) == 0);
+	PFS_ASSERT(pfs_cond_wait(cnd, mtx) == 0);
 }
 
 static inline int
-cond_timedwait(pthread_cond_t *cnd, pthread_mutex_t *mtx, const struct timespec *abstime)
+cond_timedwait(pfs_cond_t *cnd, pfs_mutex_t *mtx, const struct timespec *abstime)
 {
 	int err;
-	err = pthread_cond_timedwait(cnd, mtx, abstime);
+	err = pfs_cond_timedwait(cnd, mtx, abstime);
 	PFS_ASSERT(err == 0 || err == ETIMEDOUT);
 	return err;
 }
 
 static inline void
-cond_signal(pthread_cond_t *cnd)
+cond_signal(pfs_cond_t *cnd)
 {
-	PFS_ASSERT(pthread_cond_signal(cnd) == 0);
+	PFS_ASSERT(pfs_cond_signal(cnd) == 0);
 }
 
 static inline void
-cond_broadcast(pthread_cond_t *cnd)
+cond_broadcast(pfs_cond_t *cnd)
 {
-	PFS_ASSERT(pthread_cond_broadcast(cnd) == 0);
+	PFS_ASSERT(pfs_cond_broadcast(cnd) == 0);
 }
 
 static inline void
-rwlock_init(pthread_rwlock_t *rwlock, const pthread_rwlockattr_t *attr)
+rwlock_init(pfs_rwlock_t *rwlock, const void *attr) 
 {
-	PFS_ASSERT(pthread_rwlock_init(rwlock, attr) == 0);
+	PFS_ASSERT(pfs_rwlock_init(rwlock) == 0);
 }
 
 static inline void
-rwlock_destroy(pthread_rwlock_t *rwlock)
+rwlock_destroy(pfs_rwlock_t *rwlock)
 {
-	PFS_ASSERT(pthread_rwlock_destroy(rwlock) == 0);
+	PFS_ASSERT(pfs_rwlock_destroy(rwlock) == 0);
 }
 
 static inline void
-rwlock_wrlock(pthread_rwlock_t *rwlock)
+rwlock_wrlock(pfs_rwlock_t *rwlock)
 {
-	PFS_ASSERT(pthread_rwlock_wrlock(rwlock) == 0);
+	PFS_ASSERT(pfs_rwlock_wrlock(rwlock) == 0);
 }
 
 static inline void
-rwlock_rdlock(pthread_rwlock_t *rwlock)
+rwlock_rdlock(pfs_rwlock_t *rwlock)
 {
-	PFS_ASSERT(pthread_rwlock_rdlock(rwlock) == 0);
+	PFS_ASSERT(pfs_rwlock_rdlock(rwlock) == 0);
 }
 
 static inline int
-rwlock_tryrdlock(pthread_rwlock_t *rwlock)
+rwlock_tryrdlock(pfs_rwlock_t *rwlock)
 {
-	return pthread_rwlock_tryrdlock(rwlock);
+	return pfs_rwlock_tryrdlock(rwlock);
 }
 
 static inline void
-rwlock_unlock(pthread_rwlock_t *rwlock)
+rwlock_unlock(pfs_rwlock_t *rwlock)
 {
-	PFS_ASSERT(pthread_rwlock_unlock(rwlock) == 0);
+	PFS_ASSERT(pfs_rwlock_unlock(rwlock) == 0);
 }
 
 /*

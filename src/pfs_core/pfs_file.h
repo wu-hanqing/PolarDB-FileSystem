@@ -20,7 +20,6 @@
 #include <sys/queue.h>
 #include <stddef.h>
 #include <unistd.h>
-#include <pthread.h>
 
 #include "pfs_impl.h"
 #include "pfs_tx.h"
@@ -37,8 +36,8 @@ extern int64_t file_shrink_size;
  * I: file lock f_rwlock
  */
 typedef struct pfs_file {
-	pthread_rwlock_t f_rwlock;	/* (I) */
-	pthread_mutex_t f_offset_lock;	/* (I) */
+	pfs_rwlock_t f_rwlock;	/* (I) */
+	pfs_mutex_t f_offset_lock;	/* (I) */
 	int		f_fd;		/* file description */
 	int		f_mntid;
 	int		f_flags;

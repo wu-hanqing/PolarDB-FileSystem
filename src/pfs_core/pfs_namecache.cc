@@ -362,7 +362,7 @@ pfs_namecache_enter(pfs_mount_t *mnt, pfs_ino_t parent_ino,
 	hash = calc_hash(mnt, parent_ino, name, namelen);
 	hash2 = calc_deno_hash(mnt, deno);
 
-	rwlock_wrlock(&nch_lock);
+	pthread_rwlock_wrlock(&nch_lock);
 
 	nhh = get_namehash_head(hash);
 	dhh = get_denohash_head(hash2);
@@ -375,7 +375,7 @@ pfs_namecache_enter(pfs_mount_t *mnt, pfs_ino_t parent_ino,
 			!memcmp(ncp2->nc_name, name, namelen)) {
 			if (child_ino != ncp2->nc_ino || deno != ncp2->nc_deno) {
 				/* We don't support replacing, it is an error */
-				rwlock_unlock(&nch_lock);
+				pthread_rwlock_unlock(&nch_lock);
 				pfs_etrace("Error! pfs_namecache_enter intends to replace"
 						   " namecache, but we don't have such case.");
 				PFS_ASSERT(false);
@@ -395,24 +395,24 @@ pfs_namecache_enter(pfs_mount_t *mnt, pfs_ino_t parent_ino,
 		LIST_INSERT_HEAD(nhh, ncp, nc_hash);
 		LIST_INSERT_HEAD(dhh, ncp, nc_deno_hash);
 		numcache++;
-		mutex_lock(&lru_lock);
+		pthread_mutex_lock(&lru_lock);
 		TAILQ_INSERT_HEAD(&nc_lru, ncp, nc_lru_link);
 		ncp->nc_promoted = now;
 		evict_entries(&todel);
-		mutex_unlock(&lru_lock);
+		pthread_mutex_unlock(&lru_lock);
 
 		ncp = NULL;
 	} else if (should_promote(now, ncp2)) {
-		mutex_lock(&lru_lock);
+		pthread_mutex_lock(&lru_lock);
 		promote_entry(ncp2, now);
-		mutex_unlock(&lru_lock);
+		pthread_mutex_unlock(&lru_lock);
 	}
 
 rehash:
 	if (should_rehash())
 		rehash_namecache(); /* Note, rehash unlocks nch_lock */
 	else
-		rwlock_unlock(&nch_lock);
+		pthread_rwlock_unlock(&nch_lock);
 	if (ncp) {
 		pfs_mem_free(ncp, M_NAMECACHE);
 	}
@@ -434,7 +434,7 @@ pfs_namecache_delete(pfs_mount_t *mnt, pfs_ino_t parent_ino,
 	namelen = strlen(name);
 	hash = calc_hash(mnt, parent_ino, name, namelen);
 
-	rwlock_wrlock(&nch_lock);
+	pthread_rwlock_wrlock(&nch_lock);
 
 	nhh = get_namehash_head(hash);
 
@@ -447,11 +447,11 @@ pfs_namecache_delete(pfs_mount_t *mnt, pfs_ino_t parent_ino,
 	}
 
 	if (ncp != NULL) {
-		mutex_lock(&lru_lock);
+		pthread_mutex_lock(&lru_lock);
 		remove_entry(ncp);
-		mutex_unlock(&lru_lock);
+		pthread_mutex_unlock(&lru_lock);
 	}
-	rwlock_unlock(&nch_lock);
+	pthread_rwlock_unlock(&nch_lock);
 	if (ncp) {
 		pfs_mem_free(ncp, M_NAMECACHE);
 		__sync_fetch_and_add(&numdelbyname, 1);
@@ -467,7 +467,7 @@ pfs_namecache_delete_by_deno(pfs_mount_t *mnt, int64_t deno)
 	u_long hash;
 
 	hash = calc_deno_hash(mnt, deno);
-	rwlock_wrlock(&nch_lock);
+	pthread_rwlock_wrlock(&nch_lock);
 
 	dhh = get_denohash_head(hash);
 
@@ -478,11 +478,11 @@ pfs_namecache_delete_by_deno(pfs_mount_t *mnt, int64_t deno)
 	}
 
 	if (ncp != NULL) {
-		mutex_lock(&lru_lock);
+		pthread_mutex_lock(&lru_lock);
 		remove_entry(ncp);
-		mutex_unlock(&lru_lock);
+		pthread_mutex_unlock(&lru_lock);
 	}
-	rwlock_unlock(&nch_lock);
+	pthread_rwlock_unlock(&nch_lock);
 	if (ncp) {
 		pfs_mem_free(ncp, M_NAMECACHE);
 		__sync_fetch_and_add(&numdelbydeno, 1);
@@ -514,7 +514,7 @@ pfs_namecache_lookup(pfs_mount_t *mnt, pfs_ino_t parent_ino, const char *name,
 	namelen = strlen(name);
 	hash = calc_hash(mnt, parent_ino, name, namelen);
 
-	rwlock_rdlock(&nch_lock);
+	pthread_rwlock_rdlock(&nch_lock);
 
 	nhh = get_namehash_head(hash);
 
@@ -528,18 +528,18 @@ pfs_namecache_lookup(pfs_mount_t *mnt, pfs_ino_t parent_ino, const char *name,
 
 	now = get_current_time();
 	if (ncp == NULL) {
-		rwlock_unlock(&nch_lock);
+		pthread_rwlock_unlock(&nch_lock);
 		__sync_fetch_and_add(&numchecks, checks);
 		__sync_fetch_and_add(&nummiss, 1);
 		return -ENOENT;
 	} else if (should_promote(now, ncp)) {
-		mutex_lock(&lru_lock);
+		pthread_mutex_lock(&lru_lock);
 		promote_entry(ncp, now);
-		mutex_unlock(&lru_lock);
+		pthread_mutex_unlock(&lru_lock);
 	}
 
 	*child_ino = ncp->nc_ino;
-	rwlock_unlock(&nch_lock);
+	pthread_rwlock_unlock(&nch_lock);
 	__sync_fetch_and_add(&numchecks, checks);
 	__sync_fetch_and_add(&numhits, 1);
 
@@ -554,24 +554,24 @@ pfs_namecache_clear_mount(pfs_mount_t *mnt)
 	struct namecache *ncp, *next;
 
 	TAILQ_INIT(&todel);
-	rwlock_wrlock(&nch_lock);
+	pthread_rwlock_wrlock(&nch_lock);
 	while(nc_expanding) {
-		rwlock_unlock(&nch_lock);
+		pthread_rwlock_unlock(&nch_lock);
 		usleep(10);
-		rwlock_wrlock(&nch_lock);
+		pthread_rwlock_wrlock(&nch_lock);
 	}
 	for (u_long i = 0; i < nchash_sz; ++i) {
 		nhh = get_namehash_head_by_idx(i);
 		for (ncp = LIST_FIRST(nhh); ncp; ncp = next) {
 			next = LIST_NEXT(ncp, nc_hash);
 			if (ncp->nc_mnt == mnt) {
-				mutex_lock(&lru_lock);
+				pthread_mutex_lock(&lru_lock);
 				remove_entry_and_save(ncp, &todel);
-				mutex_unlock(&lru_lock);
+				pthread_mutex_unlock(&lru_lock);
 			}
 		}
 	}
-	rwlock_unlock(&nch_lock);
+	pthread_rwlock_unlock(&nch_lock);
 	free_entry_list(&todel);
 }
 
@@ -622,7 +622,7 @@ maintenance_thread(void *)
 	pfs_itrace("Begin expanding name cache, from size %ld to size %ld\n",
 		nchash_sz, expand_info->nchash_sz);
 	while (!done) {
-		rwlock_wrlock(&nch_lock);
+		pthread_rwlock_wrlock(&nch_lock);
 		for (i = 0; i < hash_bulk_move; ++i) {
 			/* Process name hash */
 			while ((ncp = LIST_FIRST(&nchashtbl[expand_info->expand_bucket]))
@@ -663,7 +663,7 @@ maintenance_thread(void *)
 				break;
 			}
 		}
-		rwlock_unlock(&nch_lock);
+		pthread_rwlock_unlock(&nch_lock);
 	}
 	pfs_itrace("Done expanding name cache\n");
 
@@ -676,7 +676,7 @@ rehash_namecache(void)
 	u_long n, hsize, hmask;
 
 	if (!should_rehash()) {
-		rwlock_unlock(&nch_lock);
+		pthread_rwlock_unlock(&nch_lock);
 		return;
 	}
 	n = (get_nc_max() + SEARCH_DEPTH - 1) / SEARCH_DEPTH;
@@ -685,7 +685,7 @@ rehash_namecache(void)
 		pfs_mem_malloc(sizeof(*expand_info), M_NAMECACHE);
 	if (expand_info == NULL) {
 		/* Bad news, but we can keep running. */
-		rwlock_unlock(&nch_lock);
+		pthread_rwlock_unlock(&nch_lock);
 		return;
 	}
 
@@ -698,13 +698,13 @@ rehash_namecache(void)
 	if (expand_info->nchashtbl == NULL || expand_info->denohashtbl == NULL) {
 		/* Bad news, but we can keep running. */
 		free_expand_info();
-		rwlock_unlock(&nch_lock);
+		pthread_rwlock_unlock(&nch_lock);
 		return;
 	}
 
 	nc_expanding = true;
 
-	rwlock_unlock(&nch_lock);
+	pthread_rwlock_unlock(&nch_lock);
 
 	/* Start a thread to do the expansion */
 	int ret = 0;
@@ -712,10 +712,10 @@ rehash_namecache(void)
 	ret = pthread_create(&tid, NULL, maintenance_thread, NULL);
 
 	if (ret != 0) {
-		rwlock_wrlock(&nch_lock);
+		pthread_rwlock_wrlock(&nch_lock);
 		free_expand_info();
 		nc_expanding = false;
-		rwlock_unlock(&nch_lock);
+		pthread_rwlock_unlock(&nch_lock);
 	} else {
 		ret = pthread_detach(tid);
 		PFS_ASSERT(ret == 0);
@@ -784,7 +784,7 @@ pfs_namecache_dump(int type, admin_buf_t *ab)
 		break;
 	case DUMP_HASH_TABLE:
 	case DUMP_DENO_HASH_TABLE:
-		rwlock_rdlock(&nch_lock);
+		pthread_rwlock_rdlock(&nch_lock);
 		for (i = 0; i < nchash_sz; ++i) {
 			char *buf;
 			size_t buf_size;
@@ -805,13 +805,13 @@ pfs_namecache_dump(int type, admin_buf_t *ab)
 					dump_namecache_entry(fp, ncp);
 				}
 			}
-			rwlock_unlock(&nch_lock);
+			pthread_rwlock_unlock(&nch_lock);
 			fclose(fp);
 			pfs_adminbuf_printf(ab, "%s", buf);
 			free(buf);
-			rwlock_rdlock(&nch_lock);
+			pthread_rwlock_rdlock(&nch_lock);
 		}
-		rwlock_unlock(&nch_lock);
+		pthread_rwlock_unlock(&nch_lock);
 	}
 	return 0;
 }

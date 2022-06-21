@@ -112,6 +112,7 @@ void pfs_mntstat_reinit(struct timeval* stat_time);
 void pfs_mntstat_sync(struct timeval* stat_time);
 void pfs_mntstat_clear();
 
+void pfs_mntstat_bthreads_change(int delta);
 void pfs_mntstat_nthreads_change(int delta);
 
 int pfs_mntstat_snap(admin_buf_t *ab, int64_t begin_time,

@@ -32,6 +32,12 @@
 #include "pfs_impl.h"
 #include "pfs_tls.h"
 
+#if PFS_USE_BTHREAD
+#define MAX_RQLE_CACHE 128
+#else
+#define MAX_RQLE_CACHE 3
+#endif
+
 struct rl_q_entry {
 	union {
 		TAILQ_ENTRY(rl_q_entry) rl_q_link;
@@ -39,13 +45,13 @@ struct rl_q_entry {
 	};
 	off_t		rl_q_start, rl_q_end;
 	int		rl_q_flags;
-	pthread_cond_t	rl_q_cond;
+	pfs_cond_t	rl_q_cond;
 };
 
 static struct rl_q_entry *
 rlqentry_alloc(void)
 {
-	pfs_tls_t *current = pfs_current_tls();
+	pfs_g_tls_t *current = pfs_current_g_tls();
 	struct rl_q_entry *rlqe;
 
 	if ((rlqe = current->tls_rlqe)) {
@@ -57,7 +63,7 @@ rlqentry_alloc(void)
 		pfs_mem_malloc(sizeof(struct rl_q_entry), M_RANGE_LOCK);
 	if (rlqe) {
 		memset(rlqe, 0, sizeof(*rlqe));
-		pthread_cond_init(&rlqe->rl_q_cond, NULL);
+		pfs_cond_init(&rlqe->rl_q_cond);
 	}
 	return rlqe;
 }
@@ -65,15 +71,15 @@ rlqentry_alloc(void)
 static void
 rlqentry_free(struct rl_q_entry *rlqe)
 {
-	pthread_cond_destroy(&rlqe->rl_q_cond);
+	pfs_cond_destroy(&rlqe->rl_q_cond);
 	pfs_mem_free(rlqe, M_RANGE_LOCK);
 }
 
 static void
 rlqentry_release(struct rl_q_entry *rlqe)
 {
-	pfs_tls_t *current = pfs_current_tls();
-	if (current->tls_rlqe_count >= 3) {
+	pfs_g_tls_t *current = pfs_current_g_tls();
+	if (current->tls_rlqe_count >= MAX_RQLE_CACHE) {
 		rlqentry_free(rlqe);
 	} else {
 		rlqe->rl_next = current->tls_rlqe;
@@ -85,7 +91,7 @@ rlqentry_release(struct rl_q_entry *rlqe)
 void
 pfs_rangelock_thread_exit(void)
 {
-	pfs_tls_t *current = pfs_current_tls();
+	pfs_g_tls_t *current = pfs_current_g_tls();
 	struct rl_q_entry *rlqe;
 
 	while ((rlqe = current->tls_rlqe)) {
@@ -98,15 +104,9 @@ pfs_rangelock_thread_exit(void)
 void
 pfs_rangelock_init(struct rangelock *lock)
 {
-	pthread_mutexattr_t attr;
-                                                                                
-	pthread_mutexattr_init(&attr);
-	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
-
 	TAILQ_INIT(&lock->rl_waiters);
 	lock->rl_currdep = NULL;
-	pthread_mutex_init(&lock->rl_mutex, &attr);
-        pthread_mutexattr_destroy(&attr);         
+	pfs_mutex_init(&lock->rl_mutex); // FIXME adaptive spin for pthread
 }
 
 void
@@ -114,7 +114,7 @@ pfs_rangelock_destroy(struct rangelock *lock)
 {
 
 	PFS_ASSERT(TAILQ_EMPTY(&lock->rl_waiters));
-	pthread_mutex_destroy(&lock->rl_mutex);
+	pfs_mutex_destroy(&lock->rl_mutex);
 }
 
 /*
@@ -165,7 +165,7 @@ rangelock_calc_block(struct rangelock *lock)
 
 		/* Grant this lock. */
 		entry->rl_q_flags |= RL_LOCK_GRANTED;
-		pthread_cond_signal(&entry->rl_q_cond);
+		pfs_cond_signal(&entry->rl_q_cond);
 	}
 out:
 	lock->rl_currdep = entry;
@@ -173,7 +173,7 @@ out:
 
 static void
 rangelock_unlock_locked(struct rangelock *lock, struct rl_q_entry *entry,
-    pthread_mutex_t *ilk, bool do_calc_block)
+    pfs_mutex_t *ilk, bool do_calc_block)
 {
 	pfs_tls_t *current = pfs_current_tls();
 
@@ -203,7 +203,7 @@ rangelock_unlock_locked(struct rangelock *lock, struct rl_q_entry *entry,
 }
 
 void
-pfs_rangelock_unlock(struct rangelock *lock, void *cookie, pthread_mutex_t *ilk)
+pfs_rangelock_unlock(struct rangelock *lock, void *cookie, pfs_mutex_t *ilk)
 {
 
 	PFS_ASSERT(lock != NULL && cookie != NULL && ilk != NULL);
@@ -216,7 +216,7 @@ pfs_rangelock_unlock(struct rangelock *lock, void *cookie, pthread_mutex_t *ilk)
  */
 void *
 pfs_rangelock_unlock_range(struct rangelock *lock, void *cookie, off_t start,
-    off_t end, pthread_mutex_t *ilk)
+    off_t end, pfs_mutex_t *ilk)
 {
 	struct rl_q_entry *entry;
 
@@ -241,7 +241,7 @@ pfs_rangelock_unlock_range(struct rangelock *lock, void *cookie, off_t start,
  */
 static void *
 rangelock_enqueue(struct rangelock *lock, off_t start, off_t end, int mode,
-    pthread_mutex_t *ilk, bool trylock)
+    pfs_mutex_t *ilk, bool trylock)
 {
 	struct rl_q_entry *entry;
 
@@ -280,13 +280,13 @@ rangelock_enqueue(struct rangelock *lock, off_t start, off_t end, int mode,
 			rangelock_unlock_locked(lock, entry, ilk, false);
 			return (NULL);
 		}
-		pthread_cond_wait(&entry->rl_q_cond, ilk);
+		pfs_cond_wait(&entry->rl_q_cond, ilk);
 	}
 	return (entry);
 }
 
 void *
-pfs_rangelock_rlock(struct rangelock *lock, off_t start, off_t end, pthread_mutex_t *ilk)
+pfs_rangelock_rlock(struct rangelock *lock, off_t start, off_t end, pfs_mutex_t *ilk)
 {
 
 	return (rangelock_enqueue(lock, start, end, RL_LOCK_READ, ilk, false));
@@ -294,14 +294,14 @@ pfs_rangelock_rlock(struct rangelock *lock, off_t start, off_t end, pthread_mute
 
 void *
 pfs_rangelock_tryrlock(struct rangelock *lock, off_t start, off_t end,
-    pthread_mutex_t *ilk)
+    pfs_mutex_t *ilk)
 {
 
 	return (rangelock_enqueue(lock, start, end, RL_LOCK_READ, ilk, true));
 }
 
 void *
-pfs_rangelock_wlock(struct rangelock *lock, off_t start, off_t end, pthread_mutex_t *ilk)
+pfs_rangelock_wlock(struct rangelock *lock, off_t start, off_t end, pfs_mutex_t *ilk)
 {
 
 	return (rangelock_enqueue(lock, start, end, RL_LOCK_WRITE, ilk, false));
@@ -309,7 +309,7 @@ pfs_rangelock_wlock(struct rangelock *lock, off_t start, off_t end, pthread_mute
 
 void *
 pfs_rangelock_trywlock(struct rangelock *lock, off_t start, off_t end,
-    pthread_mutex_t *ilk)
+    pfs_mutex_t *ilk)
 {
 	return (rangelock_enqueue(lock, start, end, RL_LOCK_WRITE, ilk, true));
 }

@@ -93,8 +93,8 @@ typedef struct fscp_info {
 	int  			i_dst_iochd;
 	int			i_dst_local_fd;		/* local paxos lock */
 
-	pthread_mutex_t		i_task_mtx;
-	pthread_cond_t		i_task_cond;
+	pfs_mutex_t		i_task_mtx;
+	pfs_cond_t		i_task_cond;
 	struct task_qhead	i_task_queue;
 
 	int			i_nfrag;		/* pending fragment number */

@@ -1729,7 +1729,7 @@ pfs_log_thread_entry(void *arg)
 		mutex_lock(&log->log_mtx);
 		while (err == 0 && TAILQ_EMPTY(&work_req[0]) &&
 		    TAILQ_EMPTY(&log->log_reqhead))
-		       err = pthread_cond_timedwait(&log->log_cond,
+		       err = pfs_cond_timedwait(&log->log_cond,
 			   &log->log_mtx, &ts);
 		TAILQ_CONCAT(&work_req[0], &log->log_reqhead, r_next);
 		mutex_unlock(&log->log_mtx);
@@ -1860,7 +1860,7 @@ pfs_log_start(pfs_log_t *log)
 	log->log_paxos_ts.tv_nsec = 0;
 	memset(&log->log_leader_latest, 0, sizeof(log->log_leader_latest));
 
-	err = pthread_create(&log->log_tid, NULL, pfs_log_thread_entry, log);
+	err = pfs_thread_create(&log->log_tid, NULL, pfs_log_thread_entry, log);
 	if (err) {
 		log->log_tid = 0;
 		pfs_etrace("cant create log io thread: %d, %s\n", err,
@@ -1879,7 +1879,7 @@ pfs_log_stop(pfs_log_t *log)
 
 	if (log->log_tid) {
 		pfs_log_request(log, LOG_STOP, NULL, NULL);
-		rv = pthread_join(log->log_tid, NULL);
+		rv = pfs_thread_join(log->log_tid, NULL);
 		PFS_VERIFY(rv == 0);
 		log->log_tid = 0;
 	}

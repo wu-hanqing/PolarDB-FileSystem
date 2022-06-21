@@ -49,6 +49,7 @@ target_link_libraries(pfs_unittest
     pfs
     -Wl,--no-whole-archive                                                      
     -Wl,--pop-state                                                             
+    brpc
     ${SPDK_LIBS}
     ${SPDK_DEPS}
     gtest
@@ -75,6 +76,7 @@ target_link_libraries(pfs_pwrite_zero
     pfs
     -Wl,--no-whole-archive                                                      
     -Wl,--pop-state                                                             
+    brpc
     ${SPDK_LIBS}
     ${SPDK_DEPS}
     gflags

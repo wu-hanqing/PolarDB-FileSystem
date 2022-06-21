@@ -17,8 +17,8 @@
 #define	_PFS_MOUNT_H_
 
 #include <sys/queue.h>
-#include <pthread.h>
 
+#include "pfs_sync.h"
 #include "pfs_meta.h"
 #include "pfs_alloc.h"
 #include "pfs_log.h"
@@ -66,7 +66,7 @@ typedef struct pfs_mount {
 	int		mnt_id;
 	int64_t		mnt_epoch;
 
-	pthread_mutex_t	mnt_inodetree_mtx;
+	pfs_mutex_t	mnt_inodetree_mtx;
 	TAILQ_HEAD(, pfs_inode) mnt_inodelist;	/* destack helper for swap out*/
 	pfs_avl_tree_t	mnt_inodetree;		/* (I) */
 
@@ -75,11 +75,11 @@ typedef struct pfs_mount {
 	uint64_t	mnt_disk_version;	/* version on disk */
 	uint64_t	mnt_run_version;	/* running pfs version */
 
-	pthread_mutex_t	mnt_inited_mtx;
-	pthread_cond_t	mnt_inited_cond;
+	pfs_mutex_t	mnt_inited_mtx;
+	pfs_cond_t	mnt_inited_cond;
 	int		mnt_status;		/* mount status */
 
-	pthread_rwlock_t mnt_meta_rwlock;	/* (M) */
+	pfs_rwlock_t mnt_meta_rwlock;	/* (M) */
 	pfs_anode_t	mnt_anode[MT_NTYPE];	/* (M) */
 
 	bool		mnt_discard_force;	/* discard forcedly */
@@ -111,20 +111,20 @@ typedef struct pfs_mount {
 	/* admin thread info */
 	admin_info_t    *mnt_admin;
 
-	pthread_mutex_t	mnt_poll_mtx;
-	pthread_cond_t	mnt_poll_cond;
-	pthread_t	mnt_poll_tid;
+	pfs_mutex_t	mnt_poll_mtx;
+	pfs_cond_t	mnt_poll_cond;
+	pfs_thread_t	mnt_poll_tid;
 	int		mnt_poll_stop;
 	int		mnt_poll_sync;
 
-	pthread_mutex_t	mnt_discard_mtx;
-	pthread_cond_t	mnt_discard_cond;
-	pthread_t	mnt_discard_tid;
+	pfs_mutex_t	mnt_discard_mtx;
+	pfs_cond_t	mnt_discard_cond;
+	pfs_thread_t	mnt_discard_tid;
 	int		mnt_discard_stop;
 
-	pthread_mutex_t	mnt_stat_mtx;
-	pthread_cond_t	mnt_stat_cond;
-	pthread_t	mnt_stat_tid;
+	pfs_mutex_t	mnt_stat_mtx;
+	pfs_cond_t	mnt_stat_cond;
+	pfs_thread_t	mnt_stat_tid;
 	int		mnt_stat_stop;
 	struct locktable *mnt_locktable;
 } pfs_mount_t;

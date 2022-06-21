@@ -17,7 +17,6 @@
 #define	_PFS_TX_H_
 
 #include <sys/queue.h>
-#include <pthread.h>
 
 #include "pfs_impl.h"
 #include "pfs_tls.h"

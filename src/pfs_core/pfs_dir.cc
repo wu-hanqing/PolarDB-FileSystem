@@ -38,7 +38,7 @@
 #define d_sysde		d_deplus.dp_sysde	/* code compatible */
 
 static char		work_dir[PFS_MAX_PATHLEN];
-pthread_rwlock_t	work_dir_rwlock;
+pfs_rwlock_t	work_dir_rwlock;
 
 static int pfs_direntry_init(pfs_mount_t *, pfs_direntry_phy_t *, pfs_ino_t, pfs_ino_t, const char *);
 static void pfs_direntry_fini(pfs_mount_t *, pfs_direntry_phy_t *);
