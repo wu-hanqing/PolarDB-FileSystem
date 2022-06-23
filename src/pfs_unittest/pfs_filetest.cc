@@ -1851,7 +1851,7 @@ TEST_F(FileTest, pfs_path_test)
     // 5 path = "/pbdname"
     path = "/" + g_testenv->pbdname_;
     fd = pfs_open(path.c_str(), O_CREAT | O_RDWR, 0);
-    CHECK_ERR_RET(-1, fd, EINVAL);
+    CHECK_ERR_RET(-1, fd, EISDIR);
 
     // 6 path = "/pbdname//"
     path = "/" + workpath + "//";
