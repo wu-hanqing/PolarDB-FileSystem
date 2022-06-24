@@ -166,9 +166,9 @@ int	pfsdev_pread_flags(int devi, void *buf, size_t len, uint64_t bda,
 	    int flags);
 int	pfsdev_pwrite_flags(int devi, void *buf, size_t len, uint64_t bda,
 	    int flags);
-int	pfsdev_preadv_flags(int devi, struct iovec *iov, int iovcnt, size_t len, uint64_t bda,
+int	pfsdev_preadv_flags(int devi, const struct iovec *iov, int iovcnt, size_t len, uint64_t bda,
 	    int flags);
-int	pfsdev_pwritev_flags(int devi, struct iovec *iov, int iovcnt, size_t len, uint64_t bda,
+int	pfsdev_pwritev_flags(int devi, const struct iovec *iov, int iovcnt, size_t len, uint64_t bda,
 	    int flags);
 int	pfsdev_wait_io(int devi);
 int	pfsdev_get_socket_id(int devi);

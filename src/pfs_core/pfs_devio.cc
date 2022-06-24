@@ -394,7 +394,7 @@ pfs_io_submit(pfs_devio_t *io)
 }
 
 static pfs_devio_t *
-pfs_io_create(pfs_dev_t *dev, int op, struct iovec *iov, int iovcnt, size_t len, uint64_t bda,
+pfs_io_create(pfs_dev_t *dev, int op, const struct iovec *iov, int iovcnt, size_t len, uint64_t bda,
     int flags)
 {
 	pfs_devio_t *io;
@@ -408,6 +408,7 @@ pfs_io_create(pfs_dev_t *dev, int op, struct iovec *iov, int iovcnt, size_t len,
 			io->io_iov = io->io_iovspace;
 		}
 		memcpy(io->io_iov, iov, sizeof(struct iovec) * iovcnt);
+		pfs_reset_iovcnt(io->io_iov, len, &iovcnt, true);
 		io->io_iovcnt = iovcnt;
 	} else {
 		io->io_iov = NULL;
@@ -581,7 +582,7 @@ pfsdev_flush(int devi)
 	PFS_ASSERT(0 <= devi && devi < PFS_MAX_NCHD);
 	dev = pfs_devs[devi];
 	PFS_ASSERT(dev != NULL);
-	if (!dev->d_ops->dop_has_cache(dev))
+	if (!dev->d_ops->dop_has_cache(dev) || !dev_writable(dev))
 		return 0;
 	io = pfs_io_create(dev, PFSDEV_REQ_FLUSH, NULL, 0, 0, 0, IO_WAIT);
 	PFS_VERIFY(io != NULL);
@@ -590,7 +591,7 @@ pfsdev_flush(int devi)
 }
 
 int
-pfsdev_preadv_flags(int devi, struct iovec *iov, int iovcnt, size_t len, uint64_t bda, int flags)
+pfsdev_preadv_flags(int devi, const struct iovec *iov, int iovcnt, size_t len, uint64_t bda, int flags)
 {
 	pfs_dev_t *dev;
 	pfs_devio_t *io;
@@ -620,7 +621,7 @@ pfsdev_pread_flags(int devi, void *buf, size_t len, uint64_t bda, int flags)
 }
 
 int
-pfsdev_pwritev_flags(int devi, struct iovec *iov, int iovcnt,
+pfsdev_pwritev_flags(int devi, const struct iovec *iov, int iovcnt,
 	size_t len, uint64_t bda, int flags)
 {
 	pfs_dev_t *dev;
