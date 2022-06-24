@@ -132,6 +132,7 @@ ExternalProject_Add(brpc_prj
         -DCMAKE_INSTALL_INCLUDEDIR=${ExtProjLocalDir}/include/
         -DCMAKE_INSTALL_LIBDIR=${ExtProjLocalDir}/lib
         -DCMAKE_INSTALL_RPATH=${ExtProjInstallRPath}
+    BUILD_COMMAND make -j${NCPU}
 )
 
 foreach(lib brpc)# butil bvar bthread)

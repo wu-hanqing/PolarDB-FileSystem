@@ -19,12 +19,15 @@ set(pfsd_VERSION_PATCH 2)
 set(pfsd_VERSION 
     ${pfsd_VERSION_MAJOR}.${pfsd_VERSION_MINOR}.${pfsd_VERSION_MATCH})
 
+include(ProcessorCount)
 include(CheckIncludeFile)
 include(ExternalProject)
 include(FindPkgConfig)
 if (NOT PKG_CONFIG_FOUND)
     message(FATAL_ERROR "pkg_config not found")
 endif()
+
+ProcessorCount(NCPU)
 
 set(PKG_DIR "/usr/local/polarstore/pfsd")
 
