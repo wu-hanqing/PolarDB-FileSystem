@@ -113,8 +113,8 @@ set_target_properties(protobuf_lite PROPERTIES IMPORTED_LOCATION ${ExtProjLocalD
 add_dependencies(protobuf_lite protobuf_prj)
 
 #set(patch_command patch -p1 < ${CMAKE_SOURCE_DIR}/thirdparties/brpc/brpc.patch && patch -p1 < ${CMAKE_SOURCE_DIR}/thirdparties/brpc/brpc_dpdk.patch)
-#set(patch_command patch -p1 < ${CMAKE_SOURCE_DIR}/thirdparties/brpc/brpc.patch)
-set(patch_command patch -p1 < ${CMAKE_SOURCE_DIR}/thirdparties/brpc/brpc.patch && patch -p1 < ${CMAKE_SOURCE_DIR}/thirdparties/brpc/fastmutex.patch)
+set(patch_command patch -p1 < ${CMAKE_SOURCE_DIR}/thirdparties/brpc/brpc.patch)
+#set(patch_command patch -p1 < ${CMAKE_SOURCE_DIR}/thirdparties/brpc/brpc.patch && patch -p1 < ${CMAKE_SOURCE_DIR}/thirdparties/brpc/fastmutex.patch)
 
 ExternalProject_Add(brpc_prj
     DOWNLOAD_DIR ${ExtProjDownloadDir}/brpc
