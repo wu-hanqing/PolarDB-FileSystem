@@ -600,18 +600,6 @@ pfs_spdk_dev_io_done(struct spdk_bdev_io *bdev_io,
     spdk_bdev_free_io(bdev_io);
 }
 
-#if 0
-static inline size_t
-iovec_bytes(struct iovec *iov, int cnt)
-{
-	size_t *total = 0;
-	while (cnt-- > 0) {
-		total += iov[cnt].iov_len;
-	}
-	return total;
-}
-#endif
-
 static int
 pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     pfs_spdk_iocb_t *iocb)
