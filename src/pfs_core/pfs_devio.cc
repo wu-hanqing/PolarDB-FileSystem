@@ -752,3 +752,11 @@ pfsdev_get_write_unit(int devi)
 	auto dev = pfs_devs[devi];
 	return dev->d_write_unit;
 }
+
+unsigned
+pfsdev_get_buf_align(int devi)
+{
+	PFS_ASSERT(0 <= devi && devi < PFS_MAX_NCHD);
+	auto dev = pfs_devs[devi];
+	return dev->d_buf_align;
+}

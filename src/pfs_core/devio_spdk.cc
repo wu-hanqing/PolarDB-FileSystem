@@ -623,7 +623,7 @@ pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
 
     if (FLAGS_pfs_spdk_driver_auto_dma &&
         !(io->io_flags & IO_DMABUF)) {
-        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, PFS_CACHELINE_SIZE,
+        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, dkdev->dk_base.d_buf_align,
             io->io_len, SOCKET_ID_ANY);
         if (iocb->cb_dma_buf == NULL) {
             struct timeval tv = error_time_interval;
@@ -701,8 +701,8 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
 
     if (FLAGS_pfs_spdk_driver_auto_dma &&
         !(io->io_flags & IO_DMABUF) && !(io->io_flags & IO_ZERO)) {
-        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, PFS_CACHELINE_SIZE,
-		io->io_len, SOCKET_ID_ANY);
+        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, dkdev->dk_base.d_buf_align,
+		   io->io_len, SOCKET_ID_ANY);
         if (iocb->cb_dma_buf == NULL) {
             struct timeval tv = error_time_interval;
             if (pfs_ratecheck(&last, &tv)) {

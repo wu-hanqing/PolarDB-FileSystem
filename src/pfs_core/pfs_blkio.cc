@@ -241,6 +241,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	size_t allen, iolen, left;
 	int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 	const size_t dev_bsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
+	const size_t buf_align = pfsdev_get_buf_align(mnt->mnt_ioch_desc);
 	int write_zero = !!(flags & PFS_IO_WRITE_ZERO);
 	struct rangelock *rl = NULL;
 	void		*cookie[3];
@@ -271,7 +272,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 
 		if (allen != iolen && albuf == NULL) {
 			albuf = (char *)pfs_dma_malloc("alignbuf",
-				PFS_CACHELINE_SIZE, PFS_FRAG_SIZE, socket);
+				buf_align, PFS_FRAG_SIZE, socket);
 			PFS_VERIFY(albuf != NULL);
 		}
 

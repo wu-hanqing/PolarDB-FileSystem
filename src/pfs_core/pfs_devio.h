@@ -149,6 +149,7 @@ typedef struct pfs_dev {
 
 	unsigned	d_cap;
 	unsigned	d_write_unit;
+	unsigned	d_buf_align;
 	pfs_devstat_t	d_ds;		/* statistics */
 } pfs_dev_t;
 
@@ -174,6 +175,7 @@ int	pfsdev_wait_io(int devi);
 int	pfsdev_get_socket_id(int devi);
 unsigned	pfsdev_get_cap(int devi);
 unsigned	pfsdev_get_write_unit(int devi);
+unsigned	pfsdev_get_buf_align(int devi);
 
 const char *pfsdev_trace_pbdname(const char *cluster, const char *pbdname);
 

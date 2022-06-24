@@ -1813,9 +1813,11 @@ pfs_log_start(pfs_log_t *log)
 {
 	pfs_mount_t *mnt;
 	int err, fd, socket;
+	int buf_align = 1;
 	char *buf;
 
 	mnt = log->log_mount;
+	buf_align = pfsdev_get_buf_align(mnt->mnt_ioch_desc);
 	socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 	pfs_itrace("log trim group's sector threshold=%ld, tx threshold=%ld\n",
 	    trimgroup_nsect_threshold, trimgroup_ntx_threshold);
@@ -1836,7 +1838,7 @@ pfs_log_start(pfs_log_t *log)
 	mutex_init(&log->log_trimreq.r_mtx);
 	cond_init(&log->log_trimreq.r_cond, NULL);
 
-	buf = (char *)pfs_dma_malloc("logworkbuf", PFS_CACHELINE_SIZE,
+	buf = (char *)pfs_dma_malloc("logworkbuf", buf_align,
 		PFS_FRAG_SIZE, socket);
 	if (buf == NULL)
 		ERR_RETVAL(ENOMEM);
@@ -1848,7 +1850,7 @@ pfs_log_start(pfs_log_t *log)
 	log->log_writebuf_dirty = 0;
 	log->log_writebuf_sz = PBD_SECTOR_SIZE;
 	log->log_writebuf = (char *)pfs_dma_malloc("logbuf",
-		PFS_CACHELINE_SIZE, log->log_writebuf_sz, socket);
+		buf_align, log->log_writebuf_sz, socket);
 	if (log->log_writebuf == NULL) {
 		pfs_dma_free(log->log_workbuf);
 		log->log_workbuf = NULL;

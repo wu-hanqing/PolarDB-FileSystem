@@ -301,6 +301,7 @@ pfs_leader_init(pfs_mount_t *mnt, int num_hosts, int max_hosts, int write_clear,
 	int align_size;
 	int num_disks = 1;
 	int rv, d, fd = -1;
+	int buf_align = pfsdev_get_buf_align(mnt->mnt_ioch_desc);
 
 	if (!num_hosts)
 		num_hosts = DEFAULT_MAX_HOSTS;
@@ -325,7 +326,7 @@ pfs_leader_init(pfs_mount_t *mnt, int num_hosts, int max_hosts, int write_clear,
 		return -E2BIG;
 
 	iobuf_len = align_size;
-	iobuf = (char *)pfs_dma_malloc("paxos_sector", PFS_CACHELINE_SIZE,
+	iobuf = (char *)pfs_dma_malloc("paxos_sector", buf_align,
 		iobuf_len, SOCKET_ID_ANY);
 	if (iobuf == NULL)
 		return -ENOMEM;
@@ -395,6 +396,7 @@ pfs_leader_load(pfs_mount_t *mnt)
 	int error, fd;
 	uint32_t checksum = 0;
 	int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
+	int buf_align = pfsdev_get_buf_align(mnt->mnt_ioch_desc);
 
 	fd = pfs_file_open_impl(mnt, PAXOS_FILE_MONO, 0,
 	    &mnt->mnt_paxos_file, INNER_FILE_BTIME);
@@ -402,7 +404,7 @@ pfs_leader_load(pfs_mount_t *mnt)
 	if (error < 0)
 		return error;
 
-	mnt->mnt_paxos_buf = pfs_dma_malloc("paxos_sector", PFS_CACHELINE_SIZE,
+	mnt->mnt_paxos_buf = pfs_dma_malloc("paxos_sector", buf_align,
 		mnt->mnt_sectsize, socket);
 	if (mnt->mnt_paxos_buf == NULL) {
 		pfs_etrace("can not allocate paxos_sector buffer");
