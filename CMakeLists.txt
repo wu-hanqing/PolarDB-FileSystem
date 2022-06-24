@@ -55,8 +55,10 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 if (USE_BTHREAD)
     set(PFS_USE_BTHREAD_VAL 1)
+    set(BRPC_LIBS "brpc")
 else()
     set(PFS_USE_BTHREAD_VAL 0)
+    set(BRPC_LIBS "")
 endif()
  
 set(SPDK_LIBS
@@ -66,6 +68,7 @@ set(SPDK_LIBS
  -Wl,--whole-archive
  -Wl,--start-group
  -Bstatic
+ spdk_bdev_aio
  spdk_bdev_null
  spdk_bdev_nvme
  spdk_nvme

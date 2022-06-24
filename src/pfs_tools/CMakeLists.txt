@@ -66,7 +66,7 @@ target_link_libraries(pfs-tools
     pfs
     pfsd
     -Wl,--end-group
-    brpc
+    ${BRPC_LIBS}
     ${SPDK_LIBS}
     ${SPDK_DEPS}
     pthread

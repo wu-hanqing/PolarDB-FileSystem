@@ -67,7 +67,7 @@ add_dependencies(pfsd_shm_tool
     pfsd
 )
 
-target_link_libraries(pfsd_shm_tool pfsd brpc rt pthread)
+target_link_libraries(pfsd_shm_tool pfsd ${BRPC_LIBS} rt pthread)
 
 SET_TARGET_PROPERTIES(pfsd PROPERTIES LINKER_LANGUAGE CXX)
 SET_TARGET_PROPERTIES(pfsd_shm_tool PROPERTIES LINKER_LANGUAGE CXX)

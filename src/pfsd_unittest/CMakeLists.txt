@@ -49,7 +49,7 @@ target_link_libraries(pfsd_unittest
     pfs
     -Wl,--end-group
     pfsd
-    brpc
+    ${BRPC_LIBS}
     pthread
 )
 
