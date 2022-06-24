@@ -128,6 +128,8 @@ DEFINE_int32(pfs_spdk_driver_error_interval, 1,
   "pfs spdk driver DMA buffer allocation failure report interval (seconds)");
 DEFINE_string(pfs_spdk_driver_check_pci_address, "", 
   "pfs spdk device list [device@domain:bus:dev.function;] to check pci address");
+DEFINE_bool(pfs_spdk_driver_auto_dma, true,
+  "pfs spdk driver always use dma buffer if not allocated");
 
 #define PFS_MAX_CACHED_SPDK_IOCB        128
 static __thread SLIST_HEAD(, pfs_spdk_iocb) tls_free_iocb = {NULL};
@@ -619,7 +621,8 @@ pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
-    if (!(io->io_flags & IO_DMABUF)) {
+    if (FLAGS_pfs_spdk_driver_auto_dma &&
+        !(io->io_flags & IO_DMABUF)) {
         iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, PFS_CACHELINE_SIZE,
             io->io_len, SOCKET_ID_ANY);
         if (iocb->cb_dma_buf == NULL) {
@@ -675,7 +678,7 @@ pfs_spdk_dev_io_fini_pread(void *arg)
     pfs_spdk_iocb_t *iocb = (pfs_spdk_iocb_t *)arg;
     pfs_devio_t *io = iocb->cb_pfs_io;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)io->io_queue;
-    if (io->io_error == 0 && !(io->io_flags & IO_DMABUF)) {
+    if (io->io_error == 0 && !(io->io_flags & IO_DMABUF) && iocb->cb_dma_buf) {
         pfs_copy_from_buf_to_iovec(io->io_iov, iocb->cb_dma_buf, io->io_len);
     }
     pfs_spdk_dev_deq_inflight_io(dkioq, io);
@@ -696,7 +699,8 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
-    if (!(io->io_flags & IO_DMABUF) && !(io->io_flags & IO_ZERO)) {
+    if (FLAGS_pfs_spdk_driver_auto_dma &&
+        !(io->io_flags & IO_DMABUF) && !(io->io_flags & IO_ZERO)) {
         iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, PFS_CACHELINE_SIZE,
 		io->io_len, SOCKET_ID_ANY);
         if (iocb->cb_dma_buf == NULL) {
