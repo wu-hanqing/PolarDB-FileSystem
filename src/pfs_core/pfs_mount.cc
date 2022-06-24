@@ -16,13 +16,13 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <search.h>
 #include <unistd.h>
 
+#include "pfs_sync.h"
 #include "pfs_admin.h"
 #include "pfs_alloc.h"
 #include "pfs_devio.h"
@@ -65,7 +65,7 @@ typedef struct orphan_largefile_arg {
 typedef struct mountentry {
 	int			me_id;
 	int64_t			me_epoch;
-	pthread_rwlock_t	me_rwlock;
+	pfs_rwlock_t	me_rwlock;
 	pfs_mount_t		*me_mount;
 } mountentry_t;
 
@@ -313,7 +313,7 @@ pfs_poll_thread_entry(void *arg)
                 mutex_lock(&mnt->mnt_poll_mtx);
                 mnt->mnt_poll_sync = false;
                 while (err == 0 && !mnt->mnt_poll_stop && !mnt->mnt_poll_sync)
-                        err = pthread_cond_timedwait(&mnt->mnt_poll_cond,
+                        err = pfs_cond_timedwait(&mnt->mnt_poll_cond,
                             &mnt->mnt_poll_mtx, &ts);
                 mutex_unlock(&mnt->mnt_poll_mtx);
 
@@ -340,7 +340,7 @@ pfs_poll_start(pfs_mount_t *mnt)
 {
 	int err;
 
-	err = pthread_create(&mnt->mnt_poll_tid, NULL, pfs_poll_thread_entry, mnt);
+	err = pfs_thread_create(&mnt->mnt_poll_tid, NULL, pfs_poll_thread_entry, mnt);
 	if (err) {
 		mnt->mnt_poll_tid = 0;
 		pfs_etrace("cant create poll log thread: %d, %s\n", err,
@@ -361,7 +361,7 @@ pfs_poll_stop(pfs_mount_t *mnt)
 		cond_signal(&mnt->mnt_poll_cond);
 		mutex_unlock(&mnt->mnt_poll_mtx);
 
-		rv = pthread_join(mnt->mnt_poll_tid, NULL);
+		rv = pfs_thread_join(mnt->mnt_poll_tid, NULL);
 		PFS_VERIFY(rv == 0);
 		mnt->mnt_poll_tid = 0;
 	}
@@ -1057,7 +1057,7 @@ pfs_mount_flush(pfs_mount_t *mnt)
 		 * a LOG_POLL to poll those entries.
 		 */
 		if (rv == -EAGAIN)
-			usleep(100);
+			pfs_usleep(100);
 	} while (rv != -ENODATA);
 
 	if (rv == -ENODATA)
@@ -1596,7 +1596,7 @@ pfs_bd_thread_entry(void *arg)
                 err = 0;
                 mutex_lock(&mnt->mnt_discard_mtx);
                 while (err == 0 && !mnt->mnt_discard_stop)
-                        err = pthread_cond_timedwait(&mnt->mnt_discard_cond,
+                        err = pfs_cond_timedwait(&mnt->mnt_discard_cond,
                             &mnt->mnt_discard_mtx, &ts);
                 mutex_unlock(&mnt->mnt_discard_mtx);
 
@@ -1661,7 +1661,7 @@ pfs_bd_start(pfs_mount_t *mnt)
 {
 	int err;
 
-	err = pthread_create(&mnt->mnt_discard_tid, NULL,
+	err = pfs_thread_create(&mnt->mnt_discard_tid, NULL,
 	    pfs_bd_thread_entry, mnt);
 	if (err) {
 		mnt->mnt_discard_tid = 0;
@@ -1683,7 +1683,7 @@ pfs_bd_stop(pfs_mount_t *mnt)
 		cond_signal(&mnt->mnt_discard_cond);
 		mutex_unlock(&mnt->mnt_discard_mtx);
 
-		rv = pthread_join(mnt->mnt_discard_tid, NULL);
+		rv = pfs_thread_join(mnt->mnt_discard_tid, NULL);
 		PFS_VERIFY(rv == 0);
 		mnt->mnt_discard_tid = 0;
 	}
@@ -2021,7 +2021,7 @@ pfs_remount_ro(pfs_mount_t *mnt, int host_id)
 static int  pfsd_mnt_wrref_count = 0;
 static int  pfsd_mnt_ref_count = 0;
 
-static pthread_mutex_t pfsd_mnt_shared_info_lock = PTHREAD_MUTEX_INITIALIZER;
+static pfs_mutex_t pfsd_mnt_shared_info_lock;// = PTHREAD_MUTEX_INITIALIZER;
 typedef struct pfsd_mount_shared_info {
 	int ms_ref_count;
 	bool ms_is_rwmnt;
@@ -2035,6 +2035,7 @@ init_pfsd_mount_shared_infos()
 	int i;
 	pfsd_mount_shared_info_t *info;
 
+    pfs_mutex_init(&pfsd_mnt_shared_info_lock);
 	for (i = 0; i < DEFAULT_MAX_HOSTS + 1; i++) {
 		info = &pfsd_mount_shared_infos[i];
 		info->ms_ref_count = 0;
@@ -2398,7 +2399,7 @@ pfs_mntstat_thread_entry(void *arg)
 		err = 0;
 		mutex_lock(&mnt->mnt_stat_mtx);
 		while (err == 0 && !mnt->mnt_stat_stop)
-			err = pthread_cond_timedwait(&mnt->mnt_stat_cond,
+			err = pfs_cond_timedwait(&mnt->mnt_stat_cond,
 			    &mnt->mnt_stat_mtx, &ts);
 		mutex_unlock(&mnt->mnt_stat_mtx);
 
@@ -2426,7 +2427,7 @@ pfs_mntstat_start(pfs_mount_t *mnt)
 {
 	int err;
 	pfs_mntstat_init();
-	err = pthread_create(&mnt->mnt_stat_tid, NULL, pfs_mntstat_thread_entry,
+	err = pfs_thread_create(&mnt->mnt_stat_tid, NULL, pfs_mntstat_thread_entry,
 	    mnt);
 	if (err) {
 		mnt->mnt_stat_tid = 0;
@@ -2447,7 +2448,7 @@ pfs_mntstat_stop(pfs_mount_t *mnt)
 		cond_signal(&mnt->mnt_stat_cond);
 		mutex_unlock(&mnt->mnt_stat_mtx);
 
-		rv = pthread_join(mnt->mnt_stat_tid, NULL);
+		rv = pfs_thread_join(mnt->mnt_stat_tid, NULL);
 		PFS_VERIFY(rv == 0);
 		mnt->mnt_stat_tid = 0;
 	}

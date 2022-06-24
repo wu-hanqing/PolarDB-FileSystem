@@ -17,7 +17,6 @@
 #include <errno.h>
 
 #include <assert.h>
-#include <pthread.h>
 #include <search.h>
 #include <stdio.h>
 #include <stdlib.h>

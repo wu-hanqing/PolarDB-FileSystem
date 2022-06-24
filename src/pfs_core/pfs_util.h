@@ -92,7 +92,7 @@ int	pfs_printf(pfs_printer_t *pr, const char *fmt, ...);
 
 int pfs_ratecheck(struct timeval *lasttime, const struct timeval *mininterval);
 
-#define arraysize(a)	(sizeof(a) / sizeof(a[0]))
+#define pfs_arraysize(a)	(sizeof(a) / sizeof(a[0]))
 
 static inline void
 forward_iovec_iter(struct iovec **itp, int *iovcnt, int len)
@@ -127,5 +127,6 @@ iovec_bytes(const struct iovec *iov, int cnt)
 
 void pfs_copy_from_buf_to_iovec(struct iovec *iovec, const void *_buf, size_t len);
 void pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, size_t len);
-void pfs_reset_iovcnt(struct iovec *iovec, size_t len, int *iovecnt);
+void pfs_reset_iovcnt(struct iovec *iovec, size_t len, int *iovcnt, bool reset_iov);
+
 #endif

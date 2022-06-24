@@ -46,6 +46,7 @@ static uint32_t mount_file_type_stat_iosize
 static uint32_t mount_threads_stat[MNT_STAT_SIZE][MNT_STAT_TH_TYPE_COUNT];
 
 static int mountstat_nthreads = 0;
+static int mountstat_bthreads = 0;
 
 typedef struct {
 	int cl_api_type;
@@ -278,6 +279,12 @@ void
 pfs_mntstat_nthreads_change(int delta)
 {
 	__atomic_fetch_add(&mountstat_nthreads, delta, __ATOMIC_RELAXED);
+}
+
+void
+pfs_mntstat_bthreads_change(int delta)
+{
+	__atomic_fetch_add(&mountstat_bthreads, delta, __ATOMIC_RELAXED);
 }
 
 void

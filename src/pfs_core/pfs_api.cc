@@ -95,14 +95,14 @@ char pfs_build_version[] = "libpfs_version_" TOSTR(VERSION_DETAIL);
  * pfs_unlink() is already serialized by meta lock, so
  * this protection in API layer doesn't hurt perfomance.
  */
-pthread_mutex_t	unlink_mtx;
+pfs_mutex_t	unlink_mtx;
 
 /*
  * pfs_rename() should lock this mutex for thread-safe.
  * This function is vulnerable since it resolve two paths and
  * can lead to deadlock easily. We just lock it conservatively.
  */
-pthread_mutex_t	rename_mtx;
+pfs_mutex_t	rename_mtx;
 
 #define OFF_MAX ~((off_t)1 << (sizeof(off_t) * 8 - 1))
 

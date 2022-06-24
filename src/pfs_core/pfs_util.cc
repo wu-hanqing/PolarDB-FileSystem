@@ -338,13 +338,16 @@ void pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, size_t le
     }
 }
 
-void pfs_reset_iovcnt(struct iovec *iovec, size_t len, int *iovcnt)
+void pfs_reset_iovcnt(struct iovec *iovec, size_t len, int *iovcnt, bool reset_iov)
 {
 	int i = 0;
 
 	for (;;) {
-		if (iovec[i].iov_len >= len)
+		if (iovec[i].iov_len >= len) {
+			if (reset_iov)
+				iovec[i].iov_len = len;
 			break;
+		}
 		len -= iovec[i].iov_len;
 		i++;
 	}

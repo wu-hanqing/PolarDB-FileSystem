@@ -19,7 +19,6 @@
 #include <sys/queue.h>
 
 #include <time.h>
-#include <pthread.h>
 #include <limits.h>
 
 #include "pfs_avl.h"
@@ -71,7 +70,7 @@ typedef struct pfs_writemodify {
 	int		wm_dblki;
 	int		wm_dblkn;
 	int64_t		wm_sizeinc;	/* size increment */
-	pthread_t	wm_thread;	/* modifying thread */
+	pfs_thread_id_t	wm_thread;	/* modifying thread */
 } pfs_writemodify_t;
 
 enum {
@@ -89,7 +88,7 @@ struct dxredo_rec {
 #define DXR_MAX_NREC	4		/* rename() needs 3 at most */
 
 typedef struct pfs_dxredo {
-	pthread_t	r_thread;	/* modifying thread */
+	pfs_thread_id_t	r_thread;	/* modifying thread */
 	struct dxredo_rec r_rec[DXR_MAX_NREC];
 	int		r_cnt;
 } pfs_dxredo_t;
@@ -107,9 +106,9 @@ typedef struct pfs_inode {
 	uint64_t	in_ctime;
 	uint64_t	in_btime;
 
-	pthread_mutex_t in_mtx;
-	pthread_mutex_t in_mtx_rpl;
-	pthread_cond_t 	in_cond;
+	pfs_mutex_t in_mtx;
+	pfs_mutex_t in_mtx_rpl;
+	pfs_cond_t 	in_cond;
 	pfs_avl_node_t	in_node;
 	TAILQ_ENTRY(pfs_inode) in_next;
 	pfs_mount_t 	*in_mnt;
@@ -133,7 +132,7 @@ typedef struct pfs_inode {
 	int64_t		in_rpl_ver;	/* rpl_ver > sync_ver means the replay
  					* thread has updated the inode */
 
-	volatile pthread_t	in_rpl_lock_thd; /* record rpl lock owner */
+	volatile pfs_thread_id_t	in_rpl_lock_thd; /* record rpl lock owner */
 
 	pfs_inode_blk_table_t	*in_blk_tables;
 	int64_t		in_blk_table_nsoft;

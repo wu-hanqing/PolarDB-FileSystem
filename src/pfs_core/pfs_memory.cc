@@ -113,10 +113,10 @@ memtype_inc(int type, int count, size_t size)
 	PFS_ASSERT(0 < type && type < M_NTYPE);
 
 	mt = &pfs_mem_type[type];
-	mutex_lock(&mt->mt_mtx);
+	pthread_mutex_lock(&mt->mt_mtx);
 	mt->mt_bytes_alloc += (ssize_t)size;
 	mt->mt_count_alloc += count;
-	mutex_unlock(&mt->mt_mtx);
+	pthread_mutex_unlock(&mt->mt_mtx);
 }
 
 static void
@@ -127,10 +127,10 @@ memtype_dec(int type, size_t size)
 	PFS_ASSERT(0 < type && type < M_NTYPE);
 
 	mt = &pfs_mem_type[type];
-	mutex_lock(&mt->mt_mtx);
+	pthread_mutex_lock(&mt->mt_mtx);
 	mt->mt_bytes_free += (ssize_t)size;
 	mt->mt_count_free += 1;
-	mutex_unlock(&mt->mt_mtx);
+	pthread_mutex_unlock(&mt->mt_mtx);
 }
 
 void *

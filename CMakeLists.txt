@@ -30,11 +30,15 @@ set(PKG_DIR "/usr/local/polarstore/pfsd")
 
 include(thirdparties/CMakeLists.txt)
 
+include_directories(${ExtProjLocalDir}/include SYSTEM)                          
+link_directories(${ExtProjLocalDir}/lib)
+
 set(DPDK_DIR /usr/local/dpdk CACHE STRING "dpdk directory")
 set(SPDK_DIR /usr/local/spdk CACHE STRING "spdk directory")
 list(APPEND CMAKE_PREFIX_PATH "${DPDK_DIR}" "${SPDK_DIR}")
 set(SANITIZE_ADDRESS OFF CACHE BOOL "enable -fsanitize=address")
 set(STACK_PROTECT OFF CACHE BOOL "enable -fstack-protector")
+set(USE_BTHREAD true CACHE BOOL "enable using bthread")
 
 pkg_check_modules(dpdk REQUIRED libdpdk)
 include_directories(${dpdk_INCLUDE_DIRS})
@@ -49,6 +53,14 @@ set(CMAKE_INSTALL_RPATH ${PKG_DIR}/lib)
 #set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
+if (USE_BTHREAD)
+    set(PFS_USE_BTHREAD_VAL 1)
+    set(BRPC_LIBS "brpc")
+else()
+    set(PFS_USE_BTHREAD_VAL 0)
+    set(BRPC_LIBS "")
+endif()
+ 
 set(SPDK_LIBS
  -Wl,--disable-new-dtags
  -Wl,--push-state
@@ -56,6 +68,7 @@ set(SPDK_LIBS
  -Wl,--whole-archive
  -Wl,--start-group
  -Bstatic
+ spdk_bdev_aio
  spdk_bdev_null
  spdk_bdev_nvme
  spdk_nvme
@@ -140,6 +153,7 @@ set(COMMON_FLAGS
   -mssse3
   -g
   -D_GNU_SOURCE
+  -DPFS_USE_BTHREAD=${PFS_USE_BTHREAD_VAL}
   )
 
 if (SANITIZE_ADDRESS)

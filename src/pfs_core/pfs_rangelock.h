@@ -33,7 +33,7 @@
 
 #include <sys/queue.h>
 #include <sys/types.h>
-#include <pthread.h>
+#include "pfs_sync.h"
 
 #define	RL_LOCK_READ		0x0001
 #define	RL_LOCK_WRITE		0x0002
@@ -63,23 +63,23 @@ struct rl_q_entry;
 struct rangelock {
 	TAILQ_HEAD(, rl_q_entry) rl_waiters;
 	struct rl_q_entry	*rl_currdep;
-	pthread_mutex_t 	rl_mutex;
+	pfs_mutex_t 	rl_mutex;
 };
 
 void	 pfs_rangelock_init(struct rangelock *lock);
 void	 pfs_rangelock_destroy(struct rangelock *lock);
 void	 pfs_rangelock_unlock(struct rangelock *lock, void *cookie,
-	    pthread_mutex_t *ilk);
+	    pfs_mutex_t *ilk);
 void	*pfs_rangelock_unlock_range(struct rangelock *lock, void *cookie,
-	    off_t start, off_t end, pthread_mutex_t *ilk);
+	    off_t start, off_t end, pfs_mutex_t *ilk);
 void	*pfs_rangelock_rlock(struct rangelock *lock, off_t start, off_t end,
-	    pthread_mutex_t *ilk);
+	    pfs_mutex_t *ilk);
 void	*pfs_rangelock_tryrlock(struct rangelock *lock, off_t start, off_t end,
-	    pthread_mutex_t *ilk);
+	    pfs_mutex_t *ilk);
 void	*pfs_rangelock_wlock(struct rangelock *lock, off_t start, off_t end,
-	    pthread_mutex_t *ilk);
+	    pfs_mutex_t *ilk);
 void	*pfs_rangelock_trywlock(struct rangelock *lock, off_t start, off_t end,
-	    pthread_mutex_t *ilk);
+	    pfs_mutex_t *ilk);
 void	 pfs_rlqentry_free(struct rl_q_entry *rlqe);
 void	pfs_rangelock_thread_exit();
 

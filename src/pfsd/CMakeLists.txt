@@ -51,6 +51,7 @@ target_link_libraries(pfsdaemon
     -Wl,--pop-state
     ${SPDK_LIBS}
     ${SPDK_DEPS}
+    ${BRPC_LIBS}
     glog
     gflags
     pthread

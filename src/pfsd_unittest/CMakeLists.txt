@@ -47,9 +47,10 @@ target_link_libraries(pfsd_unittest
     -Wl,--start-group
     -Wl,--no-as-needed
     pfs
-    pfsd
-    pthread
     -Wl,--end-group
+    pfsd
+    ${BRPC_LIBS}
+    pthread
 )
 
 add_dependencies(pfs-tools

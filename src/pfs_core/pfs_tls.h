@@ -62,13 +62,18 @@ typedef struct pfs_tls {
 	 */
 	char		*tls_directio_buf;
 
-	struct rl_q_entry	*tls_rlqe;
-	int		tls_rlqe_count;
-
-	struct locktable_item *tls_locktable_items[3];
-	int		tls_locktable_item_count;
+	int		tls_fdtbl_rdlock_count;
 } pfs_tls_t;
 
+typedef struct pfs_g_tls {
+	struct rl_q_entry	*tls_rlqe;
+	int			tls_rlqe_count;
+
+	struct locktable_item	*tls_locktable_items;
+	int			tls_locktable_item_count;
+} pfs_g_tls_t;
+
+pfs_g_tls_t 	*pfs_current_g_tls();
 pfs_tls_t 	*pfs_current_tls();
 pfs_ioq_t	*pfs_tls_get_ioq(int devi, uint64_t epoch);
 void		pfs_tls_set_ioq(int devi, pfs_ioq_t *ioq);

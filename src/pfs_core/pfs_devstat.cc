@@ -38,14 +38,14 @@ void
 pfs_devstat_init(pfs_devstat_t *ds)
 {
 	memset(ds, 0, sizeof(*ds));
-	rwlock_init(&ds->ds_rwlock, NULL);
+	pthread_rwlock_init(&ds->ds_rwlock, NULL);
 }
 
 void
 pfs_devstat_uninit(pfs_devstat_t *ds)
 {
 	PFS_ASSERT(ds->ds_start_count == ds->ds_end_count);
-	rwlock_destroy(&ds->ds_rwlock);
+	pthread_rwlock_destroy(&ds->ds_rwlock);
 }
 
 void
@@ -55,11 +55,11 @@ pfs_devstat_io_start(pfs_devstat_t *ds, const pfs_devio_t *io)
 	if (!(io->io_flags & IO_STAT))
 		return;
 
-	rwlock_wrlock(&ds->ds_rwlock);
+	pthread_rwlock_wrlock(&ds->ds_rwlock);
 	if (ds->ds_start_count == ds->ds_end_count)
 		ds->ds_busy_from = io->io_start_ts;
 	ds->ds_start_count++;
-	rwlock_unlock(&ds->ds_rwlock);
+	pthread_rwlock_unlock(&ds->ds_rwlock);
 }
 
 void
@@ -77,7 +77,7 @@ pfs_devstat_io_end(pfs_devstat_t *ds, const pfs_devio_t *io)
 	err = gettimeofday(&now, NULL);
 	PFS_VERIFY(err == 0);
 
-	rwlock_wrlock(&ds->ds_rwlock);
+	pthread_rwlock_wrlock(&ds->ds_rwlock);
 	/* if succeed, update statistics */
 	if (io->io_error == 0) {
 		ds->ds_bytes[op] += io->io_len;
@@ -94,7 +94,7 @@ pfs_devstat_io_end(pfs_devstat_t *ds, const pfs_devio_t *io)
 
 	ds->ds_end_count++;
 	// count - ops == failed_io_cnt
-	rwlock_unlock(&ds->ds_rwlock);
+	pthread_rwlock_unlock(&ds->ds_rwlock);
 }
 
 #if 0
@@ -157,10 +157,10 @@ pfs_devstat_snap(int devi, admin_buf_t *ab)
 	snap->s_type = dev->d_type;
 	snap->s_flags = dev->d_flags;
 
-	rwlock_rdlock(&ds->ds_rwlock);
+	pthread_rwlock_rdlock(&ds->ds_rwlock);
 	memcpy(snap->s_iostat, (char *)&ds->ds_iostat_start,
 	    sizeof(snap->s_iostat));
-	rwlock_unlock(&ds->ds_rwlock);
+	pthread_rwlock_unlock(&ds->ds_rwlock);
 
 	pfs_adminbuf_consume(ab, sizeof(*snap));
 	return 0;

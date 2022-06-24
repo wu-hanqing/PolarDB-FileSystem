@@ -580,7 +580,7 @@ pfs_inode_writemodify_shrink_dblk_hole(pfs_inode_t *in, pfs_blkid_t blkid,
 {
 	pfs_mount_t *mnt = in->in_mnt;
 	pfs_writemodify_t *wm = &in->in_write_modify;
-	pthread_t tid = pthread_self();
+	pfs_thread_id_t tid = pfs_current_id();
 	pfs_dblk_t *dblk;
 
 	PFS_ASSERT(pfs_version_has_features(mnt, PFS_FEATURE_BLKHOLE));
@@ -607,7 +607,7 @@ void
 pfs_inode_writemodify_increment_size(pfs_inode_t *in, int64_t sizeinc)
 {
 	pfs_writemodify_t *wm = &in->in_write_modify;
-	pthread_t tid = pthread_self();
+	pfs_thread_id_t tid = pfs_current_id();
 
 	PFS_ASSERT(sizeinc > 0 && sizeinc >= wm->wm_sizeinc);
 	PFS_ASSERT(wm->wm_thread == 0 || wm->wm_thread == tid);
@@ -629,7 +629,7 @@ pfs_inode_writemodify_commit(pfs_inode_t *in)
 	/*
 	 * Only the owner thread can commit the writemodify.
 	 */
-	if (wm->wm_thread != pthread_self())
+	if (wm->wm_thread != pfs_current_id())
 		return 0;
 	/*
 	 * The variables in_nblk_modify and in_size/in_size2
@@ -640,7 +640,7 @@ pfs_inode_writemodify_commit(pfs_inode_t *in)
 	 * wait until in_nblk_modify and in_size/in_size2 are
 	 * set as the assertion below.
 	 */
-	PFS_ASSERT(wm->wm_thread == pthread_self());
+	PFS_ASSERT(wm->wm_thread == pfs_current_id());
 	PFS_ASSERT(in->in_nblk_modify == 0);
 	PFS_ASSERT(in->in_size == in->in_size2);
 
@@ -888,7 +888,7 @@ pfs_inode_dxredo_record(pfs_dxredo_t *dxr, int op, const char *name,
     pfs_ino_t ino, bool isdir)
 {
 	struct dxredo_rec *rec;
-	pthread_t tid = pthread_self();
+	pfs_thread_id_t tid = pfs_current_id();
 
 	/* the ADD/DEL of directory tree within a tx is limited */
 	PFS_ASSERT(dxr->r_cnt < DXR_MAX_NREC);
@@ -917,7 +917,7 @@ pfs_inode_dxredo_apply(pfs_inode_t *dirin)
 	struct dxredo_rec *rec;
 	ssize_t szdelta;
 
-	PFS_ASSERT(dxr->r_thread == pthread_self());
+	PFS_ASSERT(dxr->r_thread == pfs_current_id());
 
 	szdelta = 0;
 	for (int i = 0; i < dxr->r_cnt; i++) {
@@ -1776,9 +1776,9 @@ pfs_inode_sync_impl(pfs_inode_t *in, int type, bool first_sync, uint64_t btime,
 	while (in->in_nblk_ip != 0 || in->in_nblk_modify ||
 	    in->in_size != in->in_size2 || !in->in_cbdone ||
 	    (pfs_inode_writemodify_inprogress(&in->in_write_modify) &&
-	    in->in_write_modify.wm_thread != pthread_self()) ||
+	    in->in_write_modify.wm_thread != pfs_current_id()) ||
 	    (pfs_inode_dxredo_inprogress(&in->in_dx_redo) &&
-	    in->in_dx_redo.r_thread != pthread_self())) {
+	    in->in_dx_redo.r_thread != pfs_current_id())) {
 		pfs_inode_rpl_unlock(in);
 		MNT_STAT_BEGIN();
 		cond_wait(&in->in_cond, &in->in_mtx);
@@ -1834,7 +1834,7 @@ pfs_inode_lock(pfs_inode_t *in)
 void
 pfs_inode_rpl_lock(pfs_inode_t *in)
 {
-	pthread_t this_thd = pthread_self();
+	pfs_thread_id_t this_thd = pfs_current_id();
 	if (this_thd == in->in_rpl_lock_thd)
 		return;
 	mutex_lock(&in->in_mtx_rpl);
@@ -1844,7 +1844,7 @@ pfs_inode_rpl_lock(pfs_inode_t *in)
 bool
 pfs_inode_rpl_unlock(pfs_inode_t *in)
 {
-	if (pthread_self() == in->in_rpl_lock_thd) {
+	if (pfs_current_id() == in->in_rpl_lock_thd) {
 		in->in_rpl_lock_thd = 0;
 		mutex_unlock(&in->in_mtx_rpl);
 		return true;
