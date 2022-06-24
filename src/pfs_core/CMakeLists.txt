@@ -19,7 +19,6 @@ include_directories(
 
 set(SRC_LIST
     pfs_spdk.cc
-    devio_disk.cc
     devio_spdk.cc
     pfs_admin.cc
     pfs_alloc.cc
