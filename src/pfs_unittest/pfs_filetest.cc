@@ -1960,6 +1960,43 @@ TEST_F(FileTest, pfs_large_rdwr)
     free(rdbuf);
 }
 
+TEST_F(FileTest, pfs_large_rdwr_dma)
+{
+    char *wrbuf, *rdbuf;
+    int repeat = UNIT_1G / UNIT_8M;
+    int len = 0;
+    int offset = 0;
+
+    wrbuf = (char *)rte_malloc("rdwr", UNIT_8M, 512);
+    rdbuf = (char *)rte_malloc("rdwr", UNIT_8M, 512);
+    memset(wrbuf, 0, UNIT_8M);
+    memset(rdbuf, 0, UNIT_8M);
+    ASSERT_TRUE(wrbuf);
+    ASSERT_TRUE(rdbuf);
+
+    len = pfs_pwrite_dma(fd_, wrbuf, UNIT_4K, 0);
+    offset += len;
+
+    for (int i =0; i< repeat; i++) {
+        len = pfs_pwrite_dma(fd_, wrbuf, UNIT_8M, offset);
+        EXPECT_EQ(UNIT_8M, len);
+        offset += len + UNIT_4K;
+    }
+    CHECK_FILESIZE(fd_, UNIT_1G + UNIT_4K*repeat);
+
+    offset = 0;
+    len = 0;
+    for (int i = 0; i< repeat; i++) {
+        offset += len + UNIT_4K;
+        len = pfs_pread_dma(fd_, rdbuf, UNIT_8M, offset);
+        EXPECT_EQ(UNIT_8M, len);
+        EXPECT_TRUE(!strncmp(rdbuf, wrbuf, UNIT_8M));
+    }
+    rte_free(wrbuf);
+    rte_free(rdbuf);
+}
+
+
 TEST_F(FileTest, positive_pfs_align)
 {
 #define	PFS_MAX_ALIGN_SIZE	(16 << 11)
