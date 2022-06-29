@@ -401,10 +401,12 @@ err_exit:
     dkdev->dk_has_cache = spdk_bdev_has_write_cache(dkdev->dk_bdev);
     dkdev->dk_size = dkdev->dk_block_num * dkdev->dk_block_size;
     dkdev->dk_bufalign = spdk_bdev_get_buf_align(dkdev->dk_bdev);
+    if (dkdev->dk_bufalign < PFS_CACHELINE_SIZE)
+        dkdev->dk_bufalign = PFS_CACHELINE_SIZE;
     dev->d_cap = DEV_CAP_RD | DEV_CAP_WR | DEV_CAP_FLUSH | DEV_CAP_TRIM;
     if (spdk_bdev_io_type_supported(dkdev->dk_bdev,
 			SPDK_BDEV_IO_TYPE_WRITE_ZEROES)) {
-	dev->d_cap |= DEV_CAP_ZERO;
+	    dev->d_cap |= DEV_CAP_ZERO;
     }
     dev->d_write_unit = spdk_bdev_get_write_unit_size(dkdev->dk_bdev) *
 		spdk_bdev_get_block_size(dkdev->dk_bdev);
