@@ -256,6 +256,10 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 		ioflags |= IO_ZERO;
 
 	if (pfs_blkio_write_segment == iofunc && !(flags & PFS_IO_NO_LOCK)) {
+		/* for mode 0, because curve support 512 bytes sector io,
+		 * if our write-unit is larger than the 512, we have to use
+		 * io range-lock to do read-merge-write
+		 */
 		if (block_io_atomic == 0)
 			blk_lock = (dev_bsize > 512);
 		else
