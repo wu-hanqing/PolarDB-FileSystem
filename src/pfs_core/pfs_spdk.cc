@@ -50,7 +50,7 @@
 #define THREAD_POLL "thread_poll"
 
 DEFINE_string(spdk_name, "", "give a name for spdk_env");
-DEFINE_string(spdk_core_mask, "[0-3]", "spdk cpu core mask");
+DEFINE_string(spdk_core_mask, "", "spdk cpu core mask");
 DEFINE_int32(spdk_shm_id, -1, "spdk shared memmory id");
 DEFINE_int32(spdk_mem_channel, -1, "spdk memmory channel");
 DEFINE_int32(spdk_main_core, -1, "spdk main cpu core id");
