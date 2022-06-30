@@ -15,7 +15,7 @@
 
 kill_single_pfsd() {
     pbd=$1
-    pfsdname="pfsdaemon -p $pbd"
+    pfsdname="pfsdaemon -pbd_name $pbd"
     exist_command="ps -ef | grep pfsdaemon |grep -w '\-p $pbd' | wc -l"
     exist=$(eval $exist_command)
     if [ $exist -eq 0 ]; then

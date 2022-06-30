@@ -25,7 +25,7 @@ BASE_DIR=$(cd "$(dirname "$0")"; pwd)
 CONF_FILE=$BASE_DIR/../conf
 
 # check if pfdameon exist
-pbdname=$2
+pbdname=`echo $* | awk '/--?pbd_name=/{ split($1, A, "="); print A[2] }'`
 exist_command="ps -ef | grep pfsdaemon |grep -w '$pbdname' | wc -l"
 exist=$(eval $exist_command)
 if [ $exist -ge 1 ]; then
@@ -35,7 +35,7 @@ fi
 
 ulimit -c unlimited
 
-nohup ${BASE_DIR}/../bin/pfsdaemon -log_cfg ${CONF_FILE}/pfsd_logger.conf $* 1>/dev/null 2>&1 &
+nohup ${BASE_DIR}/../bin/pfsdaemon $* 1>/dev/null 2>&1 &
 
 sleep 1
 
