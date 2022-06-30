@@ -34,6 +34,7 @@ rm ${INSTALL_BASE_DIR}/pfsd/include/pfsd_sdk_log.h
 rm ${INSTALL_BASE_DIR}/pfsd/include/pfs_api.h
 rm ${INSTALL_BASE_DIR}/pfsd/include/pfs_trace_func.h
 rm ${INSTALL_BASE_DIR}/pfsd/lib/libpfsd.a
+rm ${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_svr.a
 rm ${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_test.so
 rm ${INSTALL_BASE_DIR}/pfsd/bin/pfsdaemon
 rm ${INSTALL_BASE_DIR}/pfsd/bin/pfsd_shm_tool
