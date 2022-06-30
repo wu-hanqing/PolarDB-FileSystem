@@ -12,7 +12,7 @@ pfs_thread_id_t pfs_current_id();
 #include <bthread/bthread.h>
 #include <bthread/butex.h>
 #include <bthread/condition_variable.h>
-#include <bthread/rwlock.h>
+#include <bthread/rwlock_v2.h>
 
 typedef bthread_t      pfs_thread_t;
 typedef bthread_attr_t pfs_thread_attr_t;
@@ -25,7 +25,7 @@ typedef struct pfs_cond {
     bthread_cond_t cond;
 } pfs_cond_t;
 typedef struct pfs_rwlock {
-    bthread_rwlock_t rw;
+    bthread::v2::bthread_rwlock_t rw;
 } pfs_rwlock_t;
 typedef struct pfs_event {
     void *butex; 
