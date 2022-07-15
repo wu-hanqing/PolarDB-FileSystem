@@ -140,8 +140,9 @@ pfs_curvedev_open(pfs_dev_t *dev)
     pfs_curvedev_t *dkdev = (pfs_curvedev_t *)dev;
     char path[PATH_MAX], *p;
     int fd, err, sectsz;
-    int openflags = CURVE_SHARED;
+    OpenFlags openflags;
 
+    openflags.exclusive = false;
     if (pfs_init_curve())
         ERR_RETVAL(EINVAL);
 
@@ -155,13 +156,6 @@ pfs_curvedev_open(pfs_dev_t *dev)
     path[0] = '/';
 
     pfs_itrace("open curve disk: %s, d_flags:0x%x\n", path, dev->d_flags);
-
-    if (dev->d_flags & DEVFLG_WR) {
-        openflags |= CURVE_RDWR;
-    } else {
-        openflags |= CURVE_RDONLY;
-    }
-
     fd = g_curve->Open(path, openflags);
 
     if (fd < 0) {
@@ -203,13 +197,8 @@ pfs_curvedev_reopen(pfs_dev_t *dev)
 
     pfs_itrace("reopen curve disk: %s, now d_flags:0x%x", path, dev->d_flags);
 
-    int openflags = CURVE_SHARED;
-    if (dev->d_flags & DEVFLG_WR) {
-        openflags |= CURVE_RDWR;
-    } else {
-        openflags |= CURVE_RDONLY;
-    }
-
+    OpenFlags openflags;
+    openflags.exclusive = false;
     fd = g_curve->Open(path, openflags);
     if (fd < 0) {
         err = errno;
