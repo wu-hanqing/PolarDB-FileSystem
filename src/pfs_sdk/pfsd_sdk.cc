@@ -248,6 +248,41 @@ pfsd_mount(const char *cluster, const char *pbdname, int hostid, int flags)
 }
 
 int
+pfsd_increase_epoch(const char *pbdname)
+{
+	CHECK_MOUNT(pbdname);
+
+	int err = 0;
+	pfsd_iochannel_t *ch = NULL;
+	pfsd_request_t *req = NULL;
+	pfsd_response_t *rsp = NULL;
+
+retry:
+	if (pfsd_chnl_buffer_alloc(s_connid, 0, (void**)&req, 0, (void**)&rsp,
+	    NULL, (long*)(&ch)) != 0) {
+		errno = ENOMEM;
+		return -1;
+	}
+
+	PFSD_CLIENT_LOG("increae epoch for %s", pbdname);
+
+	/* fill request */
+	req->type = PFSD_REQUEST_INCREASEEPOCH;
+	strncpy(req->i_req.g_pbd, pbdname, PFS_MAX_PBDLEN);
+
+	pfsd_chnl_send_recv(s_connid, req, 0, rsp, 0, NULL, pfsd_tolong(ch), 0);
+	CHECK_STALE(rsp);
+
+	if (rsp->error != 0) {
+		errno = rsp->error;
+		err = -1;
+	}
+
+	pfsd_chnl_buffer_free(s_connid, req, rsp, NULL, pfsd_tolong(ch));
+	return err;
+}
+
+int
 pfsd_umount_force(const char *pbdname)
 {
 	PFSD_CLIENT_LOG("pbdname %s", pbdname);

@@ -39,6 +39,11 @@ void PFSDTestEnv::SetUp() {
         abort();
     }
 
+    err = increase_epoch();
+    if (err < 0) {
+        cout << "increase epoch failed." << endl;
+        abort();
+    }
     cout << "Setup successful" << endl;
 }
 
@@ -56,5 +61,9 @@ int PFSDTestEnv::mount(int flags) {
 
 int PFSDTestEnv::umount() {
     return pfsd_umount(pbdname_.data());// just close pid file
+}
+
+int PFSDTestEnv::increase_epoch() {
+    return pfsd_increase_epoch(pbdname_.data());
 }
 

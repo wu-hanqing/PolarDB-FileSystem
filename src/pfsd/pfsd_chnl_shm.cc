@@ -186,6 +186,10 @@ chnl_accept_shm_sync(chnl_ctx_shm_t *ctx, pfsd_chnl_op_t *op,
 		goto out;
 	}
 
+    if (g_option.o_auto_increase_epoch == 1) {
+        file_data.sync_data.flags |= MNTFLG_AUTO_INCREASE_EPOCH;
+    }
+
 	if (!pfsd_is_valid_connid(connect_id)) {
 		/* first mount */
 		// 2 is special for thread mode mount to avoid alive check

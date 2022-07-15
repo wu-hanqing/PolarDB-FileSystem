@@ -24,14 +24,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#include <libcurve.h>
 
 #include "pfs_trace.h"
 #include "pfs_devio.h"
 #include "pfs_memory.h"
 #include "pfs_option.h"
 #include "pfs_impl.h"
-
-#include "libcurve.h"
 
 typedef struct pfs_curvedev {
     pfs_dev_t   dk_base;
@@ -134,11 +133,49 @@ pfs_curvedev_need_throttle(pfs_dev_t *dev, pfs_ioq_t *ioq)
     return (dkioq->dkq_inflight_count >= curve_iodepth);
 }
 
+static int pfs_curvedev_get_path(pfs_dev_t *dev, char* path) {
+    strcpy(path, dev->d_devname);
+    char *p = strstr(path, "@@");
+    if (p == NULL) {
+        errno = EINVAL;
+        ERR_RETVAL(EINVAL);
+    }
+    strcpy(path, p+1);
+    path[0] = '/';
+    return 0;
+}
+
+static int
+pfs_curvedev_increase_epoch_i(const char *path) {
+    int err = g_curve->IncreaseEpoch(path);
+    if (err < 0) {
+        pfs_etrace("curve Increase epoch, err=%d\n", err);
+        if (-LIBCURVE_ERROR::EPOCH_TOO_OLD == err) {
+            errno = EROFS;
+        } else {
+            errno = EIO;
+        }
+        ERR_RETVAL(errno);
+    }
+    return 0;
+}
+
+static int
+pfs_curvedev_increase_epoch(pfs_dev_t *dev) {
+    char path[PATH_MAX];
+    int err = pfs_curvedev_get_path(dev, path);
+    if (err != 0) {
+        pfs_etrace("curvedev get path, errno=%d\n", err);
+        return err;
+    }
+    return pfs_curvedev_increase_epoch_i(path);
+}
+
 static int
 pfs_curvedev_open(pfs_dev_t *dev)
 {
     pfs_curvedev_t *dkdev = (pfs_curvedev_t *)dev;
-    char path[PATH_MAX], *p;
+    char path[PATH_MAX];
     int fd, err, sectsz;
     OpenFlags openflags;
 
@@ -147,27 +184,31 @@ pfs_curvedev_open(pfs_dev_t *dev)
         ERR_RETVAL(EINVAL);
 
     dkdev->dk_fd = -1;
-    strcpy(path, dev->d_devname);
-    p = strstr(path, "@@");
-    if (p == NULL) {
-	return -EINVAL;
+
+    err = pfs_curvedev_get_path(dev, path);
+    if (err != 0) {
+        pfs_etrace("curvedev get path, errno=%d\n", err);
+        return err;
     }
-    strcpy(path, p+1);
-    path[0] = '/';
 
     pfs_itrace("open curve disk: %s, d_flags:0x%x\n", path, dev->d_flags);
     fd = g_curve->Open(path, openflags);
 
     if (fd < 0) {
-        err = errno;
-        pfs_etrace("can not open curve disk %s, %s\n", path, strerror(err));
-        ERR_RETVAL(err);
+        errno = EIO;
+        pfs_etrace("can not open curve disk %s, %s\n", path, strerror(errno));
+        ERR_RETVAL(errno);
     }
     strcpy(dkdev->dk_path, path);
     sectsz = 4096; //FIXME
 
     dkdev->dk_fd = fd;
     dkdev->dk_sectsz = sectsz;
+
+    if ((dev->d_flags & DEVFLG_AUTO_INCREASE_EPOCH) &&
+        (dev->d_flags & DEVFLG_WR)) {
+        return pfs_curvedev_increase_epoch_i(path);
+    }
     return 0;
 }
 
@@ -175,16 +216,14 @@ static int
 pfs_curvedev_reopen(pfs_dev_t *dev)
 {
     pfs_curvedev_t *dkdev = (pfs_curvedev_t *)dev;
-    char path[PATH_MAX], *p;
+    char path[PATH_MAX];
     int fd, err, sectsz;
 
-    strcpy(path, dev->d_devname);
-    p = strstr(path, "@@");
-    if (p == NULL) {
-	return -EINVAL;
+    err = pfs_curvedev_get_path(dev, path);
+    if (err != 0) {
+        pfs_etrace("curvedev get path, errno=%d\n", err);
+        return err;
     }
-    strcpy(path, p+1);
-    path[0] = '/';
 
     /*
      * RW should guarantee the data is written to disk,
@@ -201,9 +240,9 @@ pfs_curvedev_reopen(pfs_dev_t *dev)
     openflags.exclusive = false;
     fd = g_curve->Open(path, openflags);
     if (fd < 0) {
-        err = errno;
-        pfs_etrace("cant open %s: %s\n", path, strerror(err));
-        ERR_RETVAL(err);
+        errno = EIO;
+        pfs_etrace("cant open %s: %s\n", path, strerror(errno));
+        ERR_RETVAL(errno);
     }
 
     sectsz = 4096; //FIXME
@@ -211,6 +250,11 @@ pfs_curvedev_reopen(pfs_dev_t *dev)
     strcpy(dkdev->dk_path, path);
     dkdev->dk_fd = fd;
     dkdev->dk_sectsz = (size_t)sectsz;
+
+    if ((dev->d_flags & DEVFLG_AUTO_INCREASE_EPOCH) &&
+        (dev->d_flags & DEVFLG_WR)) {
+        return pfs_curvedev_increase_epoch_i(path);
+    }
     return 0;
 }
 
@@ -230,14 +274,14 @@ static int
 pfs_curvedev_info(pfs_dev_t *dev, struct pbdinfo *pi)
 {
     pfs_curvedev_t *dkdev = (pfs_curvedev_t *)dev;
-    size_t size;
+    int64_t size;
     int err = 0;
 
     size = g_curve->StatFile(dkdev->dk_path);
-    if ((ssize_t)size == -1) {
-        err = errno;
-        pfs_etrace("curve failed to get disk size, errno=%d\n", err);
-        ERR_RETVAL(err);
+    if (size < 0) {
+        errno = EIO;
+        pfs_etrace("curve failed to get disk size, errno=%d\n", errno);
+        ERR_RETVAL(errno);
     }
 
     pi->pi_pbdno = 0;
@@ -302,10 +346,17 @@ pfs_curvedev_aio_callback(struct CurveAioContext* ctx)
 
     PFS_ASSERT(io->io_error == PFSDEV_IO_DFTERR);
 
-    if (iocb->ctx.ret == -1)
-        io->io_error = -EIO;
-    else
+    if (iocb->ctx.ret < 0) {
+        if (-LIBCURVE_ERROR::EPOCH_TOO_OLD == iocb->ctx.ret) {
+            io->io_error = -EROFS;
+            errno = EROFS;
+        } else {
+            io->io_error = -EIO;
+            errno = EIO;
+        }
+    } else {
         io->io_error = 0;
+    }
     io->io_private = nullptr;
 
     mutex_lock(&dkioq->dkq_mutex);
@@ -462,5 +513,6 @@ struct pfs_devops pfs_curvedev_ops = {
     .dop_need_throttle  = pfs_curvedev_need_throttle,
     .dop_submit_io      = pfs_curvedev_submit_io,
     .dop_wait_io        = pfs_curvedev_wait_io,
+    .dop_increase_epoch = pfs_curvedev_increase_epoch,
 };
 

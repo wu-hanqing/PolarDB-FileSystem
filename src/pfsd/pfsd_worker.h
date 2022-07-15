@@ -56,6 +56,7 @@ bool pfsd_is_busy_cpu(int cpuid, int ncpu);
 
 int pfsd_worker_handle_request(pfsd_iochannel *ch, int index);
 
+void pfsd_worker_handle_increase_epoch(pfsd_iochannel_t *ch, int , const increase_epoch_request_t *req, increase_epoch_response_t *rsp);
 void pfsd_worker_handle_growfs(pfsd_iochannel *ch, int index, const growfs_request_t *req, growfs_response_t *rsp);
 void pfsd_worker_handle_rename(pfsd_iochannel *ch, int index, const rename_request_t *req, rename_response_t *rsp);
 void pfsd_worker_handle_open(pfsd_iochannel *ch, int index, const open_request_t *req, open_response_t *rsp);

@@ -275,6 +275,10 @@ pfsd_worker_handle_request(pfsd_iochannel_t *ch, int req_index)
 	pfsd_response_t *rsp = &ch->ch_responses[req_index];
 
 	switch (pfsd_request_type(req)) {
+        case PFSD_REQUEST_INCREASEEPOCH:
+			pfsd_worker_handle_increase_epoch(ch, req_index, &req->i_req, &rsp->i_rsp);
+			return 0;
+
 		case PFSD_REQUEST_GROWFS:
 			pfsd_worker_handle_growfs(ch, req_index, &req->g_req, &rsp->g_rsp);
 			return 0;
@@ -397,6 +401,24 @@ pfsd_worker_handle_request(pfsd_iochannel_t *ch, int req_index)
 	} \
 } while(0)\
 
+
+void
+pfsd_worker_handle_increase_epoch(pfsd_iochannel_t *ch, int , const increase_epoch_request_t *req,
+    increase_epoch_response_t *rsp)
+{
+	rsp->type = PFSD_RESPONSE_INCREASEEPOCH;
+	rsp->err = -1;
+
+	CHECK_RSP_ERROR(rsp);
+
+	rsp->err = pfs_mount_increase_epoch(req->g_pbd);
+
+	if (rsp->err == -1) {
+		rsp->error = errno;
+		pfsd_error("increase epoch %s error %d", req->g_pbd, errno);
+	} else
+		pfsd_info("increase epoch %s success", req->g_pbd);
+}
 
 void
 pfsd_worker_handle_growfs(pfsd_iochannel_t *ch, int , const growfs_request_t *req,

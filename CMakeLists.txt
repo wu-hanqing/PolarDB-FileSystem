@@ -34,7 +34,7 @@ set(CMAKE_INSTALL_RPATH /usr/lib/curve)
 set(CURVE_LIBS -lcbd -lcurve_client -lcurve_common -lcurve_auth -lcurve_concurrent
     -lnameserver2_proto -ltopology_proto -lchunkserver-protos -lbrpc -lbutil -lbvar
     -lbthread -lcc_brpc_internal_proto -ljson2pb -lmcpack2pb -lcc_brpc_idl_options_proto
-    -lcommon_proto -lscan_proto
+    -lcommon_proto 
     -lprotobuf -lprotobuf_lite -lrt -lssl -lcrypto -ldl -lz -lpthread -lleveldb -lgflags -lglog)
 
 set(COMMON_FLAGS

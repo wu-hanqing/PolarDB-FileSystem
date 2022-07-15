@@ -44,6 +44,7 @@ enum {
 	PFSD_REQUEST_RENAME,
 	PFSD_REQUEST_LSEEK,
 	PFSD_REQUEST_GROWFS,
+    PFSD_REQUEST_INCREASEEPOCH,
 
 	PFSD_RESPONSE_MOUNT = 1000, /* Deprecated */
 	PFSD_RESPONSE_OPEN,
@@ -64,6 +65,7 @@ enum {
 	PFSD_RESPONSE_RENAME,
 	PFSD_RESPONSE_LSEEK,
 	PFSD_RESPONSE_GROWFS,
+    PFSD_RESPONSE_INCREASEEPOCH,
 };
 
 inline
@@ -215,6 +217,18 @@ typedef struct {
 typedef struct {
 	char padding[RESPONSE_ALIGN];
 } pfsd_response_holder_t;
+
+typedef struct {
+	COMMON_REQUEST_HEADER;
+
+	char g_pbd[PFS_MAX_PBDLEN];
+} increase_epoch_request_t;
+
+typedef struct {
+	COMMON_RESPONSE_HEADER;
+
+	int err;
+} increase_epoch_response_t;
 
 typedef struct {
 	COMMON_REQUEST_HEADER;
@@ -476,6 +490,7 @@ typedef struct pfsd_request {
 			COMMON_REQUEST_HEADER;
 		};
 
+        increase_epoch_request_t i_req;
 		growfs_request_t g_req;
 		open_request_t o_req;
 		read_request_t r_req;
@@ -534,6 +549,7 @@ typedef struct {
 			COMMON_RESPONSE_HEADER
 		};
 
+        increase_epoch_response_t i_rsp;
 		growfs_response_t g_rsp;
 		open_response_t o_rsp;
 		read_response_t r_rsp;
