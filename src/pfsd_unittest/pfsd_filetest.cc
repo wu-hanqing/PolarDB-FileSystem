@@ -1760,3 +1760,16 @@ TEST_F(FileTest, positive_pfsd_align)
 	EXPECT_EQ(errno, EFBIG);
 }
 
+
+TEST_F(FileTest, test_increase_epoch_one_node) {
+    char buf[] = "1234567";
+    int n = pfsd_write(fd_, buf, 7);
+    ASSERT_EQ(7, n);
+
+    int ret = g_testenv->increase_epoch();
+    ASSERT_EQ(0, ret);
+
+    n = pfsd_write(fd_, buf, 7);
+    ASSERT_EQ(7, n);
+}
+

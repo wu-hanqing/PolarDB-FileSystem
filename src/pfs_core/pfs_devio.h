@@ -45,6 +45,7 @@
 #define	DEVFLG_WR		0x0002
 #define	DEVFLG_RDWR		(DEVFLG_RD | DEVFLG_WR)
 #define	DEVFLG_REQ_SAFE		0x0010
+#define DEVFLG_AUTO_INCREASE_EPOCH 0x0004
 
 
 /* logical device(PBD) info */
@@ -119,6 +120,7 @@ typedef struct pfs_devops {
 			    pfs_devio_t *io);
 	pfs_devio_t *	(*dop_wait_io)(pfs_dev_t *dev, pfs_ioq_t *ioq,
 			    pfs_devio_t *io);
+	int		(*dop_increase_epoch)(pfs_dev_t *dev);
 } pfs_devops_t;
 
 /* pfs device */
@@ -148,6 +150,7 @@ int	pfsdev_pread_flags(int devi, void *buf, size_t len, uint64_t bda,
 int	pfsdev_pwrite_flags(int devi, void *buf, size_t len, uint64_t bda,
 	    int flags);
 int	pfsdev_wait_io(int devi);
+int pfsdev_increase_epoch(int devi);
 
 const char *pfsdev_trace_pbdname(const char *cluster, const char *pbdname);
 

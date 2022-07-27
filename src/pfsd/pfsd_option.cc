@@ -66,13 +66,14 @@ init_default_value()
 	strncpy(g_option.o_shm_dir, PFSD_SHM_PATH, sizeof g_option.o_shm_dir);
 	g_option.o_daemon = 1;
 	server_id = 0;
+    g_option.o_auto_increase_epoch = 0;
 }
 
 int
 pfsd_parse_option(int ac, char *av[])
 {
 	int ch = 0;
-	while ((ch = getopt(ac, av, "w:s:i:c:p:a:l:e:fd:r")) != -1) {
+	while ((ch = getopt(ac, av, "w:s:i:c:p:a:l:e:fd:r:q")) != -1) {
 		switch (ch) {
 			case 'f':
 				g_option.o_daemon = 0;
@@ -123,6 +124,9 @@ pfsd_parse_option(int ac, char *av[])
 					if (errno == 0)
 						g_option.o_pollers = (unsigned int)(w);
                 }
+                break;
+            case 'q':
+                g_option.o_auto_increase_epoch = 1;
                 break;
 			default:
 				return -1;

@@ -34,6 +34,8 @@ typedef struct {
 	int o_daemon;
 	/* if bind cpuset */
 	int o_affinity;
+    /* auto increase epoch when mount which write mode */
+    int o_auto_increase_epoch;
 } pfsd_option_t;
 
 extern pfsd_option_t g_option;

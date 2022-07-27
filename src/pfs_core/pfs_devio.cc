@@ -84,6 +84,11 @@ pfs_dev_open(pfs_dev_t *dev)
 }
 
 static inline int
+pfs_dev_increase_epoch(pfs_dev_t *dev) {
+    return dev->d_ops->dop_increase_epoch(dev);
+}
+
+static inline int
 pfs_dev_reopen(pfs_dev_t *dev, int flags)
 {
 	return dev->d_ops->dop_reopen(dev);
@@ -594,6 +599,16 @@ pfsdev_reopen(int devi, const char *cluster, const char *devname, int flags)
 	PFS_ASSERT(strcmp(dev->d_devname, devname) == 0);
 	dev->d_flags = flags;
 	return pfs_dev_reopen(dev, flags);
+}
+
+int
+pfsdev_increase_epoch(int devi)
+{
+	pfs_dev_t *dev;
+
+	PFS_ASSERT(0 <= devi && devi < PFS_MAX_NCHD);
+	dev = pfs_devs[devi];
+    return pfs_dev_increase_epoch(dev);
 }
 
 const char *

@@ -34,6 +34,7 @@
 #define	MNTFLG_RD		0x0001
 #define	MNTFLG_WR		0x0002
 #define	MNTFLG_RDWR		MNTFLG_RD|MNTFLG_WR
+#define MNTFLG_AUTO_INCREASE_EPOCH 0x0004
 #define	MNTFLG_LOG		0x0010
 #define	MNTFLG_TOOL		0x1000	/* Only pfstool will set this flag,
 				   	   to get max hostid to instead itself */
@@ -146,6 +147,7 @@ typedef struct pfs_mount {
 
 extern "C" {
 int		pfs_mount(const char *cluster, const char *pbdname, int host_id, int flags);
+int		pfs_mount_increase_epoch(const char *pbdname);
 int		pfs_remount(const char *cluster, const char *pbdname, int host_id, int flags);
 int		pfs_umount(const char *pbdname);
 int		pfs_mount_growfs(const char *pbdname);

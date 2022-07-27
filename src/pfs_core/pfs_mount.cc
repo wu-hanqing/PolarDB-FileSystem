@@ -417,6 +417,9 @@ pfs_mnt2dev_flags(int mntflags, bool require_safe)
 	/* by default, writable dev is also readable */
 	if (mntflags & MNTFLG_WR)
 		devflags |= DEVFLG_RD|DEVFLG_WR;
+    if (mntflags & MNTFLG_AUTO_INCREASE_EPOCH) {
+        devflags |= DEVFLG_AUTO_INCREASE_EPOCH;
+    }
 	if (require_safe)
 		devflags |= DEVFLG_REQ_SAFE;
 	return devflags;
@@ -1054,6 +1057,27 @@ pfs_mount_flush(pfs_mount_t *mnt)
 		return 0;
 	else
 		return rv;
+}
+
+int
+pfs_mount_increase_epoch(const char *pbdname) 
+{
+	pfs_mount_t *mnt;
+	mnt = pfs_get_mount(pbdname);
+
+	if (!pbdname || strlen(pbdname) >= PFS_MAX_PBDLEN) {
+		pfs_etrace("invalid pbdname %s\n", pbdname ? pbdname : "NULL");
+		errno = EINVAL;
+		return -1;
+	}
+	if (!mnt) {
+		pfs_etrace("cannot find PBD %s\n", pbdname);
+		errno = EINVAL;
+		return -1;
+	}
+    int rv =  pfsdev_increase_epoch(mnt->mnt_ioch_desc);
+	pfs_put_mount(mnt);
+    return rv;
 }
 
 int

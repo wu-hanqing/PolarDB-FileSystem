@@ -71,6 +71,9 @@ int pfsd_sdk_init(int mode, const char *svraddr, int timeout_ms,
     const char *cluster, const char *pbdname, int hostid, int flags);
 
 int pfsd_mount(const char *cluster, const char *pbdname, int hostid, int flags);
+
+int pfsd_increase_epoch(const char *pbdname);
+
 /* It'll return if all children process exit. */
 int pfsd_umount(const char *pbdname);
 /*

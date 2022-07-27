@@ -71,6 +71,7 @@ public:
 
     int mount(int flags);
     int umount();
+    int increase_epoch();
 
     std::string cluster_;
     std::string pbdname_;    // "PBD-VERSION"
