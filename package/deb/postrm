@@ -1,6 +1,6 @@
 #!/bin/sh
 set +e
-cd /usr/local/polarstore/pfsd/lib
+cd /usr/local/curvestore/pfsd/lib
 rm -f libglog.so.0
 rm -f libglog.so
 rm -f libgflags.so.2.2

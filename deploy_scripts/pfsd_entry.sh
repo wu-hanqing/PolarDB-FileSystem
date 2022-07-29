@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-sh /usr/local/polarstore/pfsd/bin/start_pfsd.sh $*
+sh /usr/local/curvestore/pfsd/bin/start_pfsd.sh $*
 
 while true
 do

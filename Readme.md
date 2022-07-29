@@ -42,7 +42,7 @@ sudo pfs -C disk mkfs nvme1n1
 
 ##### 2. Run the following command to start pfsdaemon:
 ```
-sudo /usr/local/polarstore/pfsd/bin/start_pfsd.sh -p nvme1n1
+sudo /usr/local/curvestore/pfsd/bin/start_pfsd.sh -p nvme1n1
 ```
 ​		 `-p nvme1n1` is a parameter that specifies the device name, and it is required. 
 ​		The following parameters are optional in the command:
@@ -59,7 +59,7 @@ sudo /usr/local/polarstore/pfsd/bin/start_pfsd.sh -p nvme1n1
 
 ##### 3. Run the following command to stop pfsdaemon:
 ```
-sudo /usr/local/polarstore/pfsd/bin/stop_pfsd.sh nvme1n1
+sudo /usr/local/curvestore/pfsd/bin/stop_pfsd.sh nvme1n1
 ```
 `			nvme1n1` specifies the device name. 
 
@@ -68,7 +68,7 @@ sudo /usr/local/polarstore/pfsd/bin/stop_pfsd.sh nvme1n1
    After stopping pfsdaemon, run the following command to clear the temporary files, logs and shared memory files that are generated when pfsdaemon is running:
 
 ```
-sudo /usr/local/polarstore/pfsd/bin/clean_pfsd.sh nvme1n1
+sudo /usr/local/curvestore/pfsd/bin/clean_pfsd.sh nvme1n1
 ```
 `nvme1n1` specifies the device name. 
 
@@ -89,7 +89,7 @@ To uninstall pfsdaemon, you must be granted the root permissions.
 
 ##### 1. Run the following command to stop pfsdaemon:
 ```
-sudo /usr/local/polarstore/pfsd/bin/stop_pfsd.sh nvme1n1
+sudo /usr/local/curvestore/pfsd/bin/stop_pfsd.sh nvme1n1
 ```
 `	nvme1n1` specifies the device name. 
 

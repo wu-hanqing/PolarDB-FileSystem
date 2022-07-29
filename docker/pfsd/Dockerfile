@@ -24,22 +24,22 @@ USER root
 COPY pfsd_supervisor.py /docker_script/
 COPY log.conf  /docker_script/
 COPY libzlog.so* /usr/lib64/
-COPY pre_stop_pfsd.sh /usr/local/polarstore/pfsd/bin/ 
+COPY pre_stop_pfsd.sh /usr/local/curvestore/pfsd/bin/ 
 COPY $RPM /opt/
 
 ENV PYTHONPATH /docker_script
 ENV RPM_ENV $RPM
 
 ENTRYPOINT ["python", "/docker_script/pfsd_supervisor.py"]
-CMD ["-f", "-c", "/usr/local/polarstore/pfsd/conf/pfsd_logger.conf"]
+CMD ["-f", "-c", "/usr/local/curvestore/pfsd/conf/pfsd_logger.conf"]
 
 RUN /usr/bin/yum makecache && \
     yum install -y python27 &&\
     ln -s /usr/bin/python2.7 /usr/bin/python && \
     /usr/bin/yum install -y libaio && \
     rpm -ivh /opt/$RPM_ENV && \
-    chmod +x /usr/local/polarstore/pfsd/bin/start_pfsd.sh && \
-    chmod +x /usr/local/polarstore/pfsd/bin/stop_pfsd.sh && \
+    chmod +x /usr/local/curvestore/pfsd/bin/start_pfsd.sh && \
+    chmod +x /usr/local/curvestore/pfsd/bin/stop_pfsd.sh && \
     mkdir -p /dev/shm/pfsd && \
     chmod 777 /dev/shm/pfsd && \
     mkdir -p /var/log && \

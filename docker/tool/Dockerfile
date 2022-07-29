@@ -26,7 +26,7 @@ COPY entry_oper.py /docker_script/
 COPY pfsd_oper.py  /docker_script/
 COPY log.conf  /docker_script/
 COPY $RPM /opt/
-COPY pre_stop_pfsd.sh /usr/local/polarstore/pfsd/bin/ 
+COPY pre_stop_pfsd.sh /usr/local/curvestore/pfsd/bin/ 
 
 ENV RPM_ENV $RPM
 ENV PYTHONPATH /docker_script

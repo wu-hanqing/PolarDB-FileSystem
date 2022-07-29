@@ -20,7 +20,7 @@
 #include <stdio.h>
 #include <ctype.h>
 
-#define DEFAULT_CONFIG_PATH	"/etc/polarfs.conf"
+#define DEFAULT_CONFIG_PATH	"/etc/curve_polarfs.conf"
 
 #define MAX_KEY_LEN 32
 #define MAX_VAL_LEN 20

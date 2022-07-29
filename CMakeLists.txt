@@ -29,7 +29,7 @@ endif()
 
 ProcessorCount(NCPU)
 
-set(PKG_DIR "/usr/local/polarstore/pfsd")
+set(PKG_DIR "/usr/local/curvestore/pfsd")
 
 include(thirdparties/CMakeLists.txt)
 

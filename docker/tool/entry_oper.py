@@ -23,8 +23,8 @@ import datetime
 import logging
 import logging.config
 
-#stop_cmd = "/usr/local/polarstore/pfsd/bin/stop_pfsd.sh "
-#force_stop_cmd = "/usr/local/polarstore/pfsd/bin/stop_pfsd.sh "
+#stop_cmd = "/usr/local/curvestore/pfsd/bin/stop_pfsd.sh "
+#force_stop_cmd = "/usr/local/curvestore/pfsd/bin/stop_pfsd.sh "
 stop_cmd = "pkill -2 pfsdaemon "
 force_stop_cmd = "pkill -9 pfsdaemon"
 mylog = None

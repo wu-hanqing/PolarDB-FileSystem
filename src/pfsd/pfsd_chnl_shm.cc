@@ -1132,7 +1132,7 @@ chnl_connection_sync_shm(chnl_ctx_shm_t *ctx, const char *cluster,
 	file_data->sync_data.flags = flags;
 
 	if (cluster == NULL)
-		cluster = "polarstore";
+		cluster = "spdk";
 
 	strncpy(file_data->sync_data.cluster, cluster,
 	    sizeof(file_data->sync_data.cluster));

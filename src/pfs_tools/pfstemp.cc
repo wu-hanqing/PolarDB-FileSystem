@@ -48,7 +48,7 @@ main(int argc, char *argv[])
 	}
 
 	strncpy(pbdname, argv[1], PFS_MAX_PATHLEN);
-	ret = pfs_mount("polarstore", pbdname, 1, PFS_RDWR);
+	ret = pfs_mount("spdk", pbdname, 1, PFS_RDWR);
 	if (ret < 0) {
 		pfs_etrace("Error in mount pbd %s\n", pbdname);
 		return 0;

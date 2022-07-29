@@ -1,5 +1,5 @@
 #!/bin/sh
-cd /usr/local/polarstore/pfsd/lib
+cd /usr/local/curvestore/pfsd/lib
 ln -s libglog.so.0.4.0 libglog.so.0
 ln -s libglog.so.0 libglog.so
 ln -s libgflags.so.2.2.2 libgflags.so.2.2

@@ -293,7 +293,7 @@ typedef struct pfs_chunkstream		pfs_chunkstream_t;
 
 /**
  * @description:	init meta， only need to be called once
- * @param cluster：	polarstore/disk/river, NULL means polarstore
+ * @param cluster：	nvme/disk/river, NULL means nvme
  * @param flags:	CHUNK_BACKUP CHUNK_RESTORE CHUNK_BACKUP|CHUNK_CRC 
  * @return: 		return pfs_chunkstream_desc_t if success, 
  * 			otherwise return NULL

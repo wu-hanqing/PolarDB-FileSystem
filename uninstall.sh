@@ -13,18 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-INSTALL_BASE_DIR="/usr/local/polarstore"
+INSTALL_BASE_DIR="/usr/local/curvestore"
 
 #uninstall check
-exist_command="ps -ef | grep pfsdaemon |  grep -v grep  | wc -l"
+exist_command="ps -ef | grep curve_pfsdaemon |  grep -v grep  | wc -l"
 exist=$(eval $exist_command)
 if [ $exist -ge 1 ]; then
-	echo "pfsd is running, before uninstall pfsd, please stop pfsd"
+	echo "curve pfsd is running, before uninstall, please stop it"
 	exit 1
 fi
 
 if [[ $EUID -ne 0 ]];then
-	echo "pfsd uninstall script must be run as root"
+	echo "curve pfsd uninstall script must be run as root"
 	exit 1
 fi
 
@@ -36,16 +36,15 @@ rm ${INSTALL_BASE_DIR}/pfsd/include/pfs_trace_func.h
 rm ${INSTALL_BASE_DIR}/pfsd/lib/libpfsd.a
 rm ${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_svr.a
 rm ${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_test.so
-rm ${INSTALL_BASE_DIR}/pfsd/bin/pfsdaemon
-rm ${INSTALL_BASE_DIR}/pfsd/bin/pfsd_shm_tool
+rm ${INSTALL_BASE_DIR}/pfsd/bin/curve_pfsdaemon
+rm ${INSTALL_BASE_DIR}/pfsd/bin/curve_pfsd_shm_tool
 rm ${INSTALL_BASE_DIR}/pfsd/conf/pfsd_logger.conf
 rm ${INSTALL_BASE_DIR}/pfsd/bin/start_pfsd.sh
 rm ${INSTALL_BASE_DIR}/pfsd/bin/stop_pfsd.sh
 rm ${INSTALL_BASE_DIR}/pfsd/bin/clean_pfsd.sh
-rm /etc/init.d/pfsd_env
-rm /etc/polarfs.conf
+rm /etc/curve_polarfs.conf
 
-rm /usr/local/bin/pfs
-rm /usr/local/bin/pfsadm
+rm /usr/local/bin/curve_pfs
+rm /usr/local/bin/curve_pfsadm
 
 echo "uninstall pfsd success!"

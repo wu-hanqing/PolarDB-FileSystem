@@ -47,6 +47,6 @@ else
 fi
 
 # 5. exec clean pfsd
-echo "/usr/local/polarstore/pfsd/bin/clean_pfsd.sh $pbd"
-exec /usr/local/polarstore/pfsd/bin/clean_pfsd.sh $pbd
+echo "/usr/local/curvestore/pfsd/bin/clean_pfsd.sh $pbd"
+exec /usr/local/curvestore/pfsd/bin/clean_pfsd.sh $pbd
 

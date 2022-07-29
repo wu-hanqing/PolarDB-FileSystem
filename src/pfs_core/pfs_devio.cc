@@ -122,7 +122,7 @@ init_pfs_dev_mtx()
  * pfs_devtype_t
  *
  * Get type of device, by inspecting cluster & devname(pbdname)
- * 	1. PBD (cluster=="polarstore", devname=="1-1")
+ * 	1. PBD (cluster=="spdk", devname=="0000:81:00.0n1")
  * 	2. pangu uri (cluster=="river...", devname=="...")
  */
 pfs_devtype_t
@@ -139,28 +139,8 @@ pfsdev_type(const char *cluster, const char *devname)
 	// in case 'devname' is pbdpath with leading '/'
 	if (devname[0] == '/')
 		return PFS_DEV_INVALID;
-	/* local disk */
-	if (strcmp(cluster, CL_DISK) == 0)
-		return PFS_DEV_DISK;
-	if (strcmp(cluster, CL_CURVE) == 0)
-		return PFS_DEV_CURVE;
 	if (strcmp(cluster, CL_SPDK) == 0)
 		return PFS_DEV_SPDK;
-
-#ifndef PFS_DISK_IO_ONLY
-	/* polarstore PBD */
-	if (strcmp(cluster, CL_POLAR) == 0 && isdigit(devname[0]))
-		return PFS_DEV_POLAR;
-
-	/* pangu uri */
-	for (int i = 0; devname[i] != '\0'; i++)
-		if (devname[i] == '-')
-			cnt++;
-	if (strncmp(cluster, CL_PANGU, strlen(CL_PANGU)) == 0
-	    && strncmp(devname, "pangu-", 6) == 0
-	    && cnt == 3)
-		return PFS_DEV_PANGU;
-#endif
 	pfs_etrace("invalid cluster-pbdname combination {%s, %s}\n",
 	    cluster, devname);
 	return PFS_DEV_INVALID;

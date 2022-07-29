@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-INSTALL_BASE_DIR="/usr/local/polarstore"
+INSTALL_BASE_DIR="/usr/local/curvestore"
 
 #prepare dir
 mkdir -p ${INSTALL_BASE_DIR}
@@ -31,17 +31,16 @@ if [ -f "${INSTALL_BASE_DIR}/pfsd/include/pfsd_sdk.h" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/lib/libpfsd.a" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_svr.a" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_test.so" ] || \
-[ -f "${INSTALL_BASE_DIR}/pfsd/bin/pfsdaemon" ] || \
-[ -f "${INSTALL_BASE_DIR}/pfsd/bin/pfsd_shm_tool" ] || \
+[ -f "${INSTALL_BASE_DIR}/pfsd/bin/curve_pfsdaemon" ] || \
+[ -f "${INSTALL_BASE_DIR}/pfsd/bin/curve_pfsd_shm_tool" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/conf/pfsd_logger.conf" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/bin/start_pfsd.sh" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/bin/stop_pfsd.sh" ] || \
 [ -f "${INSTALL_BASE_DIR}/pfsd/bin/clean_pfsd.sh" ] || \
-[ -f "/etc/init.d/pfsd_env" ] || \
-[ -f "/etc/polarfs.conf" ] || \
-[ -f "/usr/local/bin/pfs" ] || \
-[ -f "/usr/local/bin/pfsadm" ];then
-	echo "pfsd has installed, install failed"
+[ -f "/etc/curve_polarfs.conf" ] || \
+[ -f "/usr/local/bin/curve_pfs" ] || \
+[ -f "/usr/local/bin/curve_pfsadm" ];then
+	echo "curve pfsd has installed, install failed"
 	exit 1
 fi
 
@@ -52,22 +51,21 @@ if [ ! -f "src/pfs_sdk/pfsd_sdk.h" ] || \
 [ ! -f "lib/libpfsd.a" ] || \
 [ ! -f "lib/libpfsd_svr.a" ] || \
 [ ! -f "lib/libpfsd_test.so" ] || \
-[ ! -f "bin/pfsdaemon" ] || \
-[ ! -f "bin/pfsd_shm_tool" ] || \
+[ ! -f "bin/curve_pfsdaemon" ] || \
+[ ! -f "bin/curve_pfsd_shm_tool" ] || \
 [ ! -f "conf/pfsd_logger.conf" ] || \
 [ ! -f "deploy_scripts/start_pfsd.sh" ] || \
 [ ! -f "deploy_scripts/stop_pfsd.sh" ] || \
 [ ! -f "deploy_scripts/clean_pfsd.sh" ] || \
-[ ! -f "src/pfsd/pfsd.init" ] || \
-[ ! -f "etc/polarfs.conf" ] || \
-[ ! -f "bin/pfs" ] || \
-[ ! -f "bin/pfsadm" ];then
+[ ! -f "etc/curve_polarfs.conf" ] || \
+[ ! -f "bin/curve_pfs" ] || \
+[ ! -f "bin/curve_pfsadm" ];then
 	echo "installing files not found, please check files or run autobuild.sh first"
 	exit 1
 fi
 
 if [[ $EUID -ne 0 ]];then
-	echo "pfsd install script must be run as root"
+	echo "curve pfsd install script must be run as root"
 	exit 1
 fi
 
@@ -79,17 +77,16 @@ install -m 0644 src/pfs_core/pfs_trace_func.h		${INSTALL_BASE_DIR}/pfsd/include/
 install -m 0755 lib/libpfsd.a				${INSTALL_BASE_DIR}/pfsd/lib/libpfsd.a
 install -m 0755 lib/libpfsd_svr.a			${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_svr.a
 install -m 0755 lib/libpfsd_test.so			${INSTALL_BASE_DIR}/pfsd/lib/libpfsd_test.so
-install -m 0755 bin/pfsdaemon				${INSTALL_BASE_DIR}/pfsd/bin/pfsdaemon
-install -m 0755 bin/pfsd_shm_tool			${INSTALL_BASE_DIR}/pfsd/bin/pfsd_shm_tool
+install -m 0755 bin/curve_pfsdaemon			${INSTALL_BASE_DIR}/pfsd/bin/curve_pfsdaemon
+install -m 0755 bin/curve_pfsd_shm_tool			${INSTALL_BASE_DIR}/pfsd/bin/curve_pfsd_shm_tool
 install -m 0644 conf/pfsd_logger.conf			${INSTALL_BASE_DIR}/pfsd/conf/pfsd_logger.conf
 install -m 0755 deploy_scripts/start_pfsd.sh		${INSTALL_BASE_DIR}/pfsd/bin/start_pfsd.sh
 install -m 0755 deploy_scripts/stop_pfsd.sh		${INSTALL_BASE_DIR}/pfsd/bin/stop_pfsd.sh
 install -m 0755 deploy_scripts/clean_pfsd.sh		${INSTALL_BASE_DIR}/pfsd/bin/clean_pfsd.sh
-install -m 0755 src/pfsd/pfsd.init			/etc/init.d/pfsd_env
-install -m 0644 etc/polarfs.conf			/etc/polarfs.conf
+install -m 0644 etc/curve_polarfs.conf			/etc/curve_polarfs.conf
 
-install -m 0755 bin/pfs					/usr/local/bin/pfs
-install -m 0755 bin/pfsadm				/usr/local/bin/pfsadm
+install -m 0755 bin/curve_pfs				/usr/local/bin/curve_pfs
+install -m 0755 bin/curve_pfsadm			/usr/local/bin/curve_pfsadm
 
 #prepare for pfsd running
 mkdir -p /dev/shm/pfsd
@@ -99,6 +96,5 @@ chmod 777 /var/run/pfsd
 chmod 777 /dev/shm/pfsd
 chmod 777 /var/run/pfs
 touch /var/run/pfsd/.pfsd
-service pfsd_env start
 
-echo "install pfsd success!"
+echo "install curve pfsd success!"

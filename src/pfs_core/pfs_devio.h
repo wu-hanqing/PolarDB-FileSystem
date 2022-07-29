@@ -25,12 +25,8 @@
 #include "pfs_devstat.h"
 #include "pfs_impl.h"
 
-#define CL_POLAR	"polarstore"
-#define CL_PANGU	"river"
-#define CL_DISK		"disk"
-#define CL_CURVE	"curve"
 #define CL_SPDK 	"spdk"
-#define CL_DEFAULT	CL_DISK
+#define CL_DEFAULT	CL_SPDK
 
 #define MAGIC_PBDNAME	"0-0"
 

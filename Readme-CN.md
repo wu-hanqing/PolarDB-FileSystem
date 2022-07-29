@@ -43,7 +43,7 @@ sudo pfs -C disk mkfs nvme1n1
 
 ##### 2. 执行如下脚本启动pfsdaemon：
 ```bash
-sudo /usr/local/polarstore/pfsd/bin/start_pfsd.sh -p nvme1n1
+sudo /usr/local/curvestore/pfsd/bin/start_pfsd.sh -p nvme1n1
 ```
 ​		其中，"-p 设备名"必须设置，nvme1n1指代设备名。
 ​		其他可选启动参数如下：
@@ -60,7 +60,7 @@ sudo /usr/local/polarstore/pfsd/bin/start_pfsd.sh -p nvme1n1
 
 ##### 3. 可执行如下脚本停止pfsdaemon：
 ```bash
-sudo /usr/local/polarstore/pfsd/bin/stop_pfsd.sh nvme1n1
+sudo /usr/local/curvestore/pfsd/bin/stop_pfsd.sh nvme1n1
 ```
 ​		nvme1n1指代设备名。
 
@@ -69,7 +69,7 @@ sudo /usr/local/polarstore/pfsd/bin/stop_pfsd.sh nvme1n1
    停止pfsdaemon后，清理运行时产生的临时文件、日志、共享内存文件：
 
 ```bash
-sudo /usr/local/polarstore/pfsd/bin/clean_pfsd.sh nvme1n1
+sudo /usr/local/curvestore/pfsd/bin/clean_pfsd.sh nvme1n1
 ```
 ​		nvme1n1指代设备名。
 
@@ -90,7 +90,7 @@ sudo pfs -C disk ls /nvme1n1/
 
 ##### 1. 执行如下脚本停止pfsdaemon：
 ```bash
-sudo /usr/local/polarstore/pfsd/bin/stop_pfsd.sh nvme1n1
+sudo /usr/local/curvestore/pfsd/bin/stop_pfsd.sh nvme1n1
 ```
 
 ##### 2. 使用卸载脚本 uninstall.sh 进行卸载：

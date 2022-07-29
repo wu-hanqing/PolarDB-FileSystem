@@ -637,7 +637,7 @@ pfs_mount(const char *cluster, const char *pbdname, int host_id, int flags)
 	int fd = -1;
 	pfs_mount_t *mnt = NULL;
 
-	// when connecting polarstore, DB will pass NULL as "cluster"
+	// when connecting, DB can pass NULL as "cluster"
 	if (cluster == NULL)
 		cluster = CL_DEFAULT;
 

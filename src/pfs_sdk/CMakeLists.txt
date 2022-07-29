@@ -62,20 +62,20 @@ target_link_libraries(pfsd; rt;pthread;dl)
 
 
 # pfsd shm tool
-add_executable(pfsd_shm_tool
+add_executable(curve_pfsd_shm_tool
     pfsd_shm_tool.cc
     )
 
-add_dependencies(pfsd_shm_tool
+add_dependencies(curve_pfsd_shm_tool
     pfsd
 )
 
-target_link_libraries(pfsd_shm_tool pfsd ${BRPC_LIBS} rt pthread)
+target_link_libraries(curve_pfsd_shm_tool pfsd ${BRPC_LIBS} rt pthread)
 
 SET_TARGET_PROPERTIES(pfsd PROPERTIES LINKER_LANGUAGE CXX)
-SET_TARGET_PROPERTIES(pfsd_shm_tool PROPERTIES LINKER_LANGUAGE CXX)
+SET_TARGET_PROPERTIES(curve_pfsd_shm_tool PROPERTIES LINKER_LANGUAGE CXX)
 
 install(TARGETS pfsd ARCHIVE DESTINATION "${PKG_DIR}/lib")
 install(TARGETS pfsd_test LIBRARY DESTINATION "${PKG_DIR}/lib")
-install(TARGETS pfsd_shm_tool DESTINATION "${PKG_DIR}/bin")
+install(TARGETS curve_pfsd_shm_tool DESTINATION "${PKG_DIR}/bin")
 

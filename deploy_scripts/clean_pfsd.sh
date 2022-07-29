@@ -21,7 +21,7 @@ if test -z $pbd;then
 	exit
 fi
 
-/usr/local/polarstore/pfsd/bin/stop_pfsd.sh $pbd
+/usr/local/curvestore/pfsd/bin/stop_pfsd.sh $pbd
 
 pidfile="/var/run/pfsd/pfsd_${pbd}.pid"
 echo $pidfile | xargs rm -f

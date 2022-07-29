@@ -40,10 +40,10 @@ if (USE_BTHREAD)
 add_dependencies(pfsd_svr brpc_prj)
 endif()
 
-# pfsd daemon
-add_executable(pfsdaemon pfsd_main.cc)
+# curve pfsd daemon
+add_executable(curve_pfsdaemon pfsd_main.cc)
 
-target_link_libraries(pfsdaemon
+target_link_libraries(curve_pfsdaemon
     -Wl,--disable-new-dtags
     -Wl,--push-state
     -Wl,--no-as-needed
@@ -61,12 +61,12 @@ target_link_libraries(pfsdaemon
     pthread
 )
 
-add_dependencies(pfsdaemon glog_prj gflags_prj)
+add_dependencies(curve_pfsdaemon glog_prj gflags_prj)
 
-target_compile_definitions(pfsdaemon PUBLIC PFSD_SERVER)
+target_compile_definitions(curve_pfsdaemon PUBLIC PFSD_SERVER)
 
-SET_TARGET_PROPERTIES(pfsdaemon PROPERTIES LINKER_LANGUAGE CXX)
+SET_TARGET_PROPERTIES(curve_pfsdaemon PROPERTIES LINKER_LANGUAGE CXX)
 
-install(TARGETS pfsdaemon DESTINATION "${PKG_DIR}/bin")
+install(TARGETS curve_pfsdaemon DESTINATION "${PKG_DIR}/bin")
 install(TARGETS pfsd_svr DESTINATION "${PKG_DIR}/lib")
 

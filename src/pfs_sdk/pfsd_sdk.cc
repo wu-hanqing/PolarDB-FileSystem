@@ -149,7 +149,7 @@ pfsd_sdk_init(int mode, const char *svraddr, int timeout_ms,
 	void *mp = NULL;
 
 	if (cluster == NULL)
-		cluster = "polarstore";
+		cluster = "spdk";
 
 	pthread_mutex_lock(&s_init_mtx);
 	if (s_inited == 1) {
@@ -318,7 +318,7 @@ pfsd_remount(const char *cluster, const char *pbdname, int hostid, int flags)
 	}
 
 	if (cluster == NULL)
-		cluster = "polarstore";
+		cluster = "spdk";
 
 	errno = 0;
 	mp = pfs_remount_prepare(cluster, pbdname, hostid, flags);

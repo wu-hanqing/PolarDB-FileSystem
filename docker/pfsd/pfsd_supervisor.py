@@ -26,7 +26,7 @@ import logging.config
 # -p is required, others are optional
 
 # 必须前台运行
-entrypoint = "/usr/local/polarstore/pfsd/bin/start_pfsd.sh -f "
+entrypoint = "/usr/local/curvestore/pfsd/bin/start_pfsd.sh -f "
 mylog = None
 share_dir = "/scripts"
 

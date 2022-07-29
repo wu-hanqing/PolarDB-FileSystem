@@ -45,7 +45,7 @@ add_executable(pfs-tools
 	cmd_usedinfo.cc
 )
 SET_TARGET_PROPERTIES(pfs-tools
-	PROPERTIES OUTPUT_NAME pfs
+	PROPERTIES OUTPUT_NAME curve_pfs
 )
 
 add_definitions(-D__STDC_FORMAT_MACROS)
@@ -77,8 +77,8 @@ add_dependencies(pfs-tools
     pfsd
 )
 
-configure_file(${PROJECT_SOURCE_DIR}/src/pfs_tools/pfsadm
-    ${EXECUTABLE_OUTPUT_PATH}/pfsadm COPYONLY)
+configure_file(${PROJECT_SOURCE_DIR}/src/pfs_tools/curve_pfsadm
+    ${EXECUTABLE_OUTPUT_PATH}/curve_pfsadm COPYONLY)
 
 install(TARGETS pfs-tools DESTINATION "/usr/local/bin")
 install(FILES ${EXECUTABLE_OUTPUT_PATH}/pfsadm DESTINATION "/usr/local/bin"
