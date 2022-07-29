@@ -218,7 +218,7 @@ pfs mkfs succeeds!
 
 ### 启动PFS daemon
 ```
-bin/pfsdaemon -pbd_name='0000:81:00.0n1' --spdk_nvme_controller='0000:81:00.0' --pfs_spdk_driver_auto_cpu_bind=0 --workers=60
+bin/pfsdaemon -pbd_name='0000:81:00.0n1' --spdk_nvme_controller='0000:81:00.0' --pfs_spdk_driver_auto_cpu_bind=0 --workers=60 ---spdk_env_context='--in-memory'
 ```
 
 在另外一个终端查看LOG:
