@@ -111,14 +111,13 @@ add_library(protobuf_lite SHARED IMPORTED)
 set_target_properties(protobuf_lite PROPERTIES IMPORTED_LOCATION ${ExtProjLocalDir}/lib/libprotobuf_lite.so)
 add_dependencies(protobuf_lite protobuf_prj)
 
-set(patch_command patch -p1 < ${CMAKE_SOURCE_DIR}/thirdparties/brpc/brpc.patch && patch -p1 < ${CMAKE_SOURCE_DIR}/thirdparties/brpc/brpc_dpdk.patch)
-
 ExternalProject_Add(brpc_prj
     DOWNLOAD_DIR ${ExtProjDownloadDir}/brpc
     PREFIX ${ExtProjBuildDir}/brpc
-    URL "http://github.com/apache/incubator-brpc/archive/1b9e00641cbec1c8803da6a1f7f555398c954cb0.zip"
-    URL_HASH SHA256=811b319a42feb9c1ebb67ab56e1e921a8458f5885f50eba36cf9f2b5dd71daad
-    PATCH_COMMAND ${patch_command}
+    URL "https://github.com/opencurve/incubator-brpc/archive/refs/tags/TAG_rwlock_v2.tar.gz"
+    URL_HASH SHA256=ec777c7072627717781a0837b1a784ba547b013cb44264608eb94234ea4a6eb4
+    INACTIVITY_TIMEOUT 60
+    SHOW_PROGRESS
     CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fPIC
         -DBUILD_SHARED_LIBS=YES
         -DWITH_GLOG=ON
