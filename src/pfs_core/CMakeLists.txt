@@ -58,7 +58,9 @@ add_library(pfs STATIC
     ${SRC_LIST}
 )
 set_property(TARGET pfs PROPERTY POSITION_INDEPENDENT_CODE ON)
-
+if (USE_BTHREAD)
+add_dependencies(pfs brpc_prj)
+endif()
 target_link_libraries(pfs
   gflags aio rt pthread
 )

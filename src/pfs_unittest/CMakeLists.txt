@@ -66,6 +66,7 @@ add_executable(
 	pfs_pwrite_zero
 	pfs_pwrite_zero.cc
 )
+add_dependencies(pfs_pwrite_zero glog_prj)
 
 target_link_libraries(pfs_pwrite_zero
     -Wl,--disable-new-dtags                                                     

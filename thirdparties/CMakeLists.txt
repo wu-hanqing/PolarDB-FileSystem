@@ -74,7 +74,6 @@ install(FILES
         "${PKG_DIR}/lib"
 )
 
-if (USE_BTHREAD)
 
 ExternalProject_Add(leveldb_prj
     DOWNLOAD_DIR ${ExtProjDownloadDir}/leveldb
@@ -142,5 +141,4 @@ endforeach()
 add_dependencies(brpc_prj leveldb_prj gflags_prj glog_prj protobuf_prj)
 add_dependencies(protobuf_prj gflags_prj gtest_prj)
 
-endif(USE_BTHREAD)
 

@@ -35,6 +35,10 @@ SET(SRC_LIST
 
 add_library(pfsd_svr STATIC ${SRC_LIST})
 target_compile_definitions(pfsd_svr PUBLIC PFSD_SERVER)
+add_dependencies(pfsd_svr glog_prj gflags_prj)
+if (USE_BTHREAD)
+add_dependencies(pfsd_svr brpc_prj)
+endif()
 
 # pfsd daemon
 add_executable(pfsdaemon pfsd_main.cc)
@@ -56,6 +60,8 @@ target_link_libraries(pfsdaemon
     gflags
     pthread
 )
+
+add_dependencies(pfsdaemon glog_prj gflags_prj)
 
 target_compile_definitions(pfsdaemon PUBLIC PFSD_SERVER)
 

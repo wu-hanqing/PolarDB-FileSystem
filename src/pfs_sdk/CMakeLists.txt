@@ -34,6 +34,9 @@ SET(SRC_LIST_PFSD_SDK ../pfsd/pfsd_common.cc
     )
 # objects
 add_library(tmp_object_lib OBJECT ${SRC_LIST_PFSD_SDK})
+if (USE_BTHREAD)
+add_dependencies(tmp_object_lib brpc_prj)
+endif()
 target_compile_definitions(tmp_object_lib PUBLIC PFSD_CLIENT)
 set_property(TARGET tmp_object_lib PROPERTY POSITION_INDEPENDENT_CODE ON)
 
