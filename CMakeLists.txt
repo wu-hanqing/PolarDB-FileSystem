@@ -51,6 +51,7 @@ pkg_check_modules(spdk_init REQUIRED spdk_init)
 include_directories(${spdk_init_INCLUDE_DIRS})
 link_directories(${spdk_init_LIBRARY_DIRS})
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_INSTALL_RPATH ${PKG_DIR}/lib)
 #set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
