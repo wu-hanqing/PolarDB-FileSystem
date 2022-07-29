@@ -482,7 +482,7 @@ class AdminIostat(AdminOperation):
         rdur, wdur = iostats[IO_READ].duration, iostats[IO_WRITE].duration
         acount = rcount + wcount
         adur = rdur + wdur
-        print '%-15s %7d %7d %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f' % (
+        print ( '%-15s %7d %7d %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f' % (
             stat.device_name,
             int(self.normalize(rcount)) if rcount > 0 else 0,
             int(self.normalize(wcount)) if wcount > 0 else 0,
@@ -493,7 +493,7 @@ class AdminIostat(AdminOperation):
             0.0,
             float(delta2usec(adur)) / acount if acount > 0 else 0.0,
             self.normalize(qlen),
-            self.normalize(delta2usec(busydur)) / 10000)
+            self.normalize(delta2usec(busydur)) / 10000) )
 
     def handle_reply_payload(self, reply):
         fmts = ''.join(self.stathdrfmt_tuple)
@@ -537,7 +537,7 @@ class AdminIostat(AdminOperation):
         n = 0
         while self.count < 0 or n < self.count :
             if n % 20 == 0:
-                print '%-15s %7s %7s %7s %7s %7s %7s %7s %7s %7s %7s' % (
+                print ('%-15s %7s %7s %7s %7s %7s %7s %7s %7s %7s %7s' % (
                     'device',
                     'r/s',
                     'w/s',
@@ -548,7 +548,7 @@ class AdminIostat(AdminOperation):
                     'us/o',
                     'us/t',
                     'qlen',
-                    '%util')
+                    '%util') )
             self.iostat()
             n += 1
 
@@ -702,7 +702,7 @@ class AdminNameCacheStat(AdminOperation):
         else :
            hitratio = 0
         timestamp = time.localtime(self.last_timestamp.seconds)
-        print "%02d:%02d:%02d   %8d %10d %10d %8.2f %8d %8d %8d" % (
+        print ("%02d:%02d:%02d   %8d %10d %10d %8.2f %8d %8d %8d" % (
               timestamp[3], timestamp[4], timestamp[5], \
               stat.numcache, \
               int(self.normalize(self.delta_hits)) if self.delta_hits > 0 else 0, \
@@ -711,7 +711,7 @@ class AdminNameCacheStat(AdminOperation):
               int(self.normalize(self.delta_evicts)) if self.delta_evicts > 0 else 0, \
               int(self.normalize(self.delta_dels)) if self.delta_dels > 0 else 0, \
               int(self.normalize(self.delta_rejects)) if self.delta_rejects > 0 else 0 \
-              )
+              ))
 
     def handle_reply_payload(self, reply):
         """packet format: timeval, namecachestat"""
@@ -751,7 +751,7 @@ class AdminNameCacheStat(AdminOperation):
         n = 0
         while self.count < 0 or n < self.count :
             if n % 20 == 0:
-                print "%8s %10s %10s %10s %8s %8s %8s %8s" % (
+                print ("%8s %10s %10s %10s %8s %8s %8s %8s" % (
                     'time',
                     'numcache',
                     'hit/s',
@@ -759,7 +759,7 @@ class AdminNameCacheStat(AdminOperation):
                     'hit%/s',
                     'evict/s',
                     'del/s',
-                    'reject/s')
+                    'reject/s'))
 
             self.do_stat()
             n += 1
@@ -792,7 +792,7 @@ def main():
         sys.stderr.write('exception occured while handle command: %s\n' % e)
         err = e.errno
     except KeyboardInterrupt as e:
-        print "exit"
+        print("exit")
     sys.exit(err)
 
 if __name__ == '__main__':
