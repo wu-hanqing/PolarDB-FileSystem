@@ -36,6 +36,8 @@ ExternalProject_Add(gflags_prj
     URL "http://github.com/gflags/gflags/archive/v2.2.2.tar.gz"
     URL_HASH MD5=1a865b93bacfa963201af3f75b7bd64c
     CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fPIC
+               -DGFLAGS_INTTYPES_FORMAT=C99
+               -DGFLAGS_NAMESPACE=gflags
                -DBUILD_SHARED_LIBS=YES
                -DCMAKE_INSTALL_PREFIX=${ExtProjLocalDir}
                -DCMAKE_INSTALL_RPATH=${ExtProjInstallRPath}
