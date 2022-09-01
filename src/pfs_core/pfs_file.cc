@@ -374,7 +374,7 @@ fd_free(pfs_file_t *file, bool file_is_locked)
 	PFS_ASSERT(fdtbl[fd] == file);
 	if (fdtbl[fd]->f_refcnt <= 0) {
 		fd_put(fd);
-		pfs_itrace("put fd: %d", fd);
+		//pfs_itrace("put fd: %d", fd);
 		need_free = true;
 	} else {
 		PFS_ASSERT(fdtbl[fd]->f_refcnt <= 0);

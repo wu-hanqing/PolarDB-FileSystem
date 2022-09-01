@@ -717,7 +717,7 @@ pfs_spdk_setup(void)
         }
 
         g_spdk_env_initialized = true;
-        atexit(pfs_spdk_cleanup);
+        //atexit(pfs_spdk_cleanup);
         pthread_mutex_unlock(&init_mutex);
     } else {
         pthread_mutex_unlock(&init_mutex);
