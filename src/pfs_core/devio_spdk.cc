@@ -70,7 +70,7 @@ typedef struct pfs_spdk_dev {
     uint32_t    dk_block_size;
     uint32_t    dk_unit_size;
     int         dk_has_cache;
-    int         dk_bufalign;
+#define dk_bufalign dk_base.d_buf_align
     pthread_t   dk_pthread;
     struct pfs_spdk_thread *dk_thread;
     struct spdk_io_channel *dk_ioch;
@@ -401,8 +401,8 @@ err_exit:
     dkdev->dk_has_cache = spdk_bdev_has_write_cache(dkdev->dk_bdev);
     dkdev->dk_size = dkdev->dk_block_num * dkdev->dk_block_size;
     dkdev->dk_bufalign = spdk_bdev_get_buf_align(dkdev->dk_bdev);
-    if (dkdev->dk_bufalign < PFS_CACHELINE_SIZE)
-        dkdev->dk_bufalign = PFS_CACHELINE_SIZE;
+    if (dkdev->dk_bufalign < 4096)
+        dkdev->dk_bufalign = 4096;
     dev->d_cap = DEV_CAP_RD | DEV_CAP_WR | DEV_CAP_FLUSH | DEV_CAP_TRIM;
     if (spdk_bdev_io_type_supported(dkdev->dk_bdev,
 			SPDK_BDEV_IO_TYPE_WRITE_ZEROES)) {
