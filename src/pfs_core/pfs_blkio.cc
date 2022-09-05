@@ -102,11 +102,13 @@ pfs_blkio_align(pfs_mount_t *mnt, pfs_bda_t data_bda, size_t data_len,
 	PFS_ASSERT(sectsize <= mnt->mnt_fragsize);
 	sect_off = data_bda & (sectsize - 1);
 	frag_off = data_bda & (mnt->mnt_fragsize - 1);
+	/* 先处理硬件IO单位限制 */
 	if (sect_off != 0) {
 		aligned_bda = data_bda - sect_off;
 		*op_len = MIN(sectsize - sect_off, data_len);
 		*io_len = sectsize;
 	} else {
+        	/* 是硬件IO单位的倍数，那么可以根据fragsize 去做IO*/
 		aligned_bda = data_bda;
 		*op_len = MIN(mnt->mnt_fragsize - frag_off, data_len);
 		*io_len = roundup(*op_len, sectsize);
@@ -239,7 +241,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	int err, err1, ioflags;
 	pfs_bda_t bda, albda;
 	size_t allen, iolen, left;
-	int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
+	const int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 	const size_t dev_bsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
 	const size_t buf_align = pfsdev_get_buf_align(mnt->mnt_ioch_desc);
 	int write_zero = !!(flags & PFS_IO_WRITE_ZERO);
@@ -329,8 +331,9 @@ pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 {
 	ssize_t iolen = 0;
 	void *zerobuf = NULL;
-	int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
-	int cap = pfsdev_get_cap(mnt->mnt_ioch_desc);
+	const size_t buf_align = pfsdev_get_buf_align(mnt->mnt_ioch_desc);
+	const int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
+	const int cap = pfsdev_get_cap(mnt->mnt_ioch_desc);
 	struct iovec tmpiov = {0, 0}, *tmpiovp;
 	int tmpiovcnt;
 
@@ -340,7 +343,7 @@ pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 			flags |= PFS_IO_WRITE_ZERO;
 		else if (!(flags & PFS_IO_WRITE_ZERO)) {
 			zerobuf = pfs_dma_zalloc("M_ZERO_BUF",
-				PFS_CACHELINE_SIZE, len, socket);
+				buf_align, len, socket);
 			PFS_VERIFY(zerobuf != NULL);
 			tmpiov.iov_base = zerobuf;
 			tmpiov.iov_len = len;
