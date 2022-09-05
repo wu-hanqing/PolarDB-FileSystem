@@ -27,6 +27,7 @@
 #include "pfs_locktable.h"
 #include "pfs_option.h"
 #include "pfs_util.h"
+#include "pfs_iomem.h"
 
 typedef int pfs_blkio_fn_t(
     int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
@@ -277,8 +278,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 		albda = pfs_blkio_align(mnt, bda, left, &allen, &iolen);
 
 		if (allen != iolen && albuf == NULL) {
-			albuf = (char *)pfs_dma_malloc("alignbuf",
-				buf_align, PFS_FRAG_SIZE, socket);
+			albuf = (char *)pfs_iomem_alloc(PFS_FRAG_SIZE);
 			PFS_VERIFY(albuf != NULL);
 		}
 
@@ -287,7 +287,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 		if (err < 0)
 			break;
 
-		if (!(ioflags & IO_ZERO))
+		if (!(ioflags & IO_ZERO) && !(flags & PFS_IO_ZERO_BUF))
 			forward_iovec_iter(iov, iovcnt, iolen);
 
 		off += iolen;
@@ -299,7 +299,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 		pfs_block_unlock(mnt, blkno, rl, cookie, cc);
 
 	if (albuf) {
-		pfs_dma_free(albuf);
+		pfs_iomem_free(albuf);
 		albuf = NULL;
 	}
 
@@ -342,12 +342,12 @@ pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 		if (cap & DEV_CAP_ZERO)
 			flags |= PFS_IO_WRITE_ZERO;
 		else if (!(flags & PFS_IO_WRITE_ZERO)) {
-			zerobuf = pfs_dma_zalloc("M_ZERO_BUF",
-				buf_align, len, socket);
+			zerobuf = pfs_iomem_alloc(PFS_FRAG_SIZE);
+            memset(zerobuf, 0, PFS_FRAG_SIZE);
 			PFS_VERIFY(zerobuf != NULL);
 			tmpiov.iov_base = zerobuf;
-			tmpiov.iov_len = len;
-			flags |= PFS_IO_DMA_ON;
+			tmpiov.iov_len = PFS_FRAG_SIZE;
+			flags |= PFS_IO_DMA_ON | PFS_IO_ZERO_BUF;
 		}
 		tmpiovp = &tmpiov;
 		iov = &tmpiovp;
@@ -359,7 +359,7 @@ pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 	    pfs_blkio_write_segment, flags);
 
 	if (zerobuf) {
-		pfs_dma_free(zerobuf);
+		pfs_iomem_free(zerobuf);
 		zerobuf = NULL;
 	}
 	return iolen;

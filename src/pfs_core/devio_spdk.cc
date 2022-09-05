@@ -43,6 +43,7 @@
 #include "pfs_impl.h"
 #include "pfs_spdk.h"
 #include "pfs_util.h"
+#include "pfs_iomem.h"
 
 #define BUF_TYPE "pfs_iobuf"
 #define io_buf io_iov[0].iov_base
@@ -613,8 +614,7 @@ pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
 
     if (FLAGS_pfs_spdk_driver_auto_dma &&
         !(io->io_flags & IO_DMABUF)) {
-        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, dkdev->dk_base.d_buf_align,
-            io->io_len, SOCKET_ID_ANY);
+        iocb->cb_dma_buf = pfs_iomem_alloc(io->io_len);
         if (iocb->cb_dma_buf == NULL) {
             struct timeval tv = error_time_interval;
             if (pfs_ratecheck(&last, &tv)) {
@@ -656,7 +656,7 @@ pfs_spdk_dev_io_pread(void *arg)
         pfs_etrace("%s error while reading from bdev: %d\n",
             spdk_strerror(-rc), rc);
         if (iocb->cb_dma_buf) {
-            pfs_dma_free(iocb->cb_dma_buf);
+            pfs_iomem_free(iocb->cb_dma_buf);
         }
         abort();
     }
@@ -675,7 +675,7 @@ pfs_spdk_dev_io_fini_pread(void *arg)
     pfs_spdk_dev_enq_complete_io(dkioq, io);
 
     if (iocb->cb_dma_buf)
-        pfs_dma_free(iocb->cb_dma_buf);
+        pfs_iomem_free(iocb->cb_dma_buf);
     pfs_spdk_dev_free_iocb(iocb);
 }
 
@@ -691,8 +691,7 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
 
     if (FLAGS_pfs_spdk_driver_auto_dma &&
         !(io->io_flags & IO_DMABUF) && !(io->io_flags & IO_ZERO)) {
-        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, dkdev->dk_base.d_buf_align,
-		   io->io_len, SOCKET_ID_ANY);
+        iocb->cb_dma_buf = pfs_iomem_alloc(io->io_len);
         if (iocb->cb_dma_buf == NULL) {
             struct timeval tv = error_time_interval;
             if (pfs_ratecheck(&last, &tv)) {
@@ -738,7 +737,7 @@ pfs_spdk_dev_io_pwrite(void *arg)
         pfs_etrace("%s error while writting to bdev: %d, ioflags=%x",
             spdk_strerror(-rc), rc, io->io_flags);
         if (iocb->cb_dma_buf)
-            pfs_dma_free(iocb->cb_dma_buf);
+            pfs_iomem_free(iocb->cb_dma_buf);
         abort();
     }
 }
@@ -753,7 +752,7 @@ pfs_spdk_dev_io_fini_pwrite(void *arg)
     pfs_spdk_dev_enq_complete_io(dkioq, io);
 
     if (iocb->cb_dma_buf)
-        pfs_dma_free(iocb->cb_dma_buf);
+        pfs_iomem_free(iocb->cb_dma_buf);
     pfs_spdk_dev_free_iocb(iocb);
 }
 

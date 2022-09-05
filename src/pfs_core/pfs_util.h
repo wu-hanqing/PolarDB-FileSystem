@@ -129,4 +129,5 @@ void pfs_copy_from_buf_to_iovec(struct iovec *iovec, const void *_buf, size_t le
 void pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, size_t len);
 void pfs_reset_iovcnt(struct iovec *iovec, size_t len, int *iovcnt, bool reset_iov);
 
+size_t pfs_getpagesize();
 #endif

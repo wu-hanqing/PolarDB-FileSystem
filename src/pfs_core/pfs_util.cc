@@ -22,6 +22,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <sys/unistd.h>
 
 #include "pfs_impl.h"
 #include "pfs_util.h"
@@ -353,3 +354,10 @@ void pfs_reset_iovcnt(struct iovec *iovec, size_t len, int *iovcnt, bool reset_i
 	}
 	*iovcnt = i+1;
 }
+
+size_t pfs_getpagesize(void)
+{
+    static size_t page_size = sysconf(_SC_PAGESIZE);
+    return page_size;
+}
+

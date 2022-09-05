@@ -23,6 +23,7 @@
 #include <math.h>
 
 #include <fcntl.h>
+#include <sys/user.h>
 
 #include "pfs_api.h"
 #include "pfs_mount.h"
@@ -462,7 +463,7 @@ pfs_file_pzero(pfs_file_t *file, size_t len, off_t off)
 	int err = 0;
 	struct iovec iov;
 
-	buf = (char *)pfs_dma_zalloc("fill_zero", PFS_CACHELINE_SIZE, buflen,
+	buf = (char *)pfs_dma_zalloc("fill_zero", pfs_getpagesize(), buflen,
 		SOCKET_ID_ANY);
 	if (buf == NULL) {
 		return -ENOMEM;

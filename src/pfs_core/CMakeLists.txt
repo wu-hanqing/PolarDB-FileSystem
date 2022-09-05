@@ -30,6 +30,7 @@ set(SRC_LIST
     pfs_devstat.cc
     pfs_dir.cc
     pfs_file.cc
+    pfs_iomem.cc
     pfs_inode.cc
     pfs_log.cc
     pfs_memory.cc
