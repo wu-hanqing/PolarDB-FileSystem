@@ -23,7 +23,6 @@
 #include <math.h>
 
 #include <fcntl.h>
-#include <sys/user.h>
 
 #include "pfs_api.h"
 #include "pfs_mount.h"
