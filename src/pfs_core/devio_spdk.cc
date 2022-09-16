@@ -642,6 +642,9 @@ pfs_spdk_dev_io_pread(void *arg)
     if (iocb->cb_dma_buf) {
         rc = spdk_bdev_read(dkdev->dk_desc, dkdev->dk_ioch, iocb->cb_dma_buf,
             io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
+    } else if (1 == io->io_iovcnt) {
+        rc = spdk_bdev_read(dkdev->dk_desc, dkdev->dk_ioch, io->io_iov[0].iov_base,
+            io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
     } else {
         rc = spdk_bdev_readv(dkdev->dk_desc, dkdev->dk_ioch, io->io_iov,
             io->io_iovcnt, io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
@@ -722,6 +725,9 @@ pfs_spdk_dev_io_pwrite(void *arg)
             io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
     } else if (iocb->cb_dma_buf) {
     	rc = spdk_bdev_write(dkdev->dk_desc, dkdev->dk_ioch, iocb->cb_dma_buf,
+        	io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
+    } else if (1 == io->io_iovcnt) {
+     	rc = spdk_bdev_write(dkdev->dk_desc, dkdev->dk_ioch, io->io_iov[0].iov_base,
         	io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
     } else {
 	    rc = spdk_bdev_writev(dkdev->dk_desc, dkdev->dk_ioch, io->io_iov,
