@@ -76,11 +76,13 @@ DEFINE_int32(spdk_delete_temp_json_file, 1, "delete temp json file");
 #define RECYCLE_TIMEOUT 5
 
 static std::string g_spdk_temp_config_file;
-static pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_pfs_mtx = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t g_init_mtx = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t g_init_cond;
-static bool g_poll_loop = true;
+static pthread_mutex_t g_gc_mtx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_gc_cond = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t g_suspend_cond = PTHREAD_COND_INITIALIZER;
+enum class PollState { NORMAL, STOP, SUSPEND, SUSPENDED };
+static PollState g_poll_loop = PollState::NORMAL;
 static pthread_t g_init_thread_id;
 static int g_spdk_env_initialized;
 
@@ -360,9 +362,9 @@ pfs_spdk_cleanup_thread(struct pfs_spdk_thread *thread)
     spdk_thread_send_msg(thread->spdk_thread, pfs_spdk_bdev_close_targets,
         thread);
 
-    pthread_mutex_lock(&g_init_mtx);
+    pthread_mutex_lock(&g_gc_mtx);
     TAILQ_INSERT_TAIL(&g_gc_threads, thread, link);
-    pthread_mutex_unlock(&g_init_mtx);
+    pthread_mutex_unlock(&g_gc_mtx);
     spdk_set_thread(NULL);
 }
 
@@ -529,10 +531,10 @@ static void *thread_poll_loop(void *arg)
     pthread_setname_np(pthread_self(), "pfs_spdk_" THREAD_POLL);
 
     spdk_set_thread(mytd->spdk_thread);
-    while (g_poll_loop) {
+    pthread_mutex_lock(&g_gc_mtx);
+    while (g_poll_loop == PollState::NORMAL) {
         pfs_spdk_poll_thread(mytd);
 
-        pthread_mutex_lock(&g_init_mtx);
         if (!TAILQ_EMPTY(&g_gc_threads)) {
             TAILQ_FOREACH_SAFE(thread, &g_gc_threads, link, tmp) {
                 if (spdk_thread_is_exited(thread->spdk_thread)) {
@@ -545,7 +547,7 @@ static void *thread_poll_loop(void *arg)
             }
 
             /* If there are exiting threads to poll, don't sleep. */
-            pthread_mutex_unlock(&g_init_mtx);
+        
             continue;
         }
 
@@ -553,13 +555,18 @@ static void *thread_poll_loop(void *arg)
         clock_gettime(CLOCK_REALTIME, &ts);
         pfs_spdk_calc_timeout(mytd, &ts);
 
-        rc = pthread_cond_timedwait(&g_init_cond, &g_init_mtx, &ts);
-        pthread_mutex_unlock(&g_init_mtx);
+        rc = pthread_cond_timedwait(&g_gc_cond, &g_gc_mtx, &ts);
 
         if (rc != ETIMEDOUT) {
             break;
         }
     }
+    while (g_poll_loop == PollState::SUSPEND) {
+        g_poll_loop = PollState::SUSPENDED;
+        pthread_cond_broadcast(&g_suspend_cond);
+        pthread_cond_wait(&g_gc_cond, &g_gc_mtx);
+    }
+    pthread_mutex_unlock(&g_gc_mtx);
 
     struct timeval start, now, end, interval;
     int timeouted = 0;
@@ -708,19 +715,19 @@ pfs_spdk_setup(void)
     spdk_log_set_level((spdk_log_level)FLAGS_spdk_log_level);
     spdk_log_set_print_level((spdk_log_level)FLAGS_spdk_log_print_level);
 
-    pthread_mutex_lock(&init_mutex);
+    pthread_mutex_lock(&g_init_mutex);
     if (!g_spdk_env_initialized) {
         if (pfs_spdk_init_env()) {
             pfs_etrace("failed to initialize\n");
-            pthread_mutex_unlock(&init_mutex);
+            pthread_mutex_unlock(&g_init_mutex);
             return -1;
         }
 
         g_spdk_env_initialized = true;
         //atexit(pfs_spdk_cleanup);
-        pthread_mutex_unlock(&init_mutex);
+        pthread_mutex_unlock(&g_init_mutex);
     } else {
-        pthread_mutex_unlock(&init_mutex);
+        pthread_mutex_unlock(&g_init_mutex);
         return 0;
     }
 
@@ -744,19 +751,22 @@ pfs_spdk_setup(void)
     return 0;
 }
 
+
 void
 pfs_spdk_cleanup(void)
 {
     int rc;
 
-    pthread_mutex_lock(&init_mutex);
+    pthread_mutex_lock(&g_init_mutex);
     if (!g_spdk_env_initialized) {
-        pthread_mutex_unlock(&init_mutex);
+        pthread_mutex_unlock(&g_init_mutex);
         return;
     }
     pfs_spdk_thread_exit();
     g_poll_exit_result = 0;
-    g_poll_loop = false;
+    g_poll_loop = PollState::STOP;
+    pthread_mutex_unlock(&g_init_mutex);
+
     rc = pthread_join(g_init_thread_id, NULL);
     if (rc)
 	    pfs_etrace("can not join " THREAD_POLL " thread, %s\n", strerror(rc));
@@ -766,7 +776,29 @@ pfs_spdk_cleanup(void)
         spdk_log_close();
         g_spdk_env_initialized = 0;
     }
-    pthread_mutex_unlock(&init_mutex);
+    pthread_mutex_unlock(&g_init_mutex);
+}
+
+void
+pfs_spdk_suspend(void)
+{
+    int rc;
+
+    pthread_mutex_lock(&g_init_mutex);
+
+    if (!g_spdk_env_initialized) {
+        pthread_mutex_unlock(&g_init_mutex);
+        return;
+    }
+
+    pthread_mutex_lock(&g_gc_mtx);
+    g_poll_loop = PollState::SUSPEND;
+    pthread_cond_broadcast(&g_gc_cond);
+    while (g_poll_loop != PollState::SUSPENDED)
+        pthread_cond_wait(&g_suspend_cond, &g_gc_mtx);
+    pthread_mutex_unlock(&g_gc_mtx);
+
+    pthread_mutex_unlock(&g_init_mutex);
 }
 
 void pfs_spdk_thread_exit(void)

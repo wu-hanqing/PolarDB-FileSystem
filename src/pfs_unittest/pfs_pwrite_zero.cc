@@ -68,7 +68,8 @@ int main(int argc, char **argv)
 	{				\
 	struct timeval tv1, tv2; \
 	struct rusage ru1, ru2; \
-        getrusage(RUSAGE_THREAD, &ru1); \
+    std::cout << "testing " << #func << "\n"; \
+    getrusage(RUSAGE_THREAD, &ru1); \
 	auto start = std::chrono::steady_clock::now(); \
 	for (int j = 0; j < loops; ++j) { \
 		rc = pfs_lseek(fd, 0, SEEK_SET); \
@@ -120,7 +121,11 @@ int main(int argc, char **argv)
 	DO(pfs_write_zero, fd, buf_sz);
 
 	rte_free(dma_buf);
-
+#ifndef TEST_SUSPEND
 	pfs_umount(pbdname.c_str());
+	pfs_spdk_cleanup();
+#else
+	pfs_spdk_suspend();
+#endif
 	return 0;
 }

@@ -68,6 +68,7 @@ void pfs_spdk_conf_set_env_context(const char *s);
 void pfs_spdk_conf_set_controller(const char *s);
 
 int pfs_spdk_setup(void);
+void pfs_spdk_suspend(void);
 void pfs_spdk_cleanup(void);
 
 int pfs_get_pci_local_cpus(const std::string &pci_addr, cpu_set_t *setp);
