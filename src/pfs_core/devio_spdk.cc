@@ -405,10 +405,12 @@ err_exit:
     if (dkdev->dk_bufalign < 4096)
         dkdev->dk_bufalign = 4096;
     dev->d_cap = DEV_CAP_RD | DEV_CAP_WR | DEV_CAP_FLUSH | DEV_CAP_TRIM;
-    if (spdk_bdev_io_type_supported(dkdev->dk_bdev,
-			SPDK_BDEV_IO_TYPE_WRITE_ZEROES)) {
-	    dev->d_cap |= DEV_CAP_ZERO;
-    }
+    // SPDK unconditionally supports WRITE_ZEROS.
+    // It ensures that all specified blocks will be zeroed out.
+    // If a block device doesn't natively support a write zeroes command,
+    // the bdev layer emulates it using write commands.                                                                 
+    // yfxu@
+	dev->d_cap |= DEV_CAP_ZERO;
     dev->d_write_unit = spdk_bdev_get_write_unit_size(dkdev->dk_bdev) *
 		spdk_bdev_get_block_size(dkdev->dk_bdev);
     PFS_ASSERT(RTE_IS_POWER_OF_2(dev->d_write_unit));
