@@ -247,6 +247,55 @@ W 2022-05-26T15:42:45.139199+0800 132046 <spdk>:1] --file-prefix=spdk_pid132046
 
 ```
 
+### fio 测试
+
+配置文件
+pfs_global.fio
+
+```
+ioengine=pfs                                                                    
+cluster=spdk                                                                    
+pbd=0000:81:00.0n1                                                              
+filename=/0000\:81\:00.0n1/fio-seq-write                                        
+size=10G                                                                        
+bs=4096                                                                         
+#direct=1                                                                       
+#time_based                                                                     
+#create_on_open=1
+```
+
+配置文件
+pfs_seqw.fio
+```
+[global]                                                                        
+include pfs_global.fio                                                          
+                                                                                
+[seqwrite]                                                                      
+rw=write                                                                        
+size=5G                                                                         
+iodepth=1                                                                       
+numjobs=1                                                                       
+```
+
+配置文件
+pfs_randw.fio
+```
+[global]                                                                        
+include pfs_global.fio                                                          
+                                                                                
+[seqwrite]                                                                      
+rw=randwrite                                                                        
+size=5G                                                                         
+iodepth=1                                                                       
+numjobs= 16                                                                     
+```
+
+顺序填满文件:
+fio ./pfs_seqw.fio
+
+测试随机写:
+fio ./pfs_randw.fio
+
 ### 开发
 PFS daemon只是用来验证用的。CHUNK SERVER不使用pfsdaemon，但是用api启动PFS模块：
 
