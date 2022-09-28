@@ -13,6 +13,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include "pfs_spdk.h"
 #include "pfs_api.h"
 
 using namespace std;
@@ -42,6 +43,10 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+        if (pfs_spdk_setup()) {
+		std::cerr << "can not init spdk";
+                return 1;
+        }
 	                                                                               
 	int flags = MNTFLG_TOOL | MNTFLG_RDWR | MNTFLG_LOG;
 	int rc = pfs_mount(cluster.c_str(), pbdname.c_str(), hostid, flags);
