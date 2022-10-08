@@ -27,6 +27,7 @@
 #include <limits.h>
 #include <semaphore.h>
 #include <gflags/gflags.h>
+#include <unistd.h>
 
 #include <spdk/env.h>
 #include <spdk/log.h>
@@ -357,6 +358,7 @@ bdev_check_pci_address(pfs_spdk_dev_t *dkdev)
 static void *
 bdev_thread_msg_loop(void *arg)
 {
+    static size_t page_size = sysconf(_SC_PAGESIZE);
     struct bdev_open_param *param = (struct bdev_open_param *)arg;
     pfs_spdk_dev_t *dkdev = param->dkdev;
     pfs_dev_t *dev = &dkdev->dk_base;
@@ -402,8 +404,8 @@ err_exit:
     dkdev->dk_has_cache = spdk_bdev_has_write_cache(dkdev->dk_bdev);
     dkdev->dk_size = dkdev->dk_block_num * dkdev->dk_block_size;
     dkdev->dk_bufalign = spdk_bdev_get_buf_align(dkdev->dk_bdev);
-    if (dkdev->dk_bufalign < 4096)
-        dkdev->dk_bufalign = 4096;
+    if (dkdev->dk_bufalign < page_size)
+        dkdev->dk_bufalign = page_size;
     dev->d_cap = DEV_CAP_RD | DEV_CAP_WR | DEV_CAP_FLUSH | DEV_CAP_TRIM;
     // SPDK unconditionally supports WRITE_ZEROS.
     // It ensures that all specified blocks will be zeroed out.
