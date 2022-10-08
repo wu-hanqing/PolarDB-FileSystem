@@ -410,7 +410,7 @@ err_exit:
     // If a block device doesn't natively support a write zeroes command,
     // the bdev layer emulates it using write commands.                                                                 
     // yfxu@
-	dev->d_cap |= DEV_CAP_ZERO;
+    dev->d_cap |= DEV_CAP_ZERO;
     dev->d_write_unit = spdk_bdev_get_write_unit_size(dkdev->dk_bdev) *
 		spdk_bdev_get_block_size(dkdev->dk_bdev);
     PFS_ASSERT(RTE_IS_POWER_OF_2(dev->d_write_unit));
