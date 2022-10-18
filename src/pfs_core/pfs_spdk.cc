@@ -1179,3 +1179,30 @@ pfs_cpuset_socket_id(cpu_set_t *cpusetp)
 
     return socket_id;
 }
+
+extern "C" int
+pfs_is_spdk_mem(void *p, size_t size)
+{
+	char *cp = (char *)p;
+	ssize_t left = size;
+	while (left > 0) {
+		size_t tmp = left;
+		if (spdk_vtophys(cp, &tmp) == SPDK_VTOPHYS_ERROR)
+			return 0;
+		cp += tmp;
+		left -= tmp;
+	}
+
+	return 1;
+}
+
+extern "C" int
+pfs_is_spdk_memv(const struct iovec *iov, int iovcnt)
+{
+	for (int i = 0; i < iovcnt; ++i) {
+		if (!pfs_is_spdk_mem(iov[i].iov_base, iov[i].iov_len))
+			return 0;
+	}
+
+	return 1;
+}
