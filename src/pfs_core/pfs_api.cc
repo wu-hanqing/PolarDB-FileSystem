@@ -1025,8 +1025,9 @@ pfs_readv_flags(int fd, const struct iovec *iov, int iovcnt, size_t len, int fla
 		err = rlen < 0 ? (int)rlen : 0;
 		PFS_STAT_LATENCY(STAT_PFS_API_READ_DONE);
 	}
+	if (!err && (flags & PFS_IO_DMA_ON))
+		MNT_STAT_END_VALUE_BANDWIDTH2(MNT_STAT_FILE_READ_DMA, len);
 	MNT_STAT_API_END_BANDWIDTH(MNT_STAT_API_READ, len);
-
 	API_EXIT(err);
 	if (err < 0)
 		return -1;
@@ -1097,6 +1098,8 @@ pfs_writev_flags(int fd, const struct iovec *iov, int iovcnt,
 		err = wlen < 0 ? (int)wlen : 0;
 		PFS_STAT_LATENCY(STAT_PFS_API_WRITE_DONE);
 	}
+	if (!err && (flags & PFS_IO_DMA_ON))
+		MNT_STAT_END_VALUE_BANDWIDTH2(MNT_STAT_FILE_WRITE_DMA, len);
 	MNT_STAT_API_END_BANDWIDTH(MNT_STAT_API_WRITE, len);
 
 	API_EXIT(err);
@@ -1175,6 +1178,8 @@ pfs_preadv_flags(int fd, const struct iovec *iov, int iovcnt, size_t len, off_t 
 		err = rlen < 0 ? (int)rlen : 0;
 		PFS_STAT_LATENCY(STAT_PFS_API_PREAD_DONE);
 	}
+	if (!err && (flags & PFS_IO_DMA_ON))
+		MNT_STAT_END_VALUE_BANDWIDTH2(MNT_STAT_FILE_READ_DMA, len);
 	MNT_STAT_API_END_BANDWIDTH(MNT_STAT_API_PREAD, len);
 
 	API_EXIT(err);
@@ -1256,6 +1261,8 @@ pfs_pwritev_flags(int fd, const struct iovec *iov, int iovcnt,
 		err = wlen < 0 ? (int)wlen : 0;
 		PFS_STAT_LATENCY(STAT_PFS_API_PWRITE_DONE);
 	}
+	if (!err && (flags & PFS_IO_DMA_ON))
+		MNT_STAT_END_BANDWIDTH(MNT_STAT_FILE_WRITE_DMA, len);
 	MNT_STAT_API_END_BANDWIDTH(MNT_STAT_API_PWRITE, len);
 
 	API_EXIT(err);
