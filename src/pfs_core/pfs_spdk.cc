@@ -1184,7 +1184,7 @@ extern "C" int
 pfs_is_spdk_mem(void *p, size_t size)
 {
 	char *cp = (char *)p;
-	ssize_t left = size;
+	size_t left = size;
 	while (left > 0) {
 		size_t tmp = left;
 		if (spdk_vtophys(cp, &tmp) == SPDK_VTOPHYS_ERROR)
