@@ -113,11 +113,11 @@ int main(int argc, char **argv)
 	}
 	std::cout << "initialized.\n";
 
-	char *dma_buf = (char *)rte_malloc("", buf_sz, 64);
-	memset(dma_buf, 0, sizeof(buf_sz));
+	char *dma_buf = (char *)rte_malloc("", buf_sz+3584, 4096);
+	memset(dma_buf+3584, 0, sizeof(buf_sz));
 
 	DO(pfs_write, fd, buf, buf_sz);
-	DO(pfs_write_dma, fd, dma_buf, buf_sz);
+	DO(pfs_write_dma, fd, dma_buf+3584, buf_sz);
 	DO(pfs_write_zero, fd, buf_sz);
 
 	rte_free(dma_buf);

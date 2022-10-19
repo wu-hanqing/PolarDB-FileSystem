@@ -33,6 +33,7 @@
 #include "pfs_option.h"
 #include "pfs_trace.h"
 #include "pfs_stat.h"
+#include "pfs_spdk.h"
 
 /*-
  *  This file implements the API layer of the PFS, whose main
@@ -1060,14 +1061,20 @@ pfs_read_dma(int fd, void *buf, size_t len)
 		return -1;
 	}
 	struct iovec iov = { buf, len };
-	return pfs_readv_flags(fd, &iov, 1, len, PFS_IO_DMA_ON);
+	int flags = 0;
+	if (pfs_iov_is_sge_aligned(&iov, 1))
+		flags = PFS_IO_DMA_ON;
+	return pfs_readv_flags(fd, &iov, 1, len, flags);
 }
 
 ssize_t
 pfs_readv_dma(int fd, const struct iovec *iov, int iovcnt)
 {
 	size_t len = iovec_bytes(iov, iovcnt);
-	return pfs_readv_flags(fd, iov, iovcnt, len, PFS_IO_DMA_ON);
+	int flags = 0;
+	if (pfs_iov_is_sge_aligned(iov, iovcnt))
+		flags = PFS_IO_DMA_ON;
+	return pfs_readv_flags(fd, iov, iovcnt, len, flags);
 }
 
 ssize_t
@@ -1122,7 +1129,10 @@ ssize_t
 pfs_writev_dma(int fd, const struct iovec *iov, int iovcnt)
 {
 	size_t len = iovec_bytes(iov, iovcnt);
-	return pfs_writev_flags(fd, iov, iovcnt, len, PFS_IO_DMA_ON);
+	int flags = 0;
+	if (pfs_iov_is_sge_aligned(iov, iovcnt))
+		flags = PFS_IO_DMA_ON;
+	return pfs_writev_flags(fd, iov, iovcnt, len, flags);
 }
 
 ssize_t
@@ -1139,7 +1149,11 @@ pfs_write_dma(int fd, const void *buf, size_t len)
 		return -1;
 	}
 	struct iovec iov = { (void *)buf, len };
-	return pfs_writev_flags(fd, &iov, 1, len, PFS_IO_DMA_ON);
+	int flags = 0;
+	if (pfs_iov_is_sge_aligned(&iov, 1)) {
+		flags = PFS_IO_DMA_ON;
+	}
+	return pfs_writev_flags(fd, &iov, 1, len, flags);
 }
 
 static ssize_t
@@ -1202,7 +1216,10 @@ pfs_pread_dma(int fd, void *buf, size_t len, off_t offset)
 		errno = EINVAL;
 		return -1;
 	}
-	return pfs_preadv_flags(fd, &iov, 1, len, offset, PFS_IO_DMA_ON);
+	int flags = 0;
+	if (pfs_iov_is_sge_aligned(&iov, 1))
+		flags = PFS_IO_DMA_ON;
+	return pfs_preadv_flags(fd, &iov, 1, len, offset, flags);
 }
 
 ssize_t
@@ -1213,7 +1230,10 @@ pfs_preadv_dma(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 		return -1;
 	}
 	size_t len = iovec_bytes(iov, iovcnt);
-	return pfs_preadv_flags(fd, iov, iovcnt, len, offset, PFS_IO_DMA_ON);
+	int flags = 0;
+	if (pfs_iov_is_sge_aligned(iov, iovcnt))
+		flags = PFS_IO_DMA_ON;
+	return pfs_preadv_flags(fd, iov, iovcnt, len, offset, flags);
 }
 
 static ssize_t
@@ -1278,7 +1298,10 @@ pfs_pwrite_dma(int fd, const void *buf, size_t len, off_t offset)
 	}
 
 	struct iovec iov = { (void *)buf, len };
-	return pfs_pwritev_flags(fd, &iov, 1, len, offset, PFS_IO_DMA_ON);
+	int flags = 0;
+	if (pfs_iov_is_sge_aligned(&iov, 1))
+		flags = PFS_IO_DMA_ON;
+	return pfs_pwritev_flags(fd, &iov, 1, len, offset, flags);
 }
 
 ssize_t
@@ -1290,7 +1313,10 @@ pfs_pwritev_dma(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 	}
 
 	size_t len = iovec_bytes(iov, iovcnt);
-	return pfs_pwritev_flags(fd, iov, iovcnt, len, offset, PFS_IO_DMA_ON);
+	int flags = 0;
+	if (pfs_iov_is_sge_aligned(iov, iovcnt))
+		flags = PFS_IO_DMA_ON;
+	return pfs_pwritev_flags(fd, iov, iovcnt, len, offset, flags);
 }
 
 ssize_t
