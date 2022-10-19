@@ -77,5 +77,13 @@ int pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *setp);
 std::string pfs_cpuset_to_string(const cpu_set_t *mask);
 int pfs_parse_set(const char *input, cpu_set_t *setp);
 int pfs_cpuset_socket_id(cpu_set_t *setp);
+int pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt);
+int pfs_is_prp_aligned(const void *addr, size_t len);
+
+#define pfs_iov_is_sge_aligned(iov, iovcnt) \
+	pfs_iov_is_prp_aligned(iov, iovcnt)
+
+#define pfs_is_sge_aligned(addr, len) \
+	pfs_is_prp_aligned(iov, iovcnt)
 
 #endif

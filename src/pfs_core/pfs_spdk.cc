@@ -47,6 +47,9 @@
 #include <spdk/util.h>
 #include <spdk/json.h>
 
+#include <sys/user.h>	// For PAGE_SIZE and PAGE_MASK
+#include <sys/param.h>  // For roundup
+
 #define THREAD_POLL "thread_poll"
 
 DEFINE_string(spdk_name, "", "give a name for spdk_env");
@@ -1180,8 +1183,8 @@ pfs_cpuset_socket_id(cpu_set_t *cpusetp)
     return socket_id;
 }
 
-extern "C" int
-pfs_is_spdk_mem(void *p, size_t size)
+static int
+__pfs_is_spdk_mem(void *p, size_t size)
 {
 	char *cp = (char *)p;
 	size_t left = size;
@@ -1196,13 +1199,80 @@ pfs_is_spdk_mem(void *p, size_t size)
 	return 1;
 }
 
-extern "C" int
-pfs_is_spdk_memv(const struct iovec *iov, int iovcnt)
+static int
+__pfs_is_spdk_memv(const struct iovec *iov, int iovcnt)
 {
 	for (int i = 0; i < iovcnt; ++i) {
-		if (!pfs_is_spdk_mem(iov[i].iov_base, iov[i].iov_len))
+		if (!__pfs_is_spdk_mem(iov[i].iov_base, iov[i].iov_len))
 			return 0;
 	}
 
 	return 1;
+}
+
+extern "C" int
+pfs_is_spdk_mem(void *p, size_t size)
+{
+	return __pfs_is_spdk_mem(p, size);
+}
+
+extern "C" int
+pfs_is_spdk_memv(const struct iovec *iov, int iovcnt)
+{
+	return __pfs_is_spdk_memv(iov, iovcnt);
+}
+
+int
+pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
+{
+	uintptr_t addr, addr2, addr_end;
+	int i;
+
+	if (iovcnt == 0)
+		return 0;
+
+	if (!__pfs_is_spdk_memv(iov, iovcnt)) // Is not spdk memory
+		return 0;
+
+	// First page can start in middle of page
+	addr = (uintptr_t)iov[0].iov_base;
+	addr_end = addr + iov[0].iov_len;
+	if ((addr & 511) != 0)
+		return 0;
+	if ((addr_end & 511) != 0)
+		return 0;
+	addr2 = roundup(addr, PAGE_SIZE);
+	// The iovec is not ended at top of page
+	if (addr2 > addr_end)
+		return 0;
+
+	i = 0;
+	addr = addr2;
+	while (!(addr & ~PAGE_MASK) && !(addr_end & ~PAGE_MASK)) {
+		i++;
+		if (i == iovcnt)
+			break;
+		addr = (uintptr_t)iov[i].iov_base;
+		addr_end = addr + iov[i].iov_len;
+	}
+
+	if (i == iovcnt)
+		return 1;
+	
+	if (i != iovcnt-1)
+		return 0;
+
+	if ((addr & ~PAGE_MASK) || (addr_end & 511))
+		return 0;
+
+	return 1;
+}
+
+int pfs_is_prp_aligned(const void *addr, size_t len)
+{
+	struct iovec iov;
+
+	iov.iov_base = (void *)addr;
+	iov.iov_len = len;
+	return pfs_iov_is_prp_aligned(&iov, 1);
 }
