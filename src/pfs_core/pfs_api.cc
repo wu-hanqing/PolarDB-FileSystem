@@ -1262,7 +1262,7 @@ pfs_pwritev_flags(int fd, const struct iovec *iov, int iovcnt,
 		PFS_STAT_LATENCY(STAT_PFS_API_PWRITE_DONE);
 	}
 	if (!err && (flags & PFS_IO_DMA_ON))
-		MNT_STAT_END_BANDWIDTH(MNT_STAT_FILE_WRITE_DMA, len);
+		MNT_STAT_END_VALUE_BANDWIDTH2(MNT_STAT_FILE_WRITE_DMA, len);
 	MNT_STAT_API_END_BANDWIDTH(MNT_STAT_API_PWRITE, len);
 
 	API_EXIT(err);
