@@ -435,7 +435,7 @@ err_exit:
             spdk_thread_poll(spdk_thread, 0, spdk_get_ticks());
             pfs_spdk_dev_pull_iocb(dkdev);
         }
-        if (FLAGS_pfs_spdk_driver_poll_delay)
+        if (!FLAGS_pfs_spdk_driver_poll_delay)
             continue;
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
