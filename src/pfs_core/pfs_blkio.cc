@@ -28,6 +28,7 @@
 #include "pfs_option.h"
 #include "pfs_util.h"
 #include "pfs_iomem.h"
+#include "pfs_stat.h"
 
 typedef int pfs_blkio_fn_t(
     int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
@@ -154,6 +155,7 @@ pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 	int err;
 
 	if (allen != len) {
+		MNT_STAT_BEGIN();
 		PFS_ASSERT(albuf != NULL);
 		PFS_INC_COUNTER(STAT_PFS_UnAligned_W_4K);
 		err = pfsdev_pread_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
@@ -164,6 +166,7 @@ pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 		else
 			pfs_copy_from_iovec_to_buf(&albuf[bda - albda], iov, len);
 		err = pfsdev_pwrite_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
+		MNT_STAT_END_VALUE_BANDWIDTH2(MNT_STAT_FILE_WRITE_PAD, len);
 		return err;
 	}
 
