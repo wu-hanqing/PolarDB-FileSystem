@@ -1222,48 +1222,53 @@ pfs_is_spdk_memv(const struct iovec *iov, int iovcnt)
 	return __pfs_is_spdk_memv(iov, iovcnt);
 }
 
+static inline bool                                                              
+_is_page_aligned(uint64_t address, uint64_t page_size)                          
+{
+    return (address & (page_size - 1)) == 0;
+}
+
+/*
+ * A simple function to verify if iovec is PRP alignment.
+ * Note we don't check if neighbours are contig memory areas,
+ * it is enough for us.
+ */
 int
 pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
 {
-	uintptr_t addr, addr2, addr_end;
-	int i;
+    uintptr_t addr;
+    size_t len;
+    int i;
 
-	if (iovcnt == 0)
-		return 0;
+    if (iovcnt == 0)
+        return 0;
 
-	if (!__pfs_is_spdk_memv(iov, iovcnt)) // Is not spdk memory
-		return 0;
+    if (!__pfs_is_spdk_memv(iov, iovcnt)) // Is not spdk memory
+        return 0;
 
-	// First page can start in middle of page
-	addr = (uintptr_t)iov[0].iov_base;
-	addr_end = addr + iov[0].iov_len;
-	if ((addr & 511) != 0)
-		return 0;
-	if ((addr_end & 511) != 0)
-		return 0;
-	addr2 = roundup(addr, PAGE_SIZE);
-	// The iovec is not ended at top of page
-	if (addr2 > addr_end)
-		return 0;
+    if (iovcnt == 1) {
+        // check if dword aligned and size is times of sector size
+	    addr = (uintptr_t)iov[0].iov_base;
+        return (addr & 3) == 0 && (iov[0].iov_len % 512) == 0;
+    }
+    
+    for (i = 1; i < iovcnt - 1; ++i) {
+        // middle page must be page aligned and size is times of page
+	    addr = (uintptr_t)iov[i].iov_base;
+        if (!_is_page_aligned(addr, PAGE_SIZE))
+            return 0;
+	    len = iov[i].iov_len;
+        if (len % PAGE_SIZE)
+            return 0;
+    }
 
-	i = 0;
-	addr = addr2;
-	while (!(addr & ~PAGE_MASK) && !(addr_end & ~PAGE_MASK)) {
-		i++;
-		if (i == iovcnt)
-			break;
-		addr = (uintptr_t)iov[i].iov_base;
-		addr_end = addr + iov[i].iov_len;
-	}
+    addr = (uintptr_t)iov[i].iov_base;
+    if (!_is_page_aligned(addr, PAGE_SIZE))
+        return 0;
 
-	if (i == iovcnt)
-		return 1;
-	
-	if (i != iovcnt-1)
-		return 0;
-
-	if ((addr & ~PAGE_MASK) || (addr_end & 511))
-		return 0;
+    len = iov[i].iov_len;
+    if (len % 512)
+        return 0;
 
 	return 1;
 }

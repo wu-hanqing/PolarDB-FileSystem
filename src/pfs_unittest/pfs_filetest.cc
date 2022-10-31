@@ -458,6 +458,17 @@ TEST_F(FileTest, pfs_pwritev)
     EXPECT_EQ(memcmp(buf2, "world", 5), 0);
 }
 
+TEST_F(FileTest, pfs_pwrite_dma)
+{
+    ssize_t len;
+    char *buf;
+
+    buf = (char *) rte_malloc("", 4096, 4096);
+    len = pfs_pwrite_dma(fd_, buf+1, 512, 0);
+    CHECK_RET(len, 512);
+    rte_free(buf);
+}
+
 TEST_F(FileTest, pfs_pwritev_dma)
 {
     ssize_t len;
