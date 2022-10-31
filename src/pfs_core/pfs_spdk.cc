@@ -1246,18 +1246,22 @@ pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
     if (!__pfs_is_spdk_memv(iov, iovcnt)) // Is not spdk memory
         return 0;
 
+    addr = (uintptr_t)iov[0].iov_base;
     if (iovcnt == 1) {
         // check if dword aligned and size is times of sector size
-	    addr = (uintptr_t)iov[0].iov_base;
         return (addr & 3) == 0 && (iov[0].iov_len % 512) == 0;
     }
-    
+    addr += iov[0].iov_len;
+    if (!_is_page_aligned(addr, PAGE_SIZE)) {
+        return 0;
+    }
+
     for (i = 1; i < iovcnt - 1; ++i) {
         // middle page must be page aligned and size is times of page
-	    addr = (uintptr_t)iov[i].iov_base;
+        addr = (uintptr_t)iov[i].iov_base;
         if (!_is_page_aligned(addr, PAGE_SIZE))
             return 0;
-	    len = iov[i].iov_len;
+        len = iov[i].iov_len;
         if (len % PAGE_SIZE)
             return 0;
     }
@@ -1270,7 +1274,7 @@ pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
     if (len % 512)
         return 0;
 
-	return 1;
+    return 1;
 }
 
 int pfs_is_prp_aligned(const void *addr, size_t len)
