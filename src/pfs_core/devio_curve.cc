@@ -74,13 +74,15 @@ pfs_init_curve(void)
     int ret = 0;
     pthread_mutex_lock(&curve_init_lock);
     if (!g_curve) {
-    	g_curve = new curve::client::CurveClient;
-        if (g_curve->Init(CURVE_CONF_PATH)) {
+	curve::client::CurveClient *curve_client;
+    	curve_client = new curve::client::CurveClient;
+        if (curve_client->Init(CURVE_CONF_PATH)) {
             pfs_etrace("can not init nebd client, errno=%d\n", errno);
-            delete g_curve;
-            g_curve = NULL;
+            delete curve_client;
             ret = -1;
-        }
+	}
+	__sync_synchronize();
+	g_curve = curve_client;
     }
     pthread_mutex_unlock(&curve_init_lock);
     return ret;
