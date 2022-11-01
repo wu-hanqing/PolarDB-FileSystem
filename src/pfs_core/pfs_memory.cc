@@ -17,7 +17,7 @@
 
 #include <malloc.h>
 #include <stdlib.h>
-#include <rte_malloc.h>
+#include <spdk/env.h>
 
 #include "pfs_impl.h"
 #include "pfs_admin.h"
@@ -252,9 +252,11 @@ pfs_dma_malloc(const char *type, size_t align, size_t size, int socket)
 {
 	void *p;
 
-	p = rte_malloc_socket(type, size, align, socket);
-	if (p == NULL && socket != SOCKET_ID_ANY)
-		p = rte_malloc_socket(type, size, align, SOCKET_ID_ANY);
+	p = spdk_malloc(size, align, NULL, socket, SPDK_MALLOC_DMA);
+	if (p == NULL && socket != SOCKET_ID_ANY) {
+		p = spdk_malloc(size, align, NULL, SPDK_ENV_SOCKET_ID_ANY,
+				SPDK_MALLOC_DMA);
+	}
 	return p;
 }
 
@@ -263,14 +265,16 @@ pfs_dma_zalloc(const char *type, size_t align, size_t size, int socket)
 {
 	void *p;
 
-	p = rte_zmalloc_socket(type, size, align, socket);
-	if (p == NULL && socket != SOCKET_ID_ANY)
-		p = rte_zmalloc_socket(type, size, align, SOCKET_ID_ANY);
+	p = spdk_zmalloc(size, align, NULL, socket, SPDK_MALLOC_DMA);
+	if (p == NULL && socket != SOCKET_ID_ANY) {
+		p = spdk_zmalloc(size, align, NULL, SPDK_ENV_SOCKET_ID_ANY,
+				SPDK_MALLOC_DMA);
+	}
 	return p;
 }
 
 void
 pfs_dma_free(void *p)
 {
-	rte_free(p);
+	spdk_dma_free(p);
 }
