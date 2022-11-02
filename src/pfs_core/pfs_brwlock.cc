@@ -31,8 +31,8 @@
 #define leaf_mask  15
 
 struct pfs_brwlock {
-	pthread_t		owner;
 	pthread_rwlock_t	*leaves[leaf_count];
+	pthread_t		owner;
 };
 
 static int next_thread_id;
@@ -64,7 +64,10 @@ pfs_brwlock_init(pfs_brwlock_t *rwlock)
 	struct pfs_brwlock *lck;
 	int i;
 
-	lck = (struct pfs_brwlock *) calloc(1, sizeof(struct pfs_brwlock));
+	lck = (struct pfs_brwlock *)aligned_alloc(64, sizeof(struct pfs_brwlock));
+	if (lck == NULL) {
+		return ENOMEM;
+	}
 	for (i = 0; i < leaf_count; ++i) {
 		void *ptr;
 		size_t alloc_size = ((sizeof(pthread_rwlock_t) + 63) / 64) * 64;
