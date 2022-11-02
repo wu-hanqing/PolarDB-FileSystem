@@ -46,6 +46,7 @@
 #include <spdk/log.h>
 #include <spdk/util.h>
 #include <spdk/json.h>
+#include <spdk/rpc.h>
 
 #include <sys/user.h>	// For PAGE_SIZE and PAGE_MASK
 #include <sys/param.h>  // For roundup
@@ -68,7 +69,7 @@ DEFINE_string(spdk_iova_mode, "va", "iova mode");
 DEFINE_uint64(spdk_base_virtaddr, 0, "base virtual base");
 DEFINE_string(spdk_env_context, "", "env context string");
 DEFINE_string(spdk_json_config_file, "", "spdk json config file");
-DEFINE_string(spdk_rpc_addr, SPDK_DEFAULT_RPC_ADDR, "spdk rpc address");
+DEFINE_string(spdk_rpc_address, "",  "spdk rpc address");
 //DEFINE_string(spdk_log_flags, "bdev,thread,nvme", "spdk log flags");
 DEFINE_string(spdk_log_flags, "", "spdk log flags");
 DEFINE_int32(spdk_log_level, SPDK_LOG_INFO, "spdk log level");
@@ -289,14 +290,9 @@ pfs_spdk_bdev_init_start(void *arg)
         pfs_itrace("json config file: %s", json_file.c_str());
     }
 
-    if (FLAGS_spdk_rpc_addr.empty())
-        pfs_etrace("spdk rpc address is not set!");
-    else
-        pfs_itrace("spdk rpc address:%s", FLAGS_spdk_rpc_addr.c_str());
-
     spdk_subsystem_init_from_json_config(
         json_file.c_str(),
-        FLAGS_spdk_rpc_addr.c_str(),
+        SPDK_DEFAULT_RPC_ADDR,
         pfs_spdk_bdev_init_done, done, true);
 }
 
@@ -526,14 +522,27 @@ pfs_spdk_bdev_fini_start(void *arg)
 static void *thread_poll_loop(void *arg)
 {
     struct pfs_spdk_thread *mytd = (struct pfs_spdk_thread *)arg;
-    struct pfs_spdk_thread *thread, *tmp;
+    struct pfs_spdk_thread *thread = NULL, *tmp = NULL;
     struct timespec ts;
-    int rc;
-    bool done;
+    int rc = 0;
+    bool done = false;
+    bool rpc_inited = false;
 
     pthread_setname_np(pthread_self(), "pfs_spdk_" THREAD_POLL);
 
     spdk_set_thread(mytd->spdk_thread);
+    if (!FLAGS_spdk_rpc_address.empty()) {
+        if (spdk_rpc_initialize(FLAGS_spdk_rpc_address.c_str())) {
+            pfs_etrace("can not init spdk rpc server at : %s",
+                       FLAGS_spdk_rpc_address.c_str());
+        } else {
+            rpc_inited = true;
+            spdk_rpc_set_state(SPDK_RPC_RUNTIME);
+            pfs_itrace("init spdk rpc server at : %s",
+                       FLAGS_spdk_rpc_address.c_str());
+	}
+    }
+
     pthread_mutex_lock(&g_gc_mtx);
     while (g_poll_loop == PollState::NORMAL) {
         pfs_spdk_poll_thread(mytd);
@@ -564,6 +573,11 @@ static void *thread_poll_loop(void *arg)
             break;
         }
     }
+
+    if (rpc_inited) {
+        spdk_rpc_finish();
+    }
+
     while (g_poll_loop == PollState::SUSPEND) {
         g_poll_loop = PollState::SUSPENDED;
         pthread_cond_broadcast(&g_suspend_cond);
