@@ -52,6 +52,7 @@ set(SRC_LIST
     pfs_rangelock.cc
     pfs_locktable.cc
     pfs_sync.cc
+    pfs_brwlock.cc
 )
 
 # lib pfs
