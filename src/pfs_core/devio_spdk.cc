@@ -21,6 +21,8 @@
  * Author: XuYifeng
  */
 
+#include <sys/param.h>
+
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -110,7 +112,6 @@ typedef struct pfs_spdk_ioq {
 
     pfs_spdk_iocb_t *dkq_done_q __rte_aligned(RTE_CACHE_LINE_SIZE);
     pfs_event_t dkq_done_ev;
-    char	dkq_pad[RTE_CACHE_LINE_SIZE];
 } pfs_spdk_ioq_t;
 
 struct bdev_open_param {
@@ -122,14 +123,8 @@ struct bdev_open_param {
 static const int64_t g_iodepth = 128;
 DEFINE_int32(pfs_spdk_driver_poll_delay, 0,
   "pfs spdk driver busy poll delay time(us)");
-DEFINE_bool(pfs_spdk_driver_auto_cpu_bind, false,
-  "pfs spdk driver auto bind thread to cpus which are nearest to pci device");
-DEFINE_string(pfs_spdk_driver_cpu_bind, "", 
-  "pfs spdk driver list [device@dpdk_cpu_set] should bind to cpu set to");
 DEFINE_int32(pfs_spdk_driver_error_interval, 1,
   "pfs spdk driver DMA buffer allocation failure report interval (seconds)");
-DEFINE_string(pfs_spdk_driver_check_pci_address, "", 
-  "pfs spdk device list [device@domain:bus:dev.function;] to check pci address");
 DEFINE_bool(pfs_spdk_driver_auto_dma, true,
   "pfs spdk driver always use dma buffer if not allocated");
 
@@ -205,9 +200,10 @@ pfs_spdk_dev_create_ioq(pfs_dev_t *dev)
 {
     pfs_spdk_ioq_t *dkioq = NULL;
     void *p = NULL;
+    size_t alloc_size = roundup(sizeof(*dkioq), 64);
     int err;
 
-    err = pfs_mem_memalign(&p, PFS_CACHELINE_SIZE, sizeof(*dkioq),
+    err = pfs_mem_memalign(&p, PFS_CACHELINE_SIZE, alloc_size,
 		M_SPDK_DEV_IOQ);
     if (err) {
         pfs_etrace("create disk ioq failed: %d, %s\n", strerror(err));
@@ -240,7 +236,7 @@ bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 }
 
 static int
-bdev_thread_bind_cpuset(const char *thread_name, pfs_spdk_dev_t *dkdev)
+bdev_find_cpuset(pfs_spdk_dev_t *dkdev)
 {
     pfs_dev_t *dev = &dkdev->dk_base;
     cpu_set_t cpuset;
@@ -249,105 +245,13 @@ bdev_thread_bind_cpuset(const char *thread_name, pfs_spdk_dev_t *dkdev)
     err = pfs_get_dev_local_cpus(dkdev->dk_bdev, &cpuset);
     if (err == 0) {
         dev->d_mem_socket_id = pfs_cpuset_socket_id(&cpuset);
+        pfs_itrace("device %s's local cpu socket is %d", dev->d_devname,
+                   dev->d_mem_socket_id);
     } else {
         pfs_etrace("cannot get device %s's local cpuset", dev->d_devname);
     }
 
-    if (FLAGS_pfs_spdk_driver_auto_cpu_bind) {
-        if (err == 0) {
-set_it:
-            std::string cpuset_str = pfs_cpuset_to_string(&cpuset);
-            err = rte_thread_set_affinity(&cpuset);
-            if (err == 0) {
-                pfs_itrace("auto bind thread %s to cpuset : %s", thread_name,
-                        cpuset_str.c_str());
-            } else {
-                pfs_etrace("cannot bind thread %s to cpuset: %s", thread_name,
-                        cpuset_str.c_str());
-                err = -1;
-            }
-        }
-    } else if (!FLAGS_pfs_spdk_driver_cpu_bind.empty()) {
-        std::string &s = FLAGS_pfs_spdk_driver_cpu_bind;
-        auto pos = s.find(dev->d_devname);
-        if (pos != std::string::npos) {
-            pos += strlen(dev->d_devname);
-            if (s[pos] != '@') {
-                pfs_etrace("cannot find cpuset bind for %s in %s",
-                     dev->d_devname, s.c_str());
-                err = -1;
-            } else {
-                pos++;
-                auto pos2 = s.find(';', pos);
-                std::string substr;
-                if (pos2 != std::string::npos)
-                    substr = s.substr(pos2-pos);
-                else
-                    substr = s.substr(pos);
-
-                if (pfs_parse_set(substr.c_str(), &cpuset) == substr.length())
-                    goto set_it;
-                else {
-                    pfs_etrace("can not parse cpuset %s", substr.c_str());
-                    err = -1;
-                }
-            }
-        } else {
-            pfs_etrace("no cpuset found in cpuset bind %s for %s", s.c_str(),
-                       dev->d_devname);
-        }
-    }
-
     return err;
-}
-
-static int
-bdev_check_pci_address(pfs_spdk_dev_t *dkdev)
-{
-    pfs_dev_t *dev = &dkdev->dk_base;
-    std::string pci_address = pfs_get_dev_pci_address(dkdev->dk_bdev);
-
-    if (pci_address.empty()) {
-        pfs_wtrace("device %s has empty pci address", dev->d_devname);
-        return 0;
-    }
-
-    pfs_itrace("device %s, current pci address %s", dev->d_devname,
-        pci_address.c_str());
-
-    if (!FLAGS_pfs_spdk_driver_check_pci_address.empty()) {
-        std::string &s = FLAGS_pfs_spdk_driver_check_pci_address;
-        auto pos = s.find(dev->d_devname);
-        if (pos != std::string::npos) {
-            pos += strlen(dev->d_devname);
-            if (s[pos] != '@') {
-                pfs_etrace("cannot find ':' for %s in %s",
-                     dev->d_devname, s.c_str());
-                return -1;
-            } else {
-                pos++;
-                auto pos2 = s.find(';', pos);
-                std::string substr;
-                if (pos2 != std::string::npos)
-                    substr = s.substr(pos2-pos);
-                else
-                    substr = s.substr(pos);
-                if (substr == pci_address) {
-                    pfs_itrace("ok to verify pci address for %s", dev->d_devname);
-                    return 0;
-                } else {
-                    pfs_etrace("pci address is not match for %s, current: %s, expected: %s",
-                        dev->d_devname, pci_address.c_str(), substr.c_str());
-                    return -1;
-                }
-            }
-        } else {
-            pfs_wtrace("device %s is not in pfs_spdk_driver_check_pci_address",
-                dev->d_devname);
-        }
-    }
-
-    return 0;
 }
 
 /*
@@ -380,12 +284,6 @@ err_exit:
         return NULL;
     }
     dkdev->dk_bdev = spdk_bdev_desc_get_bdev(dkdev->dk_desc);
-    if (bdev_check_pci_address(dkdev) == -1) {
-        spdk_bdev_close(dkdev->dk_desc);
-        err = EINVAL;
-        goto err_exit;
-    }
-
     dkdev->dk_ioch = pfs_get_spdk_io_channel(dkdev->dk_desc);
     if (dkdev->dk_ioch == NULL) {
         pfs_etrace("can not get io channel of spdk device: %s\n",
@@ -422,7 +320,7 @@ err_exit:
                dev->d_devname, dkdev->dk_block_num, dkdev->dk_block_size,
                dkdev->dk_unit_size, dkdev->dk_has_cache, dkdev->dk_bufalign);
 
-    bdev_thread_bind_cpuset(thread_name, dkdev);
+    bdev_find_cpuset(dkdev);
 
     param->rc = 0;
     sem_post(&param->sem);
