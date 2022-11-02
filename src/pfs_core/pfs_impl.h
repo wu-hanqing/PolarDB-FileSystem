@@ -181,7 +181,7 @@ mutex_init(pfs_mutex_t *mtx)
 	err |= pthread_mutex_init(mtx, &attr);
 	err |= pthread_mutexattr_destroy(&attr);
 */
-    err = pfs_mutex_init(mtx);
+	err = pfs_mutex_init(mtx);
 	PFS_VERIFY(err == 0);
 }
 
