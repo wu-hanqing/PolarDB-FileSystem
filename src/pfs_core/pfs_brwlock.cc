@@ -27,8 +27,8 @@
 
 #include "pfs_brwlock.h"
 
-#define leaf_count 16
-#define leaf_mask  15
+#define leaf_count 32
+#define leaf_mask  31
 
 struct pfs_brwlock {
 	pthread_rwlock_t	*leaves[leaf_count];
