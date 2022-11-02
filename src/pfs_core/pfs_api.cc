@@ -128,7 +128,7 @@ pfs_mutex_t	rename_mtx;
 	(path) ? (path) : "NULL"
 
 #define	API_ENTER(level, fmt, ...) do {				\
-	if (err != 0 && err != -EAGAIN) {			\
+	if (unlikely(err != 0 && err != -EAGAIN)) {		\
 		pfs_etrace("%s invalid args(" fmt ")\n",	\
 		    __func__, __VA_ARGS__);			\
 	} else if (PFS_TRACE_##level == PFS_TRACE_INFO) { 	\

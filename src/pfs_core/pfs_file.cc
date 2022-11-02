@@ -1253,12 +1253,12 @@ pfs_file_xfallocate(pfs_file_t *file, off_t offset, size_t len, int mode)
 	 * Otherwise blocks will be wrongly preallocated at the
 	 * tail if file is opened with O_APPEND.
 	 */
-	if (mode & FALLOC_PFSFL_FIXED_OFFSET) {
+	if (unlikely(!!(mode & FALLOC_PFSFL_FIXED_OFFSET))) {
 		off2 = offset;
 	} else {
-		if (file->f_flags & O_APPEND)
+		if (unlikely(!!(file->f_flags & O_APPEND)))
 			off2 = OFFSET_FILE_SIZE;
-		else if (offset == OFFSET_FILE_POS)
+		else if (unlikely(offset == OFFSET_FILE_POS))
 			off2 = file->f_offset;
 		else
 			off2 = offset;
