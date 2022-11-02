@@ -747,8 +747,13 @@ pfs_tx_t *
 pfs_tx_get(pfs_mount_t *mnt, int type, bool timeoutfail)
 {
 	pfs_tx_t *tx;
-
-	tx = (pfs_tx_t *)pfs_mem_malloc(sizeof(*tx), M_TX);
+	pfs_tls_t *tls = pfs_current_tls();
+	if (tls->tls_tx_free) {
+		tx = tls->tls_tx_free;
+		tls->tls_tx_free = NULL;
+	} else {
+		tx = (pfs_tx_t *)pfs_mem_malloc(sizeof(*tx), M_TX);
+	}
 	if (tx) {
 		memset(tx, 0, sizeof(*tx));
 		tx->t_type = type;
@@ -798,7 +803,11 @@ pfs_tx_put(pfs_tx_t *tx)
 	}
 	PFS_ASSERT(tx->t_ncbs == 0);
 
-	pfs_mem_free(tx, M_TX);
+	pfs_tls_t *tls = pfs_current_tls();
+	if (tls->tls_tx_free == NULL)
+		tls->tls_tx_free = tx;
+	else
+		pfs_mem_free(tx, M_TX);
 }
 
 int
@@ -806,7 +815,7 @@ pfs_tx_begin(pfs_mount_t *mnt, bool timeoutfail)
 {
 	pfs_tx_t *tx;
 
-	if (!pfs_writable(mnt))
+	if (unlikely(!pfs_writable(mnt)))
 		ERR_RETVAL(EROFS);
 
 	tx = pfs_tx_get(mnt, TXT_WRITE, timeoutfail);

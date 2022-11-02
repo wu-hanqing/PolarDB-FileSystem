@@ -96,6 +96,8 @@ pfs_tls_destroy(void *data)
 			tls->tls_ioqueue[i] = NULL;
 		}
 	}
+	if (tls->tls_tx_free)
+		pfs_mem_free(tls->tls_tx_free, M_TX);
 	pfs_mem_free(tls, M_TLS);
 	pfs_mntstat_bthreads_change(-1);
 }
@@ -164,7 +166,7 @@ pfs_current_tls()
 	pfs_tls_t *tls;
 
 	tls = (pfs_tls_t *)pfs_getspecific(pfs_tls_key);
-	if (tls == NULL) {
+	if (unlikely(tls == NULL)) {
 		tls = pfs_tls_create();
 		err = pfs_setspecific(pfs_tls_key, tls);
 		PFS_VERIFY(err == 0);
