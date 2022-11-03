@@ -76,7 +76,6 @@ typedef struct pfs_spdk_dev {
     int         dk_has_cache;
 #define dk_bufalign dk_base.d_buf_align
     pthread_t   dk_pthread;
-    struct pfs_spdk_thread *dk_thread;
     struct spdk_io_channel *dk_ioch;
     int         dk_stop;
     int         dk_jobs;
@@ -266,25 +265,27 @@ bdev_thread_msg_loop(void *arg)
     struct bdev_open_param *param = (struct bdev_open_param *)arg;
     pfs_spdk_dev_t *dkdev = param->dkdev;
     pfs_dev_t *dev = &dkdev->dk_base;
-    struct pfs_spdk_thread *thread = NULL;
+    struct spdk_thread *spdk_thread = NULL;
     char thread_name[64];
     int err;
 
     snprintf(thread_name, sizeof(thread_name), "pfs-dev-%s", dev->d_devname);
     pthread_setname_np(pthread_self(), thread_name);
-    thread = pfs_create_spdk_thread(thread_name);
+    spdk_thread = spdk_thread_create(thread_name, NULL);
+    spdk_set_thread(spdk_thread);
     err = spdk_bdev_open_ext(dev->d_devname, dev_writable(dev),
                              bdev_event_cb, dkdev, &dkdev->dk_desc);
     if (err) {
         pfs_etrace("can not open spdk device %s, %s\n", dev->d_devname,
                    strerror(-err));
 err_exit:
+        pfs_spdk_gc_thread(spdk_thread);
         param->rc = -err;
         sem_post(&param->sem);
         return NULL;
     }
     dkdev->dk_bdev = spdk_bdev_desc_get_bdev(dkdev->dk_desc);
-    dkdev->dk_ioch = pfs_get_spdk_io_channel(dkdev->dk_desc);
+    dkdev->dk_ioch = spdk_bdev_get_io_channel(dkdev->dk_desc);
     if (dkdev->dk_ioch == NULL) {
         pfs_etrace("can not get io channel of spdk device: %s\n",
             dev->d_devname);
@@ -297,7 +298,6 @@ err_exit:
     dkdev->dk_block_num = spdk_bdev_get_num_blocks(dkdev->dk_bdev);
     dkdev->dk_block_size = spdk_bdev_get_block_size(dkdev->dk_bdev);
     dkdev->dk_unit_size = spdk_bdev_get_write_unit_size(dkdev->dk_bdev);
-    dkdev->dk_thread = thread;
     dkdev->dk_sectsz = dkdev->dk_unit_size * dkdev->dk_block_size;
     dkdev->dk_has_cache = spdk_bdev_has_write_cache(dkdev->dk_bdev);
     dkdev->dk_size = dkdev->dk_block_num * dkdev->dk_block_size;
@@ -325,7 +325,6 @@ err_exit:
     param->rc = 0;
     sem_post(&param->sem);
 
-    struct spdk_thread *spdk_thread = thread->spdk_thread;
     struct timespec timeout = {0, FLAGS_pfs_spdk_driver_poll_delay * 1000};
     while (!dkdev->dk_stop) {
         pfs_spdk_dev_pull_iocb(dkdev);
@@ -341,11 +340,15 @@ err_exit:
         sem_timedwait(&dkdev->dk_sem, &ts);
     }
  
-    pfs_put_spdk_io_channel(dkdev->dk_ioch);
+    while (dkdev->dk_jobs != 0) {
+        spdk_thread_poll(spdk_thread, 0, spdk_get_ticks());
+        pfs_spdk_dev_pull_iocb(dkdev);
+    }
+
+    spdk_put_io_channel(dkdev->dk_ioch);
     spdk_bdev_close(dkdev->dk_desc);
 
-    while (spdk_thread_poll(spdk_thread, 0, 0))
-        {}
+    pfs_spdk_gc_thread(spdk_thread);
     return NULL;
 }
 

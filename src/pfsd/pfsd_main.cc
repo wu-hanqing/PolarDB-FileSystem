@@ -41,6 +41,7 @@
 #include "pfsd_log.h"
 #include "pfsd.h"
 #include "pfs_api.h"
+#include "pfs_spdk.h"
 
 static void
 signal_handler(int num)
@@ -185,8 +186,10 @@ main(int argc, char *argv[])
     spdk_log_open(glog_spdk_func);
     pfs_set_trace_func(glog_pfs_func);
     setup_sigaction();
+    pfs_spdk_setup();
     if (pfsd_start(1))
         return 1;
     pfsd_wait_stop();
+    pfs_spdk_cleanup();
     return 0;
 }

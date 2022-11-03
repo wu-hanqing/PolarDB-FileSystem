@@ -31,34 +31,24 @@
 #include <string>
 #include <sched.h>
 
-struct pfs_spdk_target {
-    struct spdk_bdev_desc *desc;
-    struct spdk_io_channel *channel;
-    int ref;
-    int closed;
-    TAILQ_ENTRY(pfs_spdk_target) link;
+class pfs_spdk_thread_guard {
+    struct spdk_thread *thread_;
 
-    pfs_spdk_target();
-    ~pfs_spdk_target();
+    pfs_spdk_thread_guard(const pfs_spdk_thread_guard &);
+    void operator= (const pfs_spdk_thread_guard &);
+
+public:
+    pfs_spdk_thread_guard() {
+        thread_ = spdk_get_thread();
+    }
+    ~pfs_spdk_thread_guard() {
+        if (thread_)
+            spdk_set_thread(thread_);
+    }
+    void release() {
+        thread_ = 0;
+    }
 };
-
-struct pfs_spdk_thread {
-    struct spdk_thread *spdk_thread;
-    TAILQ_HEAD(, pfs_spdk_target) targets;
-    TAILQ_ENTRY(pfs_spdk_thread) link;
-    int on_pfs_list;
-    pthread_mutex_t mtx;
-};
-
-struct pfs_spdk_thread *pfs_create_spdk_thread(const char *name);
-struct pfs_spdk_thread *pfs_current_spdk_thread(void);
-struct pfs_spdk_thread *pfs_set_current_spdk_thread(struct pfs_spdk_thread *);
-
-struct spdk_io_channel* pfs_get_spdk_io_channel(struct spdk_bdev_desc *desc);
-int pfs_put_spdk_io_channel(struct spdk_io_channel *ch);
-void pfs_spdk_close_all_io_channels(struct spdk_bdev_desc *desc);
-void pfs_spdk_thread_exit(void);
-size_t pfs_spdk_poll_thread(struct pfs_spdk_thread *thread);                      
 
 void pfs_spdk_conf_set_blocked_pci(const char *s);
 void pfs_spdk_conf_set_allowed_pci(const char *s);
@@ -70,6 +60,8 @@ void pfs_spdk_conf_set_controller(const char *s);
 int pfs_spdk_setup(void);
 void pfs_spdk_suspend(void);
 void pfs_spdk_cleanup(void);
+void pfs_spdk_gc_thread(struct spdk_thread *thread);
+void pfs_spdk_teardown_thread(struct spdk_thread *thread);
 
 int pfs_get_pci_local_cpus(const std::string &pci_addr, cpu_set_t *setp);
 std::string pfs_get_dev_pci_address(struct spdk_bdev *dev);

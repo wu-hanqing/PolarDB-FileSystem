@@ -21,7 +21,6 @@
 #include "pfs_tls.h"
 #include "pfs_trace.h"
 #include "pfs_stat.h"
-#include "pfs_spdk.h"
 #include "pfs_devio.h"
 #include "pfs_rangelock.h"
 #include "pfs_locktable.h"
@@ -81,7 +80,6 @@ pfs_tls_destroy(void *data)
 	pfs_ioq_t *ioq;
 
 	if (tls == NULL) {
-		pfs_spdk_thread_exit();
 		return;
 	}
 	/*
@@ -127,12 +125,10 @@ pfs_g_tls_destroy(void *data)
 	pfs_g_tls_t *tls = (pfs_g_tls_t *)data;
 
 	if (tls == NULL) {
-		pfs_spdk_thread_exit();
 		return;
 	}
 	pfs_rangelock_thread_exit();
 	pfs_locktable_thread_exit();
-	pfs_spdk_thread_exit();
 	pfsdev_thread_exit();
 	pfs_mem_free(tls, M_TLS);
 	pfs_mntstat_nthreads_change(-1);
