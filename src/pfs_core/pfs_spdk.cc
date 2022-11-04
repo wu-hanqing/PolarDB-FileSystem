@@ -189,6 +189,13 @@ pfs_generate_json_file(void)
             "config":
             [
                 {
+                    "method": "bdev_set_options",
+                    "params": {
+                        "bdev_io_pool_size": 65535,
+                        "bdev_io_cache_size": 2048
+                    }
+                },
+                {
                     "method": "bdev_nvme_attach_controller",
                     "params":
                     {
