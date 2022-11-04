@@ -36,6 +36,7 @@
 #include "pfs_version.h"
 #include "pfs_stat.h"
 #include "pfs_tls.h"
+#include "pfs_brwlock.h"
 
 /*-
  * FILE IO
@@ -195,7 +196,7 @@ static pfs_file_t	**fdtbl;
 static int		fdtbl_nopen;
 static int		fdtbl_free_last;
 static int		pfs_max_nfd;
-static pfs_rwlock_t	fdtbl_lock;
+static pfs_brwlock_t	fdtbl_lock;
 int64_t file_shrink_size = (10L << 30);
 PFS_OPTION_REG(file_shrink_size, pfs_check_ival_shrink_size);
 
@@ -204,7 +205,7 @@ PFS_OPTION_REG(file_shrink_size, pfs_check_ival_shrink_size);
 static void __attribute__((constructor))
 init_lock()
 {
-    pfs_rwlock_init(&fdtbl_lock);
+    pfs_brwlock_init(&fdtbl_lock);
 }
 
 /**
@@ -248,23 +249,23 @@ init_lock()
 static inline void
 fdtbl_rdlock()
 {
-    pfs_tls_t *tls = pfs_current_tls();
+	pfs_tls_t *tls = pfs_current_tls();
 	PFS_ASSERT(tls->tls_fdtbl_rdlock_count == 0);
-	PFS_ASSERT(pfs_rwlock_rdlock(&fdtbl_lock) == 0);
+	PFS_ASSERT(pfs_brwlock_rdlock(&fdtbl_lock) == 0);
 	tls->tls_fdtbl_rdlock_count++;
 }
 
 static inline void
 fdtbl_wrlock()
 {
-	PFS_ASSERT(pfs_rwlock_wrlock(&fdtbl_lock) == 0);
+	PFS_ASSERT(pfs_brwlock_wrlock(&fdtbl_lock) == 0);
 }
 
 static inline void
 fdtbl_unlock()
 {
-    pfs_tls_t *tls = pfs_current_tls();
-	PFS_ASSERT(pfs_rwlock_unlock(&fdtbl_lock) == 0);
+	pfs_tls_t *tls = pfs_current_tls();
+	PFS_ASSERT(pfs_brwlock_unlock(&fdtbl_lock) == 0);
 	if (tls->tls_fdtbl_rdlock_count)
 		tls->tls_fdtbl_rdlock_count--;	
 }
