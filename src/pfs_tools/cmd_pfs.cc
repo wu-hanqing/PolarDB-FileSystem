@@ -1061,5 +1061,6 @@ main(int argc, char *argv[])
 	else if (ci->cmd_flags & CMDF_MOUNT)
 		pfs_umount(pbdname);
 
+	pfs_spdk_cleanup();
 	return err;
 }
