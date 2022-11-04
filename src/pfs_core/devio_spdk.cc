@@ -52,16 +52,6 @@
 #define BUF_TYPE "pfs_iobuf"
 #define io_buf io_iov[0].iov_base
 
-#define timespecadd(tsp, usp, vsp)                              \
-    do {                                                        \
-        (vsp)->tv_sec = (tsp)->tv_sec + (usp)->tv_sec;          \
-        (vsp)->tv_nsec = (tsp)->tv_nsec + (usp)->tv_nsec;       \
-        if ((vsp)->tv_nsec >= 1000000000L) {                    \
-            (vsp)->tv_sec++;                                    \
-            (vsp)->tv_nsec -= 1000000000L;                      \
-        }                                                       \
-    } while (0)
-
 typedef struct pfs_spdk_iocb pfs_spdk_iocb_t;
 
 typedef struct pfs_spdk_dev {
@@ -337,7 +327,7 @@ err_exit:
             continue;
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
-        timespecadd(&ts, &timeout, &ts);
+        pfs_timespecadd(&ts, &timeout, &ts);
         pfs_futex_event_timedwait(&dkdev->dk_event, &ts);
     }
  

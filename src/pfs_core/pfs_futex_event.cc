@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <time.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <unistd.h>
 
 static inline int
@@ -98,7 +99,7 @@ int pfs_futex_event_timedwait(pfs_futex_event_t *e,
 				ret = ETIMEDOUT;
 				break;
 			}
-			pfs_timespecsub(&now, abstime, &delta);
+			pfs_timespecsub(abstime, &now, &delta);
 		}
 		// have set waiter flag, so we can wait
 		futex(&e->value, FUTEX_WAIT, v | EVF_WAIT, tsp, NULL, 0);
