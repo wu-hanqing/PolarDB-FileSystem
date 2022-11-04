@@ -59,7 +59,7 @@ pfs_get_file_type(const char* file_path)
 		return FILE_CURVE_SNAPSHOT;
         }
 
-	if (HEAD_MATCH(file_name, len, "curvelog_")) {
+	if (HEAD_MATCH(file_name, len, "curve_log_")) {
 		return FILE_CURVE_LOG;
 	}
 
