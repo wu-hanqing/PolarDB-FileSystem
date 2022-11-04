@@ -30,6 +30,10 @@
 #define leaf_count 32
 #define leaf_mask  31
 
+#ifndef PFS_CACHELINE_SIZE
+#define PFS_CACHELINE_SIZE 64
+#endif
+
 struct pfs_brwlock {
 	pthread_rwlock_t	*leaves[leaf_count];
 	pthread_t		owner;
@@ -62,16 +66,17 @@ int
 pfs_brwlock_init(pfs_brwlock_t *rwlock)
 {
 	struct pfs_brwlock *lck;
+	const int align = 64;
 	int i;
 
-	lck = (struct pfs_brwlock *)aligned_alloc(64, sizeof(struct pfs_brwlock));
+	lck = (struct pfs_brwlock *)aligned_alloc(align, sizeof(struct pfs_brwlock));
 	if (lck == NULL) {
 		return ENOMEM;
 	}
 	for (i = 0; i < leaf_count; ++i) {
 		void *ptr;
-		size_t alloc_size = ((sizeof(pthread_rwlock_t) + 63) / 64) * 64;
-		if (!(ptr = aligned_alloc(64,  alloc_size))) {
+		size_t alloc_size = ((sizeof(pthread_rwlock_t) + align - 1) / align) * align;
+		if (!(ptr = aligned_alloc(align,  alloc_size))) {
 			int err;
 			err = errno;
 			while (--i >= 0) {
