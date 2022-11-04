@@ -125,6 +125,31 @@ iovec_bytes(const struct iovec *iov, int cnt)
     return total;
 }
 
+#define pfs_timespeccmp(tsp, usp, cmp)                                  \
+	(((tsp)->tv_sec == (usp)->tv_sec) ?                             \
+	((tsp)->tv_nsec cmp (usp)->tv_nsec) :                       	\
+	((tsp)->tv_sec cmp (usp)->tv_sec))
+
+#define pfs_timespecadd(tsp, usp, vsp)                                  \
+        do {                                                            \
+                (vsp)->tv_sec = (tsp)->tv_sec + (usp)->tv_sec;          \
+                (vsp)->tv_nsec = (tsp)->tv_nsec + (usp)->tv_nsec;       \
+                if ((vsp)->tv_nsec >= 1000000000L) {                    \
+                        (vsp)->tv_sec++;                                \
+                        (vsp)->tv_nsec -= 1000000000L;                  \
+                }                                                       \
+        } while (0)
+
+#define pfs_timespecsub(tsp, usp, vsp)                                  \
+        do {                                                            \
+                (vsp)->tv_sec = (tsp)->tv_sec - (usp)->tv_sec;          \
+                (vsp)->tv_nsec = (tsp)->tv_nsec - (usp)->tv_nsec;       \
+                if ((vsp)->tv_nsec < 0) {                               \
+                        (vsp)->tv_sec--;                                \
+                        (vsp)->tv_nsec += 1000000000L;                  \
+                }                                                       \
+        } while (0)
+
 void pfs_copy_from_buf_to_iovec(struct iovec *iovec, const void *_buf, size_t len);
 void pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, size_t len);
 void pfs_reset_iovcnt(struct iovec *iovec, size_t len, int *iovcnt, bool reset_iov);

@@ -47,6 +47,7 @@
 #include "pfs_spdk.h"
 #include "pfs_util.h"
 #include "pfs_iomem.h"
+#include "pfs_futex_event.h"
 
 #define BUF_TYPE "pfs_iobuf"
 #define io_buf io_iov[0].iov_base
@@ -81,7 +82,7 @@ typedef struct pfs_spdk_dev {
     int         dk_jobs;
 
     pfs_spdk_iocb_t *dk_incoming __rte_aligned(RTE_CACHE_LINE_SIZE);
-    sem_t       dk_sem;
+    pfs_futex_event_t dk_event;
     char        dk_path[128];
 } pfs_spdk_dev_t;
 
@@ -337,7 +338,7 @@ err_exit:
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
         timespecadd(&ts, &timeout, &ts);
-        sem_timedwait(&dkdev->dk_sem, &ts);
+        pfs_futex_event_timedwait(&dkdev->dk_event, &ts);
     }
  
     while (dkdev->dk_jobs != 0) {
@@ -380,11 +381,11 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
  
     dkdev->dk_stop = 0;
     dkdev->dk_jobs = 0;
-    sem_init(&dkdev->dk_sem, 0, 0);
+    pfs_futex_event_init(&dkdev->dk_event);
     err = pthread_create(&dkdev->dk_pthread, NULL, bdev_thread_msg_loop,
                          &param);
     if (err) {
-        sem_destroy(&dkdev->dk_sem);
+        pfs_futex_event_destroy(&dkdev->dk_event);
         pfs_etrace("can not create device msg thread %s, %s\n", dev->d_devname,
                    strerror(err));
         return -err;
@@ -407,9 +408,9 @@ pfs_spdk_dev_close(pfs_dev_t *dev)
         return 0;
     
     dkdev->dk_stop = 1;
-    sem_post(&dkdev->dk_sem);
+    pfs_futex_event_set(&dkdev->dk_event);
     pthread_join(dkdev->dk_pthread, NULL);
-    sem_destroy(&dkdev->dk_sem);
+    pfs_futex_event_destroy(&dkdev->dk_event);
     return 0;
 }
 
@@ -777,9 +778,7 @@ pfs_spdk_dev_send_iocb(pfs_spdk_dev_t *dkdev,
     }
 
     if (FLAGS_pfs_spdk_driver_poll_delay != 0) {
-        sem_getvalue(&dkdev->dk_sem, &count);
-        if (!count)
-            sem_post(&dkdev->dk_sem);
+	pfs_futex_event_set(&dkdev->dk_event);
     }
 }
 

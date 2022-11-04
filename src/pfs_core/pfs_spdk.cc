@@ -25,6 +25,7 @@
 #include "pfs_spdk.h"
 #include "pfs_trace.h"
 #include "pfs_memory.h"
+#include "pfs_util.h"
 
 #include <ctype.h>
 #include <semaphore.h>
@@ -317,16 +318,6 @@ pfs_spdk_teardown_thread(struct spdk_thread *spdk_thread)
     spdk_set_thread(NULL);
 }
 
-#define pfs_timespecadd(vvp, uvp)                                       \
-        do {                                                            \
-                (vvp)->tv_sec += (uvp)->tv_sec;                         \
-                (vvp)->tv_nsec += (uvp)->tv_nsec;                       \
-                if ((vvp)->tv_nsec >= 1000000000) {                     \
-                        (vvp)->tv_sec++;                                \
-                        (vvp)->tv_nsec -= 1000000000;                   \
-                }                                                       \
-        } while (0)
-
 static void *
 rpc_service(void *arg)
 {
@@ -356,7 +347,7 @@ rpc_service(void *arg)
         while (spdk_thread_poll(spdk_thread, 0, 0))
             ;
         clock_gettime(CLOCK_REALTIME, &ts);
-        pfs_timespecadd(&ts, &interval);
+        pfs_timespecadd(&ts, &interval, &ts);
         pthread_cond_timedwait(&g_rpc_cond, &g_rpc_mutex, &ts);
     }
     pthread_mutex_unlock(&g_rpc_mutex);
