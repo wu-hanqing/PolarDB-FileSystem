@@ -15,7 +15,6 @@
 
 #include <sys/param.h>
 
-#include <spdk/env.h>
 #include <rte_memory.h>
 #include <rte_memcpy.h>
 #include <rte_malloc.h>
@@ -291,14 +290,14 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 		if (err < 0)
 			break;
 
-		if (!(ioflags & IO_ZERO))
+		if (!(ioflags & IO_ZERO) && !(flags & PFS_IO_ZERO_BUF))
 			forward_iovec_iter(iov, iovcnt, iolen);
 
 		off += iolen;
 		left -= iolen;
 	}
 
-	err1 = pfs_blkio_done(mnt->mnt_ioch_desc, 0:// ioflags);
+	err1 = pfs_blkio_done(mnt->mnt_ioch_desc, ioflags);
 	if (blk_lock)
 		pfs_block_unlock(mnt, blkno, rl, cookie, cc);
 
@@ -329,27 +328,6 @@ pfs_blkio_read(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 	return iolen;
 }
 
-static void *
-pfs_get_zero_buf(void)
-{
-    static pthread_mutex_t zero_buf_lock = PTHREAD_MUTEX_INITIALIZER;
-    static void *zero_buf = NULL;
-    if (zero_buf == NULL) {
-        pthread_mutex_lock(&zero_buf_lock);
-        if (zero_buf == NULL) {
-           void *p = spdk_zmalloc(PFS_BLOCK_SIZE, 4096, NULL,
-                SOCKET_ID_ANY, SPDK_MALLOC_DMA);
-            if (p == NULL) {
-                pfs_etrace("can not allocate zero buffer");
-                abort();
-            }
-           zero_buf = p; 
-        }
-        pthread_mutex_unlock(&zero_buf_lock);
-    }
-    return zero_buf;
-}
-
 ssize_t
 pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
     pfs_blkno_t blkno, off_t off, ssize_t len, int flags)
@@ -367,14 +345,12 @@ pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 		if (cap & DEV_CAP_ZERO)
 			flags |= PFS_IO_WRITE_ZERO;
 		else if (!(flags & PFS_IO_WRITE_ZERO)) {
-            if (len > PFS_BLOCK_SIZE) {
-                pfs_etrace("block size too large");
-                abort();
-            }
-			zerobuf = pfs_get_zero_buf();
+			zerobuf = pfs_iomem_alloc(PFS_FRAG_SIZE);
+            memset(zerobuf, 0, PFS_FRAG_SIZE);
+			PFS_VERIFY(zerobuf != NULL);
 			tmpiov.iov_base = zerobuf;
-			tmpiov.iov_len = len;
-			flags |= PFS_IO_DMA_ON;
+			tmpiov.iov_len = PFS_FRAG_SIZE;
+			flags |= PFS_IO_DMA_ON | PFS_IO_ZERO_BUF;
 		}
 		tmpiovp = &tmpiov;
 		iov = &tmpiovp;
@@ -385,6 +361,9 @@ pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 	iolen = pfs_blkio_execute(mnt, iov, iovcnt, blkno, off, len,
 	    pfs_blkio_write_segment, flags);
 
+	if (zerobuf) {
+		pfs_iomem_free(zerobuf);
+		zerobuf = NULL;
+	}
 	return iolen;
 }
-
