@@ -67,12 +67,14 @@ typedef struct pfs_spdk_dev {
     int         dk_has_cache;
 #define dk_bufalign dk_base.d_buf_align
     pthread_t   dk_pthread;
+    struct spdk_thread *dk_spdk_thread;
     struct spdk_io_channel *dk_ioch;
     int         dk_stop;
     int         dk_jobs;
-
     pfs_spdk_iocb_t *dk_incoming __rte_aligned(RTE_CACHE_LINE_SIZE);
+    pthread_mutex_t dk_work_mutex;
     pfs_futex_event_t dk_event;
+    int         dk_running;
     char        dk_path[128];
 } pfs_spdk_dev_t;
 
@@ -131,6 +133,7 @@ static void pfs_spdk_dev_io_fini_pwrite(void *iocb);
 static void pfs_spdk_dev_io_fini_trim(void *iocb);
 static void pfs_spdk_dev_io_fini_flush(void *iocb);
 static void pfs_spdk_dev_pull_iocb(pfs_spdk_dev_t *dkdev);
+static void pfs_spdk_dev_try_requests(pfs_spdk_dev_t *dkdev);
 
 static pfs_spdk_iocb_t *
 pfs_spdk_dev_alloc_iocb(void)
@@ -312,34 +315,47 @@ err_exit:
                dkdev->dk_unit_size, dkdev->dk_has_cache, dkdev->dk_bufalign);
 
     bdev_find_cpuset(dkdev);
-
+    dkdev->dk_spdk_thread = spdk_thread;
     param->rc = 0;
     sem_post(&param->sem);
 
     struct timespec timeout = {0, FLAGS_pfs_spdk_driver_poll_delay * 1000};
+    if (FLAGS_pfs_spdk_driver_poll_delay) {
+        pthread_mutex_lock(&dkdev->dk_work_mutex);
+        __atomic_store_n(&dkdev->dk_running, 1, __ATOMIC_RELAXED);
+    }
     while (!dkdev->dk_stop) {
         pfs_spdk_dev_pull_iocb(dkdev);
         while (dkdev->dk_jobs != 0) {
-            spdk_thread_poll(spdk_thread, 0, spdk_get_ticks());
+            spdk_thread_poll(spdk_thread, 64, 0);
             pfs_spdk_dev_pull_iocb(dkdev);
         }
-        if (!FLAGS_pfs_spdk_driver_poll_delay)
+        if (!FLAGS_pfs_spdk_driver_poll_delay) {
             continue;
+        }
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
         pfs_timespecadd(&ts, &timeout, &ts);
+        __atomic_store_n(&dkdev->dk_running, 0, __ATOMIC_RELAXED);
+        pthread_mutex_unlock(&dkdev->dk_work_mutex);
         pfs_futex_event_timedwait(&dkdev->dk_event, &ts);
+        pthread_mutex_lock(&dkdev->dk_work_mutex);
+        __atomic_store_n(&dkdev->dk_running, 1, __ATOMIC_RELAXED);
     }
  
     while (dkdev->dk_jobs != 0) {
-        spdk_thread_poll(spdk_thread, 0, spdk_get_ticks());
+        spdk_thread_poll(spdk_thread, 0, 0);
         pfs_spdk_dev_pull_iocb(dkdev);
     }
+    __atomic_store_n(&dkdev->dk_running, 0, __ATOMIC_RELAXED);
 
     spdk_put_io_channel(dkdev->dk_ioch);
     spdk_bdev_close(dkdev->dk_desc);
 
     pfs_spdk_gc_thread(spdk_thread);
+    dkdev->dk_spdk_thread = NULL;
+    if (FLAGS_pfs_spdk_driver_poll_delay)
+        pthread_mutex_unlock(&dkdev->dk_work_mutex);
     return NULL;
 }
 
@@ -369,6 +385,7 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
     param.dkdev = dkdev;
     param.rc = 0;
  
+    pthread_mutex_init(&dkdev->dk_work_mutex, NULL);
     dkdev->dk_stop = 0;
     dkdev->dk_jobs = 0;
     pfs_futex_event_init(&dkdev->dk_event);
@@ -376,6 +393,7 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
                          &param);
     if (err) {
         pfs_futex_event_destroy(&dkdev->dk_event);
+        pthread_mutex_destroy(&dkdev->dk_work_mutex);
         pfs_etrace("can not create device msg thread %s, %s\n", dev->d_devname,
                    strerror(err));
         return -err;
@@ -385,6 +403,8 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
     sem_destroy(&param.sem);
     if (param.rc) {
         pthread_join(dkdev->dk_pthread, NULL);
+        pfs_futex_event_destroy(&dkdev->dk_event);
+        pthread_mutex_destroy(&dkdev->dk_work_mutex);
     }
     return -param.rc;
 }
@@ -401,6 +421,7 @@ pfs_spdk_dev_close(pfs_dev_t *dev)
     pfs_futex_event_set(&dkdev->dk_event);
     pthread_join(dkdev->dk_pthread, NULL);
     pfs_futex_event_destroy(&dkdev->dk_event);
+    pthread_mutex_destroy(&dkdev->dk_work_mutex);
     return 0;
 }
 
@@ -768,7 +789,7 @@ pfs_spdk_dev_send_iocb(pfs_spdk_dev_t *dkdev,
     }
 
     if (FLAGS_pfs_spdk_driver_poll_delay != 0) {
-	pfs_futex_event_set(&dkdev->dk_event);
+	    pfs_futex_event_set(&dkdev->dk_event);
     }
 }
 
@@ -871,10 +892,12 @@ fail:
 static pfs_devio_t *
 pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
 {
+    pfs_spdk_thread_guard guard;
     struct pfs_spdk_iocb *iocb, *next;
     pfs_spdk_dev_t *dkdev = (pfs_spdk_dev_t *)dev;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)ioq;
     pfs_devio_t *nio = nullptr;
+    bool locked = false, wait = false;
 
     while ((dkioq->dkq_inflight_count | dkioq->dkq_complete_count)) {
         TAILQ_FOREACH(nio, &dkioq->dkq_complete_queue, io_next) {
@@ -887,7 +910,26 @@ pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
                 break;
             }
 
-            pfs_event_wait(&dkioq->dkq_done_ev);
+            if (!wait && FLAGS_pfs_spdk_driver_poll_delay) {
+                int running = __atomic_load_n(&dkdev->dk_running, __ATOMIC_RELAXED);
+                if (!locked && !running &&
+                    !pthread_mutex_trylock(&dkdev->dk_work_mutex)) {
+                    // set to 1 to avoid other threads run pthread_mutex_trylock
+                    __atomic_store_n(&dkdev->dk_running, 1, __ATOMIC_RELAXED);
+                    locked = true;
+                    spdk_set_thread(dkdev->dk_spdk_thread);
+                }
+                if (locked) {
+                    pfs_spdk_dev_pull_iocb(dkdev);
+                    spdk_thread_poll(dkdev->dk_spdk_thread, 64, 0);
+                } else {
+                    wait = true;
+                    goto wait_event;
+                }
+            } else {
+wait_event:
+                pfs_event_wait(&dkioq->dkq_done_ev);
+            }
 
             for (iocb = __atomic_exchange_n(&dkioq->dkq_done_q, NULL,
                     __ATOMIC_ACQUIRE); iocb; iocb = next) {
@@ -898,6 +940,10 @@ pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
             pfs_spdk_dev_deq_complete_io(dkioq, nio);
             break;
         }
+    }
+    if (locked) {
+        spdk_set_thread(NULL);
+        pthread_mutex_unlock(&dkdev->dk_work_mutex);
     }
     return nio;
 }
