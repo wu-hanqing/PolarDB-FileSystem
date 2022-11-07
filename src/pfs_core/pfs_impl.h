@@ -72,7 +72,6 @@
 #define PFS_IO_DMA_ON		0x1
 #define PFS_IO_WRITE_ZERO	0x2
 #define PFS_IO_NO_LOCK		0x4
-#define PFS_IO_ZERO_BUF		0x8
 
 /*
  * A block is of unit size, 4M. A fragment is of size 16K.

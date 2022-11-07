@@ -291,14 +291,14 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 		if (err < 0)
 			break;
 
-		if (!(ioflags & IO_ZERO) && !(flags & PFS_IO_ZERO_BUF))
+		if (!(ioflags & IO_ZERO))
 			forward_iovec_iter(iov, iovcnt, iolen);
 
 		off += iolen;
 		left -= iolen;
 	}
 
-	err1 = pfs_blkio_done(mnt->mnt_ioch_desc, ioflags);
+	err1 = pfs_blkio_done(mnt->mnt_ioch_desc, 0:// ioflags);
 	if (blk_lock)
 		pfs_block_unlock(mnt, blkno, rl, cookie, cc);
 
@@ -374,7 +374,7 @@ pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 			zerobuf = pfs_get_zero_buf();
 			tmpiov.iov_base = zerobuf;
 			tmpiov.iov_len = len;
-			flags |= PFS_IO_DMA_ON | PFS_IO_ZERO_BUF;
+			flags |= PFS_IO_DMA_ON;
 		}
 		tmpiovp = &tmpiov;
 		iov = &tmpiovp;
