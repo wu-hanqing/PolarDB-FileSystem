@@ -186,7 +186,8 @@ main(int argc, char *argv[])
     spdk_log_open(glog_spdk_func);
     pfs_set_trace_func(glog_pfs_func);
     setup_sigaction();
-    pfs_spdk_setup();
+    if (pfs_spdk_setup())
+        return 1;
     if (pfsd_start(1))
         return 1;
     pfsd_wait_stop();
