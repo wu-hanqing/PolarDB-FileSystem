@@ -62,6 +62,10 @@ enum {
 
 	MNT_STAT_FILE_FSYNC,
 
+	MNT_STAT_FILE_READ_DMA,
+	MNT_STAT_FILE_WRITE_DMA,
+	MNT_STAT_FILE_WRITE_PAD,
+
 	MNT_STAT_TYPE_COUNT
 };
 
@@ -150,5 +154,8 @@ int pfs_mntstat_sample(char* sample_pattern, int sample_pattern_len);
 
 #define MNT_STAT_END_VALUE_BANDWIDTH(type, stat_begin, size) \
 	pfs_mntstat_store(stat_begin, NULL, type, false, (uint32_t)size)
+
+#define MNT_STAT_END_VALUE_BANDWIDTH2(type, size) \
+	pfs_mntstat_store(&__stat_begin, NULL, type, false, (uint32_t)size)
 
 #endif //POLARDB_PFS_MOUNTSTAT_H

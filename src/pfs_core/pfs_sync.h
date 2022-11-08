@@ -1,6 +1,7 @@
 #ifndef _PFS_SYNC_H
 #define _PFS_SYNC_H
 
+#include "pfs_futex_event.h"
 #include <unistd.h>
 
 typedef struct pfs_tid *pfs_thread_id_t;
@@ -194,7 +195,7 @@ typedef struct pfs_rwlock {
     pthread_rwlock_t rw;
 } pfs_rwlock_t;
 typedef struct pfs_event {
-    sem_t sem;
+    pfs_futex_event_t value;
 } pfs_event_t;
 
 inline int pfs_usleep(useconds_t usec)

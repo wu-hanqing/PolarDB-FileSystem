@@ -178,7 +178,7 @@ pfs_dev_free_id(pfs_dev_t *dev)
 static pfs_dev_t *
 pfs_dev_create(const char *cluster, const char *devname, int flags)
 {
-	size_t		devsize;
+	size_t		devsize, pad_devsize;
 	int		devmtag;
 	int		err;
 	pfs_devtype_t	dtype;
@@ -203,13 +203,14 @@ pfs_dev_create(const char *cluster, const char *devname, int flags)
 	}
 	devsize = dop->dop_size;
 	devmtag = dop->dop_memtag;
-
-	if (pfs_mem_memalign((void **)&dev, 128, devsize, devmtag)) {
+	pad_devsize = roundup(devsize, PFS_CACHELINE_SIZE);
+	if (pfs_mem_memalign((void **)&dev, PFS_CACHELINE_SIZE,
+                             pad_devsize, devmtag)) {
 		pfs_etrace("cluster %s, devname %s: no memory\n",
 		    cluster, devname);
 		return NULL;
 	}
-	memset(dev, 0, devsize);
+	memset(dev, 0, pad_devsize);
 	err = strncpy_safe(dev->d_cluster, cluster, PFS_MAX_CLUSTERLEN);
 	if (err < 0) {
 		pfs_etrace("cluster name too long: %s\n", cluster);
@@ -315,7 +316,7 @@ pfs_io_wait(pfs_devio_t *io, pfs_dev_t *dev)
 		return NULL;
 	if (nio->io_error < 0)
 		pfs_etrace("io failed! error: %d, pbdname: %s, op: %d, "
-		    "buf: %#x, len: %lu, bda: %lu, flags: %d\n",
+		    "buf: %p, len: %lu, bda: %lu, flags: %d\n",
 		    nio->io_error, nio->io_dev->d_devname, nio->io_op,
 		    nio->io_buf, nio->io_len, nio->io_bda, nio->io_flags);
 

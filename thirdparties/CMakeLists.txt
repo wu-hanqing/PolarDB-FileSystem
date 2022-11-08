@@ -36,6 +36,8 @@ ExternalProject_Add(gflags_prj
     URL "http://github.com/gflags/gflags/archive/v2.2.2.tar.gz"
     URL_HASH MD5=1a865b93bacfa963201af3f75b7bd64c
     CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fPIC
+               -DGFLAGS_INTTYPES_FORMAT=C99
+               -DGFLAGS_NAMESPACE=gflags
                -DBUILD_SHARED_LIBS=YES
                -DCMAKE_INSTALL_PREFIX=${ExtProjLocalDir}
                -DCMAKE_INSTALL_RPATH=${ExtProjInstallRPath}
@@ -112,12 +114,11 @@ set_target_properties(protobuf_lite PROPERTIES IMPORTED_LOCATION ${ExtProjLocalD
 add_dependencies(protobuf_lite protobuf_prj)
 
 ExternalProject_Add(brpc_prj
-    DOWNLOAD_DIR ${ExtProjDownloadDir}/brpc
+    GIT_REPOSITORY git@github.com:opencurve/incubator-brpc.git
+    GIT_TAG dpdk
     PREFIX ${ExtProjBuildDir}/brpc
-    URL "https://github.com/opencurve/incubator-brpc/archive/refs/tags/TAG_rwlock_v2.tar.gz"
-    URL_HASH SHA256=ec777c7072627717781a0837b1a784ba547b013cb44264608eb94234ea4a6eb4
-    INACTIVITY_TIMEOUT 60
-    SHOW_PROGRESS
+    GIT_PROGRESS true
+    GIT_REMOTE_UPDATE_STRATEGY REBASE
     CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fPIC
         -DBUILD_SHARED_LIBS=YES
         -DWITH_GLOG=ON

@@ -17,22 +17,22 @@
 
 #include <malloc.h>
 #include <stdlib.h>
-#include <rte_malloc.h>
+#include <spdk/env.h>
 
 #include "pfs_impl.h"
 #include "pfs_admin.h"
 
 typedef struct pfs_memtype {
 	const char 	*mt_name;
-	pthread_mutex_t	mt_mtx;
 	ssize_t		mt_bytes_alloc;
 	ssize_t 	mt_bytes_free;
 	int64_t		mt_count_alloc;
 	int64_t		mt_count_free;
+	int64_t		__pad[3];
 } pfs_memtype_t;
 
-#define	MEMTYPE_ENTRY(tag)	[tag] = { #tag, PTHREAD_MUTEX_INITIALIZER, }
-static pfs_memtype_t	pfs_mem_type[M_NTYPE] = {
+#define	MEMTYPE_ENTRY(tag)	[tag] = { #tag }
+static pfs_memtype_t	pfs_mem_type[M_NTYPE] __attribute__((aligned(64))) = {
 	MEMTYPE_ENTRY(M_NONE),
 	MEMTYPE_ENTRY(M_SECTOR),
 	MEMTYPE_ENTRY(M_FRAG),
@@ -113,10 +113,8 @@ memtype_inc(int type, int count, size_t size)
 	PFS_ASSERT(0 < type && type < M_NTYPE);
 
 	mt = &pfs_mem_type[type];
-	pthread_mutex_lock(&mt->mt_mtx);
-	mt->mt_bytes_alloc += (ssize_t)size;
-	mt->mt_count_alloc += count;
-	pthread_mutex_unlock(&mt->mt_mtx);
+	__atomic_add_fetch(&mt->mt_bytes_alloc, size, __ATOMIC_RELAXED);
+	__atomic_add_fetch(&mt->mt_count_alloc, count, __ATOMIC_RELAXED);
 }
 
 static void
@@ -127,10 +125,8 @@ memtype_dec(int type, size_t size)
 	PFS_ASSERT(0 < type && type < M_NTYPE);
 
 	mt = &pfs_mem_type[type];
-	pthread_mutex_lock(&mt->mt_mtx);
-	mt->mt_bytes_free += (ssize_t)size;
-	mt->mt_count_free += 1;
-	pthread_mutex_unlock(&mt->mt_mtx);
+	__atomic_add_fetch(&mt->mt_bytes_free, size, __ATOMIC_RELAXED);
+	__atomic_add_fetch(&mt->mt_count_free, 1, __ATOMIC_RELAXED);
 }
 
 void *
@@ -252,9 +248,11 @@ pfs_dma_malloc(const char *type, size_t align, size_t size, int socket)
 {
 	void *p;
 
-	p = rte_malloc_socket(type, size, align, socket);
-	if (p == NULL && socket != SOCKET_ID_ANY)
-		p = rte_malloc_socket(type, size, align, SOCKET_ID_ANY);
+	p = spdk_malloc(size, align, NULL, socket, SPDK_MALLOC_DMA);
+	if (p == NULL && socket != SOCKET_ID_ANY) {
+		p = spdk_malloc(size, align, NULL, SPDK_ENV_SOCKET_ID_ANY,
+				SPDK_MALLOC_DMA);
+	}
 	return p;
 }
 
@@ -263,14 +261,16 @@ pfs_dma_zalloc(const char *type, size_t align, size_t size, int socket)
 {
 	void *p;
 
-	p = rte_zmalloc_socket(type, size, align, socket);
-	if (p == NULL && socket != SOCKET_ID_ANY)
-		p = rte_zmalloc_socket(type, size, align, SOCKET_ID_ANY);
+	p = spdk_zmalloc(size, align, NULL, socket, SPDK_MALLOC_DMA);
+	if (p == NULL && socket != SOCKET_ID_ANY) {
+		p = spdk_zmalloc(size, align, NULL, SPDK_ENV_SOCKET_ID_ANY,
+				SPDK_MALLOC_DMA);
+	}
 	return p;
 }
 
 void
 pfs_dma_free(void *p)
 {
-	rte_free(p);
+	spdk_dma_free(p);
 }

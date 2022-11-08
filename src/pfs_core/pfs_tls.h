@@ -40,6 +40,7 @@ typedef struct pfs_bd_info {
  */
 typedef struct pfs_tls {
 	pfs_tx_t	*tls_tx;		/* tx for meta data change */
+	pfs_tx_t	*tls_tx_free;		/* freed tx */
 	int64_t		tls_req_ttl;		/* ttl for io reqeusts;
 						 * 0 means unlimited  */
 	pfs_bd_info_t	*tls_bdi;
@@ -86,11 +87,11 @@ void		pfs_tls_set_ioq(int devi, pfs_ioq_t *ioq);
 #define	tls_write_begin_flags(mnt, timeoutfail)	do {			\
 	int _err = 0;							\
 	do {								\
-		if ((_err = pfs_tx_begin(mnt, timeoutfail)) != 0)	\
+		if (unlikely((_err = pfs_tx_begin(mnt, timeoutfail)) != 0))\
 			break;
 
 #define	tls_write_begin(mnt)						\
-		tls_write_begin_flags(mnt, false)
+	tls_write_begin_flags(mnt, false)
 
 #define	tls_write_end(err)						\
 		_err = pfs_tx_end(err);					\

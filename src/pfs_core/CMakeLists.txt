@@ -18,19 +18,24 @@ include_directories(
     )
 
 set(SRC_LIST
-    pfs_spdk.cc
     devio_spdk.cc
     pfs_admin.cc
     pfs_alloc.cc
     pfs_api.cc
+    pfs_avl.cc
     pfs_blkio.cc
+    pfs_brwlock.cc
+    pfs_chunk.cc
     pfs_command.cc
     pfs_config.cc
     pfs_devio.cc
     pfs_devstat.cc
     pfs_dir.cc
     pfs_file.cc
+    pfs_futex_event.cc
+    pfs_iomem.cc
     pfs_inode.cc
+    pfs_locktable.cc
     pfs_log.cc
     pfs_memory.cc
     pfs_meta.cc
@@ -39,18 +44,16 @@ set(SRC_LIST
     pfs_namei.cc
     pfs_option.cc
     pfs_paxos.cc
+    pfs_rangelock.cc
+    pfs_spdk.cc
     pfs_stat.cc
     pfs_stat_file_type.cc
+    pfs_sync.cc
     pfs_tls.cc
     pfs_trace.cc
     pfs_tx.cc
     pfs_util.cc
     pfs_version.cc
-    pfs_chunk.cc
-    pfs_avl.cc
-    pfs_rangelock.cc
-    pfs_locktable.cc
-    pfs_sync.cc
 )
 
 # lib pfs

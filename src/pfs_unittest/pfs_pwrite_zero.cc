@@ -13,6 +13,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include "pfs_spdk.h"
 #include "pfs_api.h"
 
 using namespace std;
@@ -42,6 +43,10 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+        if (pfs_spdk_setup()) {
+		std::cerr << "can not init spdk";
+                return 1;
+        }
 	                                                                               
 	int flags = MNTFLG_TOOL | MNTFLG_RDWR | MNTFLG_LOG;
 	int rc = pfs_mount(cluster.c_str(), pbdname.c_str(), hostid, flags);
@@ -63,7 +68,8 @@ int main(int argc, char **argv)
 	{				\
 	struct timeval tv1, tv2; \
 	struct rusage ru1, ru2; \
-        getrusage(RUSAGE_THREAD, &ru1); \
+    std::cout << "testing " << #func << "\n"; \
+    getrusage(RUSAGE_THREAD, &ru1); \
 	auto start = std::chrono::steady_clock::now(); \
 	for (int j = 0; j < loops; ++j) { \
 		rc = pfs_lseek(fd, 0, SEEK_SET); \
@@ -107,15 +113,19 @@ int main(int argc, char **argv)
 	}
 	std::cout << "initialized.\n";
 
-	char *dma_buf = (char *)rte_malloc("", buf_sz, 64);
-	memset(dma_buf, 0, sizeof(buf_sz));
+	char *dma_buf = (char *)rte_malloc("", buf_sz+3584, 4096);
+	memset(dma_buf+3584, 0, sizeof(buf_sz));
 
 	DO(pfs_write, fd, buf, buf_sz);
-	DO(pfs_write_dma, fd, dma_buf, buf_sz);
+	DO(pfs_write_dma, fd, dma_buf+3584, buf_sz);
 	DO(pfs_write_zero, fd, buf_sz);
 
 	rte_free(dma_buf);
-
+#ifndef TEST_SUSPEND
 	pfs_umount(pbdname.c_str());
+	pfs_spdk_cleanup();
+#else
+	pfs_spdk_suspend();
+#endif
 	return 0;
 }

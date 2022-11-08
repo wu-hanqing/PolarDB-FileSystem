@@ -1,4 +1,17 @@
 #include "pfs_tls.h"
+
+#include <stdint.h>
+#include <sys/syscall.h>   /* For SYS_xxx definitions */
+#include <sys/time.h>
+#include <unistd.h>
+
+static inline int
+futex(uint32_t *uaddr, int futex_op, uint32_t val,
+      const struct timespec *timeout, uint32_t *uaddr2, uint32_t val3)
+{
+    return syscall(SYS_futex, uaddr, futex_op, val, timeout, uaddr2, val3);
+}
+
 #if PFS_USE_BTHREAD
 #include <bthread/butex.h>
 #else
@@ -47,29 +60,22 @@ void pfs_event_set(pfs_event_t *e)
 
 void pfs_event_init(pfs_event_t *e)
 {
-	sem_init(&e->sem, 0, 0);
+	pfs_futex_event_init(&e->value);
 }
 
 void pfs_event_destroy(pfs_event_t *e)
 {
-	sem_destroy(&e->sem);
+	pfs_futex_event_destroy(&e->value);
 }
 
 void pfs_event_wait(pfs_event_t *e)
 {
-	sem_wait(&e->sem);
+	pfs_futex_event_wait(&e->value);
 }
 
 void pfs_event_set(pfs_event_t *e)
 {
-	int v;
-
-	std::atomic_thread_fence(std::memory_order_seq_cst);
-	sem_getvalue(&e->sem, &v);
-	if (v != 0) {
-		return;
-	}
-	sem_post(&e->sem);
+	pfs_futex_event_set(&e->value);
 }
 
 #endif

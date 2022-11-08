@@ -97,6 +97,9 @@ static const char* mountstat_name[MNT_STAT_TYPE_COUNT] = {
     "meta_rdlock",
     "meta_wrlock",
     "fsync",
+    "read_dma",
+    "write_dma",
+    "write_pad",
 };
 
 static const char* mountstat_api_name[MNT_STAT_FILE_SPEC_TYPE_COUNT] = {
@@ -190,7 +193,7 @@ pfs_mntstat_set_file_type(int file_type)
 			    color_slots[i].cl_file_type == file_type &&
 			    __atomic_compare_exchange_n(&color_slots[i].cl_stat,
 			    &color_set, COLOR_INITED, false,
-			    __ATOMIC_ACQUIRE, __ATOMIC_ACQUIRE)) {
+			    __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
 				file_type = FILE_COLOR_0 + i;
 				goto out;
 			}

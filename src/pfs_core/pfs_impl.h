@@ -72,6 +72,7 @@
 #define PFS_IO_DMA_ON		0x1
 #define PFS_IO_WRITE_ZERO	0x2
 #define PFS_IO_NO_LOCK		0x4
+#define PFS_IO_ZERO_BUF		0x8
 
 /*
  * A block is of unit size, 4M. A fragment is of size 16K.
@@ -180,7 +181,7 @@ mutex_init(pfs_mutex_t *mtx)
 	err |= pthread_mutex_init(mtx, &attr);
 	err |= pthread_mutexattr_destroy(&attr);
 */
-    err = pfs_mutex_init(mtx);
+	err = pfs_mutex_init(mtx);
 	PFS_VERIFY(err == 0);
 }
 

@@ -15,6 +15,7 @@
 
 #include "pfs_testenv.h"
 #include "pfs_api.h"
+#include "pfs_spdk.h"
 #include <iostream>
 #include <stdlib.h>
 
@@ -41,6 +42,7 @@ void PFSTestEnv::SetUp() {
 void PFSTestEnv::TearDown() {
     cout << "Finish PFSDTest of host " << hostid_ << " on pbd " << pbdname_ << endl;
     umount();
+    pfs_spdk_cleanup();
 }
 
 int PFSTestEnv::mount(int flags) {

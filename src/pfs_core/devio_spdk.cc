@@ -21,12 +21,15 @@
  * Author: XuYifeng
  */
 
+#include <sys/param.h>
+
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
 #include <semaphore.h>
 #include <gflags/gflags.h>
+#include <unistd.h>
 
 #include <spdk/env.h>
 #include <spdk/log.h>
@@ -43,19 +46,11 @@
 #include "pfs_impl.h"
 #include "pfs_spdk.h"
 #include "pfs_util.h"
+#include "pfs_iomem.h"
+#include "pfs_futex_event.h"
 
 #define BUF_TYPE "pfs_iobuf"
 #define io_buf io_iov[0].iov_base
-
-#define timespecadd(tsp, usp, vsp)                              \
-    do {                                                        \
-        (vsp)->tv_sec = (tsp)->tv_sec + (usp)->tv_sec;          \
-        (vsp)->tv_nsec = (tsp)->tv_nsec + (usp)->tv_nsec;       \
-        if ((vsp)->tv_nsec >= 1000000000L) {                    \
-            (vsp)->tv_sec++;                                    \
-            (vsp)->tv_nsec -= 1000000000L;                      \
-        }                                                       \
-    } while (0)
 
 typedef struct pfs_spdk_iocb pfs_spdk_iocb_t;
 
@@ -70,15 +65,19 @@ typedef struct pfs_spdk_dev {
     uint32_t    dk_block_size;
     uint32_t    dk_unit_size;
     int         dk_has_cache;
-    int         dk_bufalign;
+#define dk_bufalign dk_base.d_buf_align
     pthread_t   dk_pthread;
-    struct pfs_spdk_thread *dk_thread;
+    struct      pfs_spdk_driver_poller dk_driver_poller;
+    void        *dk_poller_handle;
+    struct spdk_thread *dk_spdk_thread;
     struct spdk_io_channel *dk_ioch;
     int         dk_stop;
-    int         dk_jobs;
 
     pfs_spdk_iocb_t *dk_incoming __rte_aligned(RTE_CACHE_LINE_SIZE);
-    sem_t       dk_sem;
+    int         dk_jobs;
+    pthread_mutex_t dk_work_mutex;
+    pfs_futex_event_t dk_event;
+    int         dk_running;
     char        dk_path[128];
 } pfs_spdk_dev_t;
 
@@ -108,26 +107,13 @@ typedef struct pfs_spdk_ioq {
 
     pfs_spdk_iocb_t *dkq_done_q __rte_aligned(RTE_CACHE_LINE_SIZE);
     pfs_event_t dkq_done_ev;
-    char	dkq_pad[RTE_CACHE_LINE_SIZE];
 } pfs_spdk_ioq_t;
-
-struct bdev_open_param {
-    pfs_spdk_dev_t *dkdev;
-    sem_t sem;
-    int rc;
-};
 
 static const int64_t g_iodepth = 128;
 DEFINE_int32(pfs_spdk_driver_poll_delay, 0,
   "pfs spdk driver busy poll delay time(us)");
-DEFINE_bool(pfs_spdk_driver_auto_cpu_bind, false,
-  "pfs spdk driver auto bind thread to cpus which are nearest to pci device");
-DEFINE_string(pfs_spdk_driver_cpu_bind, "", 
-  "pfs spdk driver list [device@dpdk_cpu_set] should bind to cpu set to");
 DEFINE_int32(pfs_spdk_driver_error_interval, 1,
   "pfs spdk driver DMA buffer allocation failure report interval (seconds)");
-DEFINE_string(pfs_spdk_driver_check_pci_address, "", 
-  "pfs spdk device list [device@domain:bus:dev.function;] to check pci address");
 DEFINE_bool(pfs_spdk_driver_auto_dma, true,
   "pfs spdk driver always use dma buffer if not allocated");
 
@@ -144,6 +130,7 @@ static void pfs_spdk_dev_io_fini_pwrite(void *iocb);
 static void pfs_spdk_dev_io_fini_trim(void *iocb);
 static void pfs_spdk_dev_io_fini_flush(void *iocb);
 static void pfs_spdk_dev_pull_iocb(pfs_spdk_dev_t *dkdev);
+static void pfs_spdk_dev_try_requests(pfs_spdk_dev_t *dkdev);
 
 static pfs_spdk_iocb_t *
 pfs_spdk_dev_alloc_iocb(void)
@@ -203,9 +190,10 @@ pfs_spdk_dev_create_ioq(pfs_dev_t *dev)
 {
     pfs_spdk_ioq_t *dkioq = NULL;
     void *p = NULL;
+    size_t alloc_size = roundup(sizeof(*dkioq), 64);
     int err;
 
-    err = pfs_mem_memalign(&p, PFS_CACHELINE_SIZE, sizeof(*dkioq),
+    err = pfs_mem_memalign(&p, PFS_CACHELINE_SIZE, alloc_size,
 		M_SPDK_DEV_IOQ);
     if (err) {
         pfs_etrace("create disk ioq failed: %d, %s\n", strerror(err));
@@ -238,7 +226,7 @@ bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 }
 
 static int
-bdev_thread_bind_cpuset(const char *thread_name, pfs_spdk_dev_t *dkdev)
+bdev_find_cpuset(pfs_spdk_dev_t *dkdev)
 {
     pfs_dev_t *dev = &dkdev->dk_base;
     cpu_set_t cpuset;
@@ -247,143 +235,133 @@ bdev_thread_bind_cpuset(const char *thread_name, pfs_spdk_dev_t *dkdev)
     err = pfs_get_dev_local_cpus(dkdev->dk_bdev, &cpuset);
     if (err == 0) {
         dev->d_mem_socket_id = pfs_cpuset_socket_id(&cpuset);
+        pfs_itrace("device %s's local cpu socket is %d", dev->d_devname,
+                   dev->d_mem_socket_id);
     } else {
         pfs_etrace("cannot get device %s's local cpuset", dev->d_devname);
-    }
-
-    if (FLAGS_pfs_spdk_driver_auto_cpu_bind) {
-        if (err == 0) {
-set_it:
-            std::string cpuset_str = pfs_cpuset_to_string(&cpuset);
-            err = rte_thread_set_affinity(&cpuset);
-            if (err == 0) {
-                pfs_itrace("auto bind thread %s to cpuset : %s", thread_name,
-                        cpuset_str.c_str());
-            } else {
-                pfs_etrace("cannot bind thread %s to cpuset: %s", thread_name,
-                        cpuset_str.c_str());
-                err = -1;
-            }
-        }
-    } else if (!FLAGS_pfs_spdk_driver_cpu_bind.empty()) {
-        std::string &s = FLAGS_pfs_spdk_driver_cpu_bind;
-        auto pos = s.find(dev->d_devname);
-        if (pos != std::string::npos) {
-            pos += strlen(dev->d_devname);
-            if (s[pos] != '@') {
-                pfs_etrace("cannot find cpuset bind for %s in %s",
-                     dev->d_devname, s.c_str());
-                err = -1;
-            } else {
-                pos++;
-                auto pos2 = s.find(';', pos);
-                std::string substr;
-                if (pos2 != std::string::npos)
-                    substr = s.substr(pos2-pos);
-                else
-                    substr = s.substr(pos);
-
-                if (pfs_parse_set(substr.c_str(), &cpuset) == substr.length())
-                    goto set_it;
-                else {
-                    pfs_etrace("can not parse cpuset %s", substr.c_str());
-                    err = -1;
-                }
-            }
-        } else {
-            pfs_etrace("no cpuset found in cpuset bind %s for %s", s.c_str(),
-                       dev->d_devname);
-        }
     }
 
     return err;
 }
 
-static int
-bdev_check_pci_address(pfs_spdk_dev_t *dkdev)
+static unsigned 
+bdev_poll(void *arg)
 {
+    int count = 100;
+    pfs_spdk_thread_guard guard;
+
+    pfs_spdk_dev_t *dkdev = (pfs_spdk_dev_t *)arg;
     pfs_dev_t *dev = &dkdev->dk_base;
-    std::string pci_address = pfs_get_dev_pci_address(dkdev->dk_bdev);
+    struct spdk_thread *spdk_thread = dkdev->dk_spdk_thread;
+    spdk_set_thread(spdk_thread);
 
-    if (pci_address.empty()) {
-        pfs_wtrace("device %s has empty pci address", dev->d_devname);
-        return 0;
-    }
-
-    pfs_itrace("device %s, current pci address %s", dev->d_devname,
-        pci_address.c_str());
-
-    if (!FLAGS_pfs_spdk_driver_check_pci_address.empty()) {
-        std::string &s = FLAGS_pfs_spdk_driver_check_pci_address;
-        auto pos = s.find(dev->d_devname);
-        if (pos != std::string::npos) {
-            pos += strlen(dev->d_devname);
-            if (s[pos] != '@') {
-                pfs_etrace("cannot find ':' for %s in %s",
-                     dev->d_devname, s.c_str());
-                return -1;
-            } else {
-                pos++;
-                auto pos2 = s.find(';', pos);
-                std::string substr;
-                if (pos2 != std::string::npos)
-                    substr = s.substr(pos2-pos);
-                else
-                    substr = s.substr(pos);
-                if (substr == pci_address) {
-                    pfs_itrace("ok to verify pci address for %s", dev->d_devname);
-                    return 0;
-                } else {
-                    pfs_etrace("pci address is not match for %s, current: %s, expected: %s",
-                        dev->d_devname, pci_address.c_str(), substr.c_str());
-                    return -1;
-                }
-            }
-        } else {
-            pfs_wtrace("device %s is not in pfs_spdk_driver_check_pci_address",
-                dev->d_devname);
-        }
-    }
+    do {
+        if (count-- == 0)
+            break;
+        pfs_spdk_dev_pull_iocb(dkdev);
+    } while (spdk_thread_poll(spdk_thread, 64, 0));
 
     return 0;
 }
 
-/*
-    return param.rc:
-	failure: > 0
-	success: 0
-*/
 static void *
 bdev_thread_msg_loop(void *arg)
 {
-    struct bdev_open_param *param = (struct bdev_open_param *)arg;
-    pfs_spdk_dev_t *dkdev = param->dkdev;
+    pfs_spdk_dev_t *dkdev = (pfs_spdk_dev_t *)arg;
     pfs_dev_t *dev = &dkdev->dk_base;
-    struct pfs_spdk_thread *thread = NULL;
+    struct spdk_thread *spdk_thread = NULL;
+    const char *thread_name = NULL;
+    int err;
+
+    spdk_thread = dkdev->dk_spdk_thread;
+    spdk_set_thread(spdk_thread);
+
+    thread_name = spdk_thread_get_name(spdk_thread);
+    pthread_setname_np(pthread_self(), thread_name);
+
+    struct timespec timeout = {0, FLAGS_pfs_spdk_driver_poll_delay * 1000};
+    if (FLAGS_pfs_spdk_driver_poll_delay) {
+        pthread_mutex_lock(&dkdev->dk_work_mutex);
+        __atomic_store_n(&dkdev->dk_running, 1, __ATOMIC_RELAXED);
+    }
+    while (!dkdev->dk_stop) {
+        pfs_spdk_dev_pull_iocb(dkdev);
+        while (dkdev->dk_jobs != 0) {
+            spdk_thread_poll(spdk_thread, 64, 0);
+            pfs_spdk_dev_pull_iocb(dkdev);
+        }
+        if (!FLAGS_pfs_spdk_driver_poll_delay) {
+            continue;
+        }
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        pfs_timespecadd(&ts, &timeout, &ts);
+        __atomic_store_n(&dkdev->dk_running, 0, __ATOMIC_RELAXED);
+        pthread_mutex_unlock(&dkdev->dk_work_mutex);
+        pfs_futex_event_timedwait(&dkdev->dk_event, &ts);
+        pthread_mutex_lock(&dkdev->dk_work_mutex);
+        __atomic_store_n(&dkdev->dk_running, 1, __ATOMIC_RELAXED);
+    }
+ 
+    while (dkdev->dk_jobs != 0) {
+        spdk_thread_poll(spdk_thread, 0, 0);
+        pfs_spdk_dev_pull_iocb(dkdev);
+    }
+    __atomic_store_n(&dkdev->dk_running, 0, __ATOMIC_RELAXED);
+
+    spdk_set_thread(NULL);
+    if (FLAGS_pfs_spdk_driver_poll_delay)
+        pthread_mutex_unlock(&dkdev->dk_work_mutex);
+    return NULL;
+}
+
+/*
+ * return:
+ *    failure: < 0
+ *    sucess : 0
+ */
+static int
+pfs_spdk_dev_open(pfs_dev_t *dev)
+{
+    pfs_spdk_thread_guard guard;
+    static size_t page_size = sysconf(_SC_PAGESIZE);
+    pfs_spdk_dev_t *dkdev = (pfs_spdk_dev_t *)dev;
+    struct spdk_thread *spdk_thread;
     char thread_name[64];
     int err;
 
     snprintf(thread_name, sizeof(thread_name), "pfs-dev-%s", dev->d_devname);
-    pthread_setname_np(pthread_self(), thread_name);
-    thread = pfs_create_spdk_thread(thread_name);
+ 
+    /*
+     * pfs_spdk_setup should be called as soone as possible in
+     * application's main thread earlier, put it here is just easy
+     * for pfs tools.
+     */
+    if ((err = pfs_spdk_setup())) {
+        pfs_etrace("can not init spdk env");
+        return -EIO;
+    }
+ 
+    dkdev->dk_stop = 0;
+    dkdev->dk_jobs = 0;
+    pthread_mutex_init(&dkdev->dk_work_mutex, NULL);
+    pfs_futex_event_init(&dkdev->dk_event);
+
+    spdk_thread = spdk_thread_create(thread_name, NULL);
+    spdk_set_thread(spdk_thread);
     err = spdk_bdev_open_ext(dev->d_devname, dev_writable(dev),
                              bdev_event_cb, dkdev, &dkdev->dk_desc);
     if (err) {
         pfs_etrace("can not open spdk device %s, %s\n", dev->d_devname,
                    strerror(-err));
 err_exit:
-        param->rc = -err;
-        sem_post(&param->sem);
-        return NULL;
+        pfs_spdk_gc_thread(spdk_thread);
+        pthread_mutex_destroy(&dkdev->dk_work_mutex);
+        pfs_futex_event_destroy(&dkdev->dk_event);
+        return -err;
     }
     dkdev->dk_bdev = spdk_bdev_desc_get_bdev(dkdev->dk_desc);
-    if (bdev_check_pci_address(dkdev) == -1) {
-        spdk_bdev_close(dkdev->dk_desc);
-        err = EINVAL;
-        goto err_exit;
-    }
-
-    dkdev->dk_ioch = pfs_get_spdk_io_channel(dkdev->dk_desc);
+    dkdev->dk_ioch = spdk_bdev_get_io_channel(dkdev->dk_desc);
     if (dkdev->dk_ioch == NULL) {
         pfs_etrace("can not get io channel of spdk device: %s\n",
             dev->d_devname);
@@ -396,18 +374,19 @@ err_exit:
     dkdev->dk_block_num = spdk_bdev_get_num_blocks(dkdev->dk_bdev);
     dkdev->dk_block_size = spdk_bdev_get_block_size(dkdev->dk_bdev);
     dkdev->dk_unit_size = spdk_bdev_get_write_unit_size(dkdev->dk_bdev);
-    dkdev->dk_thread = thread;
     dkdev->dk_sectsz = dkdev->dk_unit_size * dkdev->dk_block_size;
     dkdev->dk_has_cache = spdk_bdev_has_write_cache(dkdev->dk_bdev);
     dkdev->dk_size = dkdev->dk_block_num * dkdev->dk_block_size;
     dkdev->dk_bufalign = spdk_bdev_get_buf_align(dkdev->dk_bdev);
-    if (dkdev->dk_bufalign < PFS_CACHELINE_SIZE)
-        dkdev->dk_bufalign = PFS_CACHELINE_SIZE;
+    if (dkdev->dk_bufalign < page_size)
+        dkdev->dk_bufalign = page_size;
     dev->d_cap = DEV_CAP_RD | DEV_CAP_WR | DEV_CAP_FLUSH | DEV_CAP_TRIM;
-    if (spdk_bdev_io_type_supported(dkdev->dk_bdev,
-			SPDK_BDEV_IO_TYPE_WRITE_ZEROES)) {
-	    dev->d_cap |= DEV_CAP_ZERO;
-    }
+    // SPDK unconditionally supports WRITE_ZEROS.
+    // It ensures that all specified blocks will be zeroed out.
+    // If a block device doesn't natively support a write zeroes command,
+    // the bdev layer emulates it using write commands.                                                                 
+    // yfxu@
+    dev->d_cap |= DEV_CAP_ZERO;
     dev->d_write_unit = spdk_bdev_get_write_unit_size(dkdev->dk_bdev) *
 		spdk_bdev_get_block_size(dkdev->dk_bdev);
     PFS_ASSERT(RTE_IS_POWER_OF_2(dev->d_write_unit));
@@ -417,93 +396,61 @@ err_exit:
                dev->d_devname, dkdev->dk_block_num, dkdev->dk_block_size,
                dkdev->dk_unit_size, dkdev->dk_has_cache, dkdev->dk_bufalign);
 
-    bdev_thread_bind_cpuset(thread_name, dkdev);
-
-    param->rc = 0;
-    sem_post(&param->sem);
-
-    struct spdk_thread *spdk_thread = thread->spdk_thread;
-    struct timespec timeout = {0, FLAGS_pfs_spdk_driver_poll_delay * 1000};
-    while (!dkdev->dk_stop) {
-        pfs_spdk_dev_pull_iocb(dkdev);
-        while (dkdev->dk_jobs != 0) {
-            spdk_thread_poll(spdk_thread, 0, spdk_get_ticks());
-            pfs_spdk_dev_pull_iocb(dkdev);
+    bdev_find_cpuset(dkdev);
+    dkdev->dk_spdk_thread = spdk_thread;
+    pfs_spdk_get_driver_poller(&dkdev->dk_driver_poller);
+    if (dkdev->dk_driver_poller.register_callback) {
+        dkdev->dk_poller_handle =
+            (*dkdev->dk_driver_poller.register_callback)(bdev_poll, dkdev);
+        if (dkdev->dk_poller_handle == NULL) {
+            pfs_etrace("can not register callback");
+            err = ENOMEM;
         }
-        if (FLAGS_pfs_spdk_driver_poll_delay)
-            continue;
-        struct timespec ts;
-        clock_gettime(CLOCK_REALTIME, &ts);
-        timespecadd(&ts, &timeout, &ts);
-        sem_timedwait(&dkdev->dk_sem, &ts);
+    } else {
+        err = pthread_create(&dkdev->dk_pthread, NULL, bdev_thread_msg_loop, dkdev);
+        if (err) {
+            pfs_etrace("can not create pthread");
+        }
     }
- 
-    pfs_put_spdk_io_channel(dkdev->dk_ioch);
-    spdk_bdev_close(dkdev->dk_desc);
 
-    while (spdk_thread_poll(spdk_thread, 0, 0))
-        {}
-    return NULL;
-}
-
-/*
- * return:
- *    failure: < 0
- *    sucess : 0
- */
-static int
-pfs_spdk_dev_open(pfs_dev_t *dev)
-{
-    pfs_spdk_dev_t *dkdev = (pfs_spdk_dev_t *)dev;
-    struct spdk_thread *origin, *thread;
-    struct bdev_open_param param;
-    int err;
-
-    /*
-     * pfs_spdk_setup should be called as soone as possible in
-     * application's main thread earlier, put it here is just easy
-     * for pfs tools.
-     */
-    if ((err = pfs_spdk_setup())) {
-        pfs_etrace("can not init spdk env");
-        return -EIO;
-    }
-    sem_init(&param.sem, 0, 0);
-    param.dkdev = dkdev;
-    param.rc = 0;
- 
-    dkdev->dk_stop = 0;
-    dkdev->dk_jobs = 0;
-    sem_init(&dkdev->dk_sem, 0, 0);
-    err = pthread_create(&dkdev->dk_pthread, NULL, bdev_thread_msg_loop,
-                         &param);
     if (err) {
-        sem_destroy(&dkdev->dk_sem);
+        spdk_put_io_channel(dkdev->dk_ioch);
+        spdk_bdev_close(dkdev->dk_desc);
+        pfs_spdk_gc_thread(spdk_thread);
+        dkdev->dk_spdk_thread = NULL;
         pfs_etrace("can not create device msg thread %s, %s\n", dev->d_devname,
                    strerror(err));
-        return -err;
+        goto err_exit;
     }
 
-    sem_wait(&param.sem);
-    sem_destroy(&param.sem);
-    if (param.rc) {
-        pthread_join(dkdev->dk_pthread, NULL);
-    }
-    return -param.rc;
+    return 0;
 }
 
 static int
 pfs_spdk_dev_close(pfs_dev_t *dev)
 {
+    pfs_spdk_thread_guard guard;
     pfs_spdk_dev_t *dkdev = (pfs_spdk_dev_t *)dev;
 
     if (dkdev->dk_desc == NULL)
         return 0;
     
     dkdev->dk_stop = 1;
-    sem_post(&dkdev->dk_sem);
-    pthread_join(dkdev->dk_pthread, NULL);
-    sem_destroy(&dkdev->dk_sem);
+    if (dkdev->dk_poller_handle) {
+        (*dkdev->dk_driver_poller.remove_callback)(dkdev->dk_poller_handle);
+    } else {
+        pfs_futex_event_set(&dkdev->dk_event);
+        pthread_join(dkdev->dk_pthread, NULL);
+    }
+
+    spdk_set_thread(dkdev->dk_spdk_thread);
+    spdk_put_io_channel(dkdev->dk_ioch);
+    spdk_bdev_close(dkdev->dk_desc);
+    pfs_spdk_gc_thread(dkdev->dk_spdk_thread);
+    dkdev->dk_spdk_thread = NULL;
+
+    pfs_futex_event_destroy(&dkdev->dk_event);
+    pthread_mutex_destroy(&dkdev->dk_work_mutex);
     return 0;
 }
 
@@ -613,8 +560,7 @@ pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
 
     if (FLAGS_pfs_spdk_driver_auto_dma &&
         !(io->io_flags & IO_DMABUF)) {
-        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, dkdev->dk_base.d_buf_align,
-            io->io_len, SOCKET_ID_ANY);
+        iocb->cb_dma_buf = pfs_iomem_alloc(io->io_len);
         if (iocb->cb_dma_buf == NULL) {
             struct timeval tv = error_time_interval;
             if (pfs_ratecheck(&last, &tv)) {
@@ -656,7 +602,7 @@ pfs_spdk_dev_io_pread(void *arg)
         pfs_etrace("%s error while reading from bdev: %d\n",
             spdk_strerror(-rc), rc);
         if (iocb->cb_dma_buf) {
-            pfs_dma_free(iocb->cb_dma_buf);
+            pfs_iomem_free(iocb->cb_dma_buf);
         }
         abort();
     }
@@ -675,7 +621,7 @@ pfs_spdk_dev_io_fini_pread(void *arg)
     pfs_spdk_dev_enq_complete_io(dkioq, io);
 
     if (iocb->cb_dma_buf)
-        pfs_dma_free(iocb->cb_dma_buf);
+        pfs_iomem_free(iocb->cb_dma_buf);
     pfs_spdk_dev_free_iocb(iocb);
 }
 
@@ -691,8 +637,7 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
 
     if (FLAGS_pfs_spdk_driver_auto_dma &&
         !(io->io_flags & IO_DMABUF) && !(io->io_flags & IO_ZERO)) {
-        iocb->cb_dma_buf = pfs_dma_malloc(BUF_TYPE, dkdev->dk_base.d_buf_align,
-		   io->io_len, SOCKET_ID_ANY);
+        iocb->cb_dma_buf = pfs_iomem_alloc(io->io_len);
         if (iocb->cb_dma_buf == NULL) {
             struct timeval tv = error_time_interval;
             if (pfs_ratecheck(&last, &tv)) {
@@ -738,7 +683,7 @@ pfs_spdk_dev_io_pwrite(void *arg)
         pfs_etrace("%s error while writting to bdev: %d, ioflags=%x",
             spdk_strerror(-rc), rc, io->io_flags);
         if (iocb->cb_dma_buf)
-            pfs_dma_free(iocb->cb_dma_buf);
+            pfs_iomem_free(iocb->cb_dma_buf);
         abort();
     }
 }
@@ -753,7 +698,7 @@ pfs_spdk_dev_io_fini_pwrite(void *arg)
     pfs_spdk_dev_enq_complete_io(dkioq, io);
 
     if (iocb->cb_dma_buf)
-        pfs_dma_free(iocb->cb_dma_buf);
+        pfs_iomem_free(iocb->cb_dma_buf);
     pfs_spdk_dev_free_iocb(iocb);
 }
 
@@ -872,10 +817,11 @@ pfs_spdk_dev_send_iocb(pfs_spdk_dev_t *dkdev,
         rte_pause();
     }
 
-    if (FLAGS_pfs_spdk_driver_poll_delay != 0) {
-        sem_getvalue(&dkdev->dk_sem, &count);
-        if (!count)
-            sem_post(&dkdev->dk_sem);
+    if (dkdev->dk_poller_handle == NULL) {
+        if (FLAGS_pfs_spdk_driver_poll_delay != 0)
+	        pfs_futex_event_set(&dkdev->dk_event);
+    } else {
+        dkdev->dk_driver_poller.notify_callback(dkdev->dk_poller_handle);
     }
 }
 
@@ -978,10 +924,12 @@ fail:
 static pfs_devio_t *
 pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
 {
+    pfs_spdk_thread_guard guard;
     struct pfs_spdk_iocb *iocb, *next;
     pfs_spdk_dev_t *dkdev = (pfs_spdk_dev_t *)dev;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)ioq;
     pfs_devio_t *nio = nullptr;
+    bool locked = false, wait = false;
 
     while ((dkioq->dkq_inflight_count | dkioq->dkq_complete_count)) {
         TAILQ_FOREACH(nio, &dkioq->dkq_complete_queue, io_next) {
@@ -994,7 +942,27 @@ pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
                 break;
             }
 
-            pfs_event_wait(&dkioq->dkq_done_ev);
+            if (dkdev->dk_poller_handle == NULL && // not external poller mode
+                !wait && FLAGS_pfs_spdk_driver_poll_delay) {
+                int running = __atomic_load_n(&dkdev->dk_running, __ATOMIC_RELAXED);
+                if (!locked && !running &&
+                    !pthread_mutex_trylock(&dkdev->dk_work_mutex)) {
+                    // set to 1 to avoid other threads run pthread_mutex_trylock
+                    __atomic_store_n(&dkdev->dk_running, 1, __ATOMIC_RELAXED);
+                    locked = true;
+                    spdk_set_thread(dkdev->dk_spdk_thread);
+                }
+                if (locked) {
+                    pfs_spdk_dev_pull_iocb(dkdev);
+                    spdk_thread_poll(dkdev->dk_spdk_thread, 64, 0);
+                } else {
+                    wait = true;
+                    goto wait_event;
+                }
+            } else {
+wait_event:
+                pfs_event_wait(&dkioq->dkq_done_ev);
+            }
 
             for (iocb = __atomic_exchange_n(&dkioq->dkq_done_q, NULL,
                     __ATOMIC_ACQUIRE); iocb; iocb = next) {
@@ -1005,6 +973,10 @@ pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
             pfs_spdk_dev_deq_complete_io(dkioq, nio);
             break;
         }
+    }
+    if (locked) {
+        spdk_set_thread(NULL);
+        pthread_mutex_unlock(&dkdev->dk_work_mutex);
     }
     return nio;
 }

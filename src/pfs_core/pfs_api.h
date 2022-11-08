@@ -109,6 +109,13 @@ off_t	pfs_lseek(int fd, off_t offset, int whence);
 int	pfs_setxattr(const char *pbdpath, const char *name, const void *value,
 	    size_t size, int flags);
 
+/*
+ * Check if memory region is spdk memory.
+ * Return 1: yes, 0 : not
+ */
+int     pfs_is_spdk_mem(void *p, size_t size);
+int     pfs_is_spdk_memv(const struct iovec *iov, int iovcnt);
+
 /* directory */
 int	pfs_mkdir(const char *pbdpath, mode_t mode);
 DIR	*pfs_opendir(const char *pbdpath);
