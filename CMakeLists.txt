@@ -12,7 +12,7 @@
 # limitations under the License.
 
 cmake_minimum_required (VERSION 3.23.1)
-project(pfsd CXX C ASM)
+project(curve_pfsd CXX C ASM)
 set(pfsd_VERSION_MAJOR 2)
 set(pfsd_VERSION_MINOR 1)
 set(pfsd_VERSION_PATCH 2)
@@ -29,7 +29,8 @@ endif()
 
 ProcessorCount(NCPU)
 
-set(PKG_DIR "/usr/local/curvestore/pfsd")
+set(PKG_ROOT "/usr/local/curvestore/")
+set(PKG_DIR "${PKG_ROOT}/pfsd")
 
 include(thirdparties/CMakeLists.txt)
 
@@ -194,10 +195,10 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 add_subdirectory(src)
 
-set(CPACK_PACKAGE_NAME pfsd)
+set(CPACK_PACKAGE_NAME curve-pfsd)
 set(CPACK_PACKAGE_VENDOR "Netease")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Polar filesystem")
-set(CPACK_PACKAGE_INSTALL_DIRECTORY pfsd)
+set(CPACK_PACKAGE_INSTALL_DIRECTORY ${PKG_DIR})
 set(CPACK_PACKAGE_VERSION_MAJOR ${pfsd_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${pfsd_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${pfsd_VERSION_PATCH})
@@ -239,15 +240,8 @@ install(
   
 install(
   FILES
-	src/pfsd/pfsd.init
-  DESTINATION "/etc/init.d/"
-  RENAME pfsd_env
-)
-
-install(
-  FILES
 	etc/polarfs.conf
-  DESTINATION "/etc/"
+  DESTINATION "${PKG_ROOT}/etc/"
 )
 
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA

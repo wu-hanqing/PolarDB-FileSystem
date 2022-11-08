@@ -1,8 +1,12 @@
 #!/bin/sh
 set +e
-cd /usr/local/curvestore/pfsd/lib
-rm -f libglog.so.0
-rm -f libglog.so
-rm -f libgflags.so.2.2
-rm -f libgflags.so
+DIR=/usr/local/curvestore/pfsd/lib
+if [ -d $DIR ]
+then
+  cd $DIR
+  rm -f libglog.so.0
+  rm -f libglog.so
+  rm -f libgflags.so.2.2
+  rm -f libgflags.so
+fi
 set -e
