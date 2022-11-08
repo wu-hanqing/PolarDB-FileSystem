@@ -63,6 +63,15 @@ void pfs_spdk_cleanup(void);
 void pfs_spdk_gc_thread(struct spdk_thread *thread);
 void pfs_spdk_teardown_thread(struct spdk_thread *thread);
 
+struct pfs_spdk_driver_poller {
+    void* (*register_callback)(unsigned (*cb)(void *), void *arg);
+    void (*notify_callback)(void *handle);
+    void (*remove_callback)(void *handle);
+};
+
+void pfs_spdk_set_driver_poller(const struct pfs_spdk_driver_poller *);
+void pfs_spdk_get_driver_poller(struct pfs_spdk_driver_poller *);
+
 int pfs_get_pci_local_cpus(const std::string &pci_addr, cpu_set_t *setp);
 std::string pfs_get_dev_pci_address(struct spdk_bdev *dev);
 int pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *setp);

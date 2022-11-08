@@ -89,6 +89,19 @@ static pthread_t g_init_thread_id = 0;
 static pthread_t g_rpc_thread_id = 0;
 static pthread_t g_gc_thread_id = 0;
 static bool g_spdk_env_initialized = false;
+struct pfs_spdk_driver_poller spdk_driver_poller = { NULL };
+
+void
+pfs_spdk_set_driver_poller(const struct pfs_spdk_driver_poller *poller)
+{
+    spdk_driver_poller = *poller;
+}
+
+void
+pfs_spdk_get_driver_poller(struct pfs_spdk_driver_poller *poller)
+{
+    *poller = spdk_driver_poller;
+}
 
 static void
 parse_pci_address(struct spdk_env_opts *opts)
@@ -304,7 +317,8 @@ void
 pfs_spdk_gc_thread(struct spdk_thread *spdk_thread)
 {
     spdk_thread_exit(spdk_thread);
-    spdk_set_thread(NULL);
+    if (spdk_get_thread() == spdk_thread)
+        spdk_set_thread(NULL);
 
     // kill spdk thread in gc thread context
     pthread_mutex_lock(&g_gc_mutex);
