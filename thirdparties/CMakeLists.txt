@@ -1,3 +1,7 @@
+# Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
+	cmake_policy(SET CMP0135 NEW)
+endif()
 
 set(ExtProjBuildDir ${CMAKE_BINARY_DIR}/thirdparties)
 set(ExtProjLocalDir ${ExtProjBuildDir}/local)
@@ -113,6 +117,7 @@ add_library(protobuf_lite SHARED IMPORTED)
 set_target_properties(protobuf_lite PROPERTIES IMPORTED_LOCATION ${ExtProjLocalDir}/lib/libprotobuf_lite.so)
 add_dependencies(protobuf_lite protobuf_prj)
 
+if (USE_BTHREAD)
 ExternalProject_Add(brpc_prj
     GIT_REPOSITORY git@github.com:opencurve/incubator-brpc.git
     GIT_TAG dpdk
@@ -139,6 +144,8 @@ foreach(lib brpc)# butil bvar bthread)
 endforeach()
 
 add_dependencies(brpc_prj leveldb_prj gflags_prj glog_prj protobuf_prj)
+endif()
+
 add_dependencies(protobuf_prj gflags_prj gtest_prj)
 
 
