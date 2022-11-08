@@ -26,7 +26,7 @@ CONF_FILE=$BASE_DIR/../conf
 
 # check if pfdameon exist
 pbdname=`echo $* | awk '/--?pbd_name=/{ split($1, A, "="); print A[2] }'`
-exist_command="ps -ef | grep curve_pfsdaemon |grep -w '$pbdname' | wc -l"
+exist_command="ps -ef | grep pfsdaemon |grep -w '$pbdname' | wc -l"
 exist=$(eval $exist_command)
 if [ $exist -ge 1 ]; then
     echo "$pbdname already exist"
@@ -35,15 +35,15 @@ fi
 
 ulimit -c unlimited
 
-nohup ${BASE_DIR}/../bin/curve_pfsdaemon $* 1>/dev/null 2>&1 &
+nohup ${BASE_DIR}/../bin/pfsdaemon $* 1>/dev/null 2>&1 &
 
 sleep 1
 
 # check if start success 
 exist=$(eval $exist_command)
 if [ $exist -eq 0 ]; then
-    echo "curve_pfsdaemon $pfsdname start failed"
+    echo "pfsdaemon $pfsdname start failed"
     exit 1
 fi
 
-echo "curve_pfsdaemon $pbdname start success"
+echo "pfsdaemon $pbdname start success"

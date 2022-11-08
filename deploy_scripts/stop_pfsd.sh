@@ -15,15 +15,15 @@
 
 kill_single_pfsd() {
     pbd=$1
-    pfsdname="curve_pfsdaemon -pbd_name $pbd"
-    exist_command="ps -ef | grep curve_pfsdaemon |grep -w '\-p $pbd' | wc -l"
+    pfsdname="pfsdaemon -pbd_name $pbd"
+    exist_command="ps -ef | grep pfsdaemon |grep -w '\-p $pbd' | wc -l"
     exist=$(eval $exist_command)
     if [ $exist -eq 0 ]; then
         echo "$pfsdname not exist"
         exit 1
     fi
 
-    pid=`ps -ef |grep curve_pfsdaemon |grep -w '\-p '$pbd'' |awk '{print $2}'`
+    pid=`ps -ef |grep pfsdaemon |grep -w '\-p '$pbd'' |awk '{print $2}'`
     kill -2 $pid
     sleep 1
 
@@ -46,23 +46,23 @@ kill_single_pfsd() {
 }
 
 kill_all_pfsd() {
-    pkill -2 curve_pfsdaemon		
+    pkill -2 pfsdaemon		
     sleep 1		
-    cnt=`ps -ef | grep curve_pfsdaemon |  grep -v grep  | wc -l`
+    cnt=`ps -ef | grep pfsdaemon |  grep -v grep  | wc -l`
     if [ $cnt -eq 0 ]; then
-        echo "pkill -2 all curve_pfsdaemon success"
+        echo "pkill -2 all pfsdaemon success"
         exit 0
     fi
 
-    echo "going to pkill -9 all curve_pfsdaemon"
-    pkill -9 curve_pfsdaemon
+    echo "going to pkill -9 all pfsdaemon"
+    pkill -9 pfsdaemon
     sleep 1
-    cnt=`ps -ef | grep curve_pfsdaemon |  grep -v grep  | wc -l`
+    cnt=`ps -ef | grep pfsdaemon |  grep -v grep  | wc -l`
     if [ $cnt -eq 0 ]; then
-        echo "pkill -9 all curve_pfsdaemon success"
+        echo "pkill -9 all pfsdaemon success"
         exit 0
     fi
-    echo "pkill -9 all curve_pfsdaemon failed!"
+    echo "pkill -9 all pfsdaemon failed!"
 }
 
 if [ $# -gt 0 ]; then
