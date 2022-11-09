@@ -107,7 +107,7 @@ pfs_option_list(admin_buf_t *ab)
 			break;
 		case OPT_STR:
 			pfs_adminbuf_printf(ab, "%s\t", ((std::string *)(opt->o_valuep))->c_str());
-			pfs_adminbuf_printf(ab, "%s\t", opt->o_default);
+			pfs_adminbuf_printf(ab, "%s\n", opt->o_default);
 			break;
 		}
 	}

@@ -230,9 +230,9 @@ class AdminTrace(AdminOperation):
 class AdminConfig(AdminOperation):
     """request format is as follows
     char          name[PFS_MAX_OPTLEN]
-    int64         value
+    char          value[PFS_MAX_OPTLEN]
     """
-    reqfmt_tuple = (str(PFS_MAX_OPTLEN)+'s', 'q')
+    reqfmt_tuple = (str(PFS_MAX_OPTLEN)+'s', str(PFS_MAX_OPTLEN)+'s')
 
     @classmethod
     def register_options(cls, subparsers):
@@ -246,7 +246,7 @@ class AdminConfig(AdminOperation):
             const=9)
         sp.add_argument('pbdname')
         sp.add_argument('name', nargs='?', default='*')
-        sp.add_argument('value', type=int, nargs='?', default=0)
+        sp.add_argument('value', nargs='?', default='')
         sp.set_defaults(reqclass=cls)
 
     def __init__(self, args):
