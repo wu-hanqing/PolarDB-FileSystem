@@ -16,21 +16,21 @@
 #include <iostream>
 #include <string>
 #include <gflags/gflags.h>
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 #include "pfs_testenv.h"
 #include "pfs_spdk.h"
+#include "pfs_option.h"
 
 using namespace std;
 
 DEFINE_string(cluster, "", "cluster name");
 DEFINE_int32(host_id, 1, "hosit id");
 DEFINE_string(pbd_name, "", "pbdname name");                       
+DEFINE_string(spdk_nvme_controller, "", "nvme controller");                       
 
 int main(int argc, char **argv)
 {
 	gflags::ParseCommandLineFlags(&argc, &argv, true);
-	google::InitGoogleLogging(argv[0]);
 
 	int hostid = FLAGS_host_id;
 	string cluster = FLAGS_cluster;
@@ -44,6 +44,8 @@ int main(int argc, char **argv)
 		cerr << "pbd_name is empty";
 		return 1;
 	}
+
+	pfs_option_set("spdk_nvme_controller", FLAGS_spdk_nvme_controller.c_str());
 
 	g_testenv = dynamic_cast<PFSTestEnv *>(
 			::testing::AddGlobalTestEnvironment(
