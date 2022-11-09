@@ -65,7 +65,7 @@ if (USE_BTHREAD)
 add_dependencies(pfs brpc_prj)
 endif()
 target_link_libraries(pfs
-  gflags aio rt pthread
+  aio rt pthread
 )
 
 install(TARGETS pfs ARCHIVE DESTINATION "${PKG_DIR}/lib")
