@@ -168,18 +168,22 @@
 #define MAX_SHRINK_SIZE 10737418240L
 
 static bool
-pfs_check_ival_max_nfd(void *data)
+pfs_check_ival_max_nfd(struct pfs_option *, const char *data)
 {
-	int64_t integer_val = *(int64_t*)data;
+	int64_t integer_val;
+	if (pfs_strtol(data, &integer_val))
+		return false;
 	if (integer_val <= 0 || integer_val >= MAX_NFD_LIMIT)
 		return false;
 	return true;
 }
 
 static bool
-pfs_check_ival_shrink_size(void *data)
+pfs_check_ival_shrink_size(struct pfs_option *, const char *data)
 {
-	int64_t integer_val = *(int64_t*)data;
+	int64_t integer_val;
+	if (pfs_strtol(data, &integer_val))
+		return false;
 	if (integer_val <= 0 || integer_val > MAX_SHRINK_SIZE)
 		return false;
 	return true;
@@ -190,7 +194,7 @@ pfs_check_ival_shrink_size(void *data)
  * must init by restart
  */
 static int64_t file_max_nfd = 204800;
-PFS_OPTION_REG(file_max_nfd, pfs_check_ival_max_nfd);
+PFS_OPTION_REG(file_max_nfd, "204800", pfs_check_ival_max_nfd);
 
 static pfs_file_t	**fdtbl;
 static int		fdtbl_nopen;
@@ -198,7 +202,7 @@ static int		fdtbl_free_last;
 static int		pfs_max_nfd;
 static pfs_brwlock_t	fdtbl_lock;
 int64_t file_shrink_size = (10L << 30);
-PFS_OPTION_REG(file_shrink_size, pfs_check_ival_shrink_size);
+PFS_OPTION_REG(file_shrink_size, "10737418240", pfs_check_ival_shrink_size);
 
 #define TMP_VEC_LEN 128
 

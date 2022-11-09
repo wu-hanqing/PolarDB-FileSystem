@@ -58,7 +58,7 @@ struct pfs_inode_blk_table {
 };
 
 static int64_t du_nblk_limit = 1;
-PFS_OPTION_REG(du_nblk_limit, pfs_check_ival_normal);
+PFS_OPTION_REG(du_nblk_limit, "1", pfs_check_lval_normal);
 
 static const 	pfs_dblk_t zerodblk = { 0, 0, 0 };
 

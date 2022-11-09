@@ -48,9 +48,11 @@ static void		default_pfs_vtrace(int level, const char *file,
 pfs_trace_func_t	pfs_trace_func = &default_pfs_vtrace;
 
 bool
-pfs_check_ival_trace_level(void *data)
+pfs_check_ival_trace_level(struct pfs_option *, const char *data)
 {
-	int64_t integer_val = *(int64_t*)data;
+	int64_t integer_val;
+	if (pfs_strtol(data, &integer_val))
+		return false;
 	if ((integer_val != PFS_TRACE_FATAL) &&
 	    (integer_val != PFS_TRACE_ERROR) &&
 	    (integer_val != PFS_TRACE_WARN) &&
@@ -63,7 +65,7 @@ pfs_check_ival_trace_level(void *data)
 
 /* print level of trace */
 int64_t pfs_trace_plevel = PFS_TRACE_INFO;
-PFS_OPTION_REG(pfs_trace_plevel, pfs_check_ival_trace_level);
+PFS_OPTION_REG(pfs_trace_plevel, "3", pfs_check_ival_trace_level);
 
 /*
  * Create a dummy tracectl to INIT trace sector.

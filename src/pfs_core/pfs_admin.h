@@ -103,7 +103,7 @@ typedef struct msg_trace {
 
 typedef struct msg_option {
 	char		o_name[PFS_MAX_OPTLEN];
-	int64_t		o_value;
+	char		o_value[];
 } msg_option_t;
 
 struct cmd_read {

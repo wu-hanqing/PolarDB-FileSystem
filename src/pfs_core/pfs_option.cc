@@ -17,6 +17,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <string>
+
 #include "pfs_admin.h"
 #include "pfs_option.h"
 #include "pfs_trace.h"
@@ -29,37 +31,52 @@
 #define FILE_MAX_NFD "file_max_nfd"
 
 bool
-pfs_check_ival_normal(void *data)
+pfs_check_lval_normal(struct pfs_option *, const char *data)
 {
-	int64_t integer_val = *(int64_t*)data;
-	if (integer_val <= 0)
+	int64_t val;
+
+	if (pfs_strtol(data, &val))
+		return false;
+
+	if (val <= 0)
 		return false;
 	return true;
 }
+
 /* 0 or 1 */
 bool
-pfs_check_ival_switch(void *data)
+pfs_check_lval_switch(struct pfs_option *, const char *data)
 {
-	int64_t integer_val = *(int64_t*)data;
-	if (integer_val != PFS_OPT_ENABLE && integer_val != PFS_OPT_DISABLE)
+	int64_t val;
+
+	if (pfs_strtol(data, &val))
+		return false;
+	if (val != PFS_OPT_ENABLE && val != PFS_OPT_DISABLE)
 		return false;
 	return true;
 }
 
-/* convert to ensure value is a legal num */
-static int
-pfs_option_strtol(const char* sval, int64_t* ival)
+bool
+pfs_store_generic(struct pfs_option *opt, const char *data)
 {
-	char *endptr;
-	errno = 0;
-	*ival = strtol(sval, &endptr, 10);
-	if (endptr == sval || endptr != (sval + strlen(sval)))
-		return CONFIG_ERR_VAL;
+	int64_t val;
 
-	if (errno)
-		return CONFIG_ERR_VAL;
-
-	return CONFIG_OK;
+	switch(opt->o_kind) {
+	case OPT_INT:
+		if (pfs_strtol(data, &val))
+			return false;
+		*(int *)opt->o_valuep = val;
+		break;
+	case OPT_LONG:
+		if (pfs_strtol(data, &val))
+			return false;
+		*(int64_t *)opt->o_valuep = val;
+		break;
+	case OPT_STR:
+		*(std::string *)opt->o_valuep = data;
+		break;
+	}
+	return true;
 }
 
 static int
@@ -76,11 +93,23 @@ pfs_option_list(admin_buf_t *ab)
 	DATA_SET_FOREACH(optp, _pfsopt) {
 		opt = *optp;
 
-		n = pfs_adminbuf_printf(ab,
-					"%-36s\t%-10ld\t%-10ld\n",
-					opt->o_name, *(opt->o_valuep), opt->o_valued);
+		n = pfs_adminbuf_printf(ab, "%-36s\t", opt->o_name);
 		if (n < 0)
 			return n;
+		switch(opt->o_kind) {
+		case OPT_INT:
+			pfs_adminbuf_printf(ab, "%-10d\t", *(int *)(opt->o_valuep));
+			pfs_adminbuf_printf(ab, "%s\n", opt->o_default);
+			break;
+		case OPT_LONG:
+			pfs_adminbuf_printf(ab, "%-10ld\t", *(int64_t *)(opt->o_valuep));
+			pfs_adminbuf_printf(ab, "%s\n", opt->o_default);
+			break;
+		case OPT_STR:
+			pfs_adminbuf_printf(ab, "%s\t", ((std::string *)(opt->o_valuep))->c_str());
+			pfs_adminbuf_printf(ab, "%s\t", opt->o_default);
+			break;
+		}
 	}
 	return 0;
 }
@@ -99,9 +128,99 @@ is_effect_after_restart_option(const char *option_name)
 }
 
 static int
-pfs_option_set(const char *name, int64_t val, admin_buf_t *ab)
+pfs_option_get_str(pfs_option_t *opt, char buf[], size_t len)
+{
+	buf[0] = 0;
+	switch(opt->o_kind) {
+	case OPT_INT:
+		snprintf(buf, len, "%d", *(int *)opt->o_valuep);
+		break;
+	case OPT_LONG:
+		snprintf(buf, len, "%ld", *(long *)opt->o_valuep);
+		break;
+	case OPT_STR:
+		snprintf(buf, len, "%s", *(char **)opt->o_valuep);
+		break;
+	default:
+		return -1;
+	}
+	return 0;
+}
+
+static int
+pfs_option_get_default_str(pfs_option_t *opt, char buf[], size_t len)
+{
+	snprintf(buf, len, "%s", opt->o_default);
+	return 0;
+}
+
+int
+pfs_option_set(const char *name, const char *val)
 {
 	DATA_SET_DECL(pfs_option, _pfsopt);
+    	char buf[1024];
+	pfs_option_t **optp, *opt;
+	int n;
+	bool flag = false;
+
+	if (is_effect_after_restart_option(name)) {
+		pfs_etrace("change %s should restart to take effect\n", name);
+		return -EPERM;
+	}
+
+	DATA_SET_FOREACH(optp, _pfsopt) {
+		opt = *optp;
+		if (strcmp(name, opt->o_name) != 0)
+			continue;
+
+		if (opt->o_check && !opt->o_check(opt, val)) {
+			pfs_etrace("option %s new value is invalid\n", opt->o_name);
+			return -EINVAL;
+		}
+
+		pfs_option_get_str(opt, buf, sizeof(buf));
+		pfs_itrace("option %s is changing from '%s' to %s\n",
+			   opt->o_name, buf, val);
+		opt->o_store(opt, val);
+		flag = true;
+		break;
+	}
+
+	if (!flag) {
+		pfs_etrace("option %s is not found\n", name);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int
+pfs_option_set(const char *name, int val)
+{
+	char buf[128];
+	snprintf(buf, sizeof(buf), "%d", val);
+	return pfs_option_set(name, buf);
+}
+
+int
+pfs_option_set(const char *name, long val)
+{
+	char buf[128];
+	snprintf(buf, sizeof(buf), "%ld", val);
+	return pfs_option_set(name, buf);
+}
+
+int
+pfs_option_set(const char *name, const std::string &val)
+{
+	return pfs_option_set(name, val.c_str());
+}
+
+static int
+pfs_option_set_ab(const char *name, const char *val, admin_buf_t *ab)
+{
+	DATA_SET_DECL(pfs_option, _pfsopt);
+    	char buf[1024];
 	pfs_option_t **optp, *opt;
 	int n;
 	bool flag = false;
@@ -117,16 +236,15 @@ pfs_option_set(const char *name, int64_t val, admin_buf_t *ab)
 		if (strcmp(name, opt->o_name) != 0)
 			continue;
 
-		if (!opt->check_func(&val)) {
-			pfs_etrace("option %s new value %ld is invalid\n",
-			    opt->o_name, val);
+		if (opt->o_check && !opt->o_check(opt, val)) {
+			pfs_etrace("option %s new value is invalid\n", opt->o_name);
 			ERR_RETVAL(EINVAL);
 		}
 
-		PFS_ASSERT(opt->o_valuep != NULL);
-		pfs_itrace("option %s is changing from %ld to %ld\n",
-		    opt->o_name, *(opt->o_valuep), val);
-		*(opt->o_valuep) = val;
+		pfs_option_get_str(opt, buf, sizeof(buf));
+		pfs_itrace("option %s is changing from %s to %s\n",
+				opt->o_name, buf, val);
+		opt->o_store(opt, val);
 		flag = true;
 		break;
 	}
@@ -143,6 +261,7 @@ pfs_option_set(const char *name, int64_t val, admin_buf_t *ab)
 static void
 pfs_option_update_value(const char *name, const char *value, void *data)
 {
+	char buf[1024];
 	int n = 0;
 	int64_t ival = 0;
 
@@ -154,15 +273,6 @@ pfs_option_update_value(const char *name, const char *value, void *data)
 		return;
 	}
 
-	if (pfs_option_strtol(value, &ival) != CONFIG_OK) {
-		pfs_etrace("pfs config value trans error, key %s value %s\n", name, value);
-		if (ab) {
-			pfs_adminbuf_printf(ab, "%-36s\t%-10ld\t%-10ld\tillegal\n",
-			    name, ival, ival);
-		}
-		return;
-	}
-
 	DATA_SET_DECL(pfs_option, _pfsopt);
 	pfs_option_t **optp, *opt;
 	bool flag = false;
@@ -171,35 +281,39 @@ pfs_option_update_value(const char *name, const char *value, void *data)
 		opt = *optp;
 		if (strcmp(name, opt->o_name) != 0)
 			continue;
-		if (!opt->check_func(&ival)) {
-			pfs_etrace("option %s new value %ld is invalid\n", opt->o_name, ival);
+		if (opt->o_check && !opt->o_check(opt, value)) {
+			pfs_etrace("option %s new value '%s' is invalid\n", opt->o_name, value);
 			if (ab)
-				pfs_adminbuf_printf(ab,"%-36s\t%-10ld\t%-10ld\tillegal\n",
-				    opt->o_name, ival, opt->o_valued);
+				pfs_adminbuf_printf(ab,"option %s new value '%s' is invalid\n",
+                                    opt->o_name, value);
 			return;
 		}
 
-		PFS_ASSERT(opt->o_valuep != NULL);
-		pfs_itrace("option %s is changing from %ld to %ld\n",
-			    opt->o_name, *(opt->o_valuep), ival);
+		pfs_option_get_str(opt, buf, sizeof(buf));
 
-		*(opt->o_valuep) = ival;
+		bool rc = opt->o_store(opt, value);
 
-		flag = true;
+		pfs_itrace("option %s is changing from '%s' to '%s', %s\n",
+			    opt->o_name, buf, value,
+			    rc ? "success":"failure");
+
 		if (ab) {
-			n = pfs_adminbuf_printf(ab,"%-36s\t%-10ld\t%-10ld\tsuccess\n",
-				    opt->o_name, ival, opt->o_valued);
+			pfs_option_get_default_str(opt, buf, sizeof(buf));
+			n = pfs_adminbuf_printf(ab,"%-36s\t%s\t%-10ld\t%s\n",
+				    opt->o_name, value, buf,
+				    rc ? "success":"failure");
 			if (n < 0)
 				return;
 		}
 
+		flag = true;
 		break;
 	}
 	if (!flag) {
 		pfs_itrace("find unknown option name %s\n", name);
 		if (ab)
-			pfs_adminbuf_printf(ab, "%-36s\t%-10ld\t%-10ld\tn/a\n",
-					    name, ival, 0);
+			pfs_adminbuf_printf(ab, "%-36s\t%s\t%-10ld\tn/a\n",
+					    name, value, 0);
 	}
 }
 
@@ -219,6 +333,26 @@ pfs_option_reload(admin_buf_t *ab)
 	ret = pfs_config_load(NULL, pfs_option_update_value, ab);
 	if (ret != CONFIG_OK)
 		pfs_etrace("pfs config load err, errno %d\n", ret);
+
+	return ret;
+}
+
+int
+pfs_option_set_default(void)
+{
+	DATA_SET_DECL(pfs_option, _pfsopt);
+	pfs_option_t **optp, *opt;
+	int ret = true;
+
+	DATA_SET_FOREACH(optp, _pfsopt) {
+		opt = *optp;
+
+		if (!opt->o_store(opt, opt->o_default)) {
+			pfs_etrace("option %s can not set default value '%s'",
+				opt->o_name, opt->o_default);
+			ret = false;
+		}
+	}
 
 	return ret;
 }
@@ -258,7 +392,7 @@ pfs_option_handle(int sock, msg_header_t *mh, msg_option_t *msgopt)
 		break;
 
 	case OPTION_SET_REQ:
-		err = pfs_option_set(msgopt->o_name, msgopt->o_value, ab);
+		err = pfs_option_set_ab(msgopt->o_name, msgopt->o_value, ab);
 		break;
 
 	case OPTION_RELOAD_REQ:

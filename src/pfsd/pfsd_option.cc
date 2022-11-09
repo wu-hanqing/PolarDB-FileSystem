@@ -17,8 +17,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-
-#include <gflags/gflags.h>
+#include <string>
 
 #include "pfsd_option.h"
 #include "pfsd_common.h"
@@ -26,12 +25,23 @@
 
 unsigned int server_id = 0; /* db ins id */
 
-DEFINE_bool(daemon, false, "become daemon process");
-DEFINE_int32(server_id, 0, "PFSD server id");
-DEFINE_string(pbd_name, "", "PBD name");
-DEFINE_string(shm_dir, PFSD_SHM_PATH, "pfsd shared memory dir");
-DEFINE_int32(pollers, 2, "PFSD pollers");
-DEFINE_int32(workers, 50, "PFSD pollers");
+static int FLAGS_daemon;
+PFS_OPTION_REG2(daemon, FLAGS_daemon, OPT_INT, "0", NULL);
+static int FLAGS_server_id = 0;
+PFS_OPTION_REG2(server_id, FLAGS_server_id, OPT_INT, "0", NULL);
+
+static std::string FLAGS_pbd_name;
+PFS_OPTION_REG2(pbd_name, FLAGS_pbd_name, OPT_STR, "", NULL);
+
+static std::string FLAGS_shm_dir = PFSD_SHM_PATH;
+PFS_OPTION_REG2(shm_dir, FLAGS_shm_dir, OPT_STR, pfs_to_string(PFSD_SHM_PATH),
+	NULL);
+
+static int FLAGS_pollers = 2;
+PFS_OPTION_REG2(pollers, FLAGS_pollers, OPT_INT, "2", NULL);
+
+static int FLAGS_workers = 50;
+PFS_OPTION_REG2(workers, FLAGS_workers, OPT_INT, "50", NULL);
 
 pfsd_option_t g_pfsd_option;
 

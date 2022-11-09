@@ -159,6 +159,7 @@ set(COMMON_FLAGS
   -g
   -D_GNU_SOURCE
   -DPFS_USE_BTHREAD=${PFS_USE_BTHREAD_VAL}
+  -D__PFS_BUILD__
   )
 
 if (SANITIZE_ADDRESS)
@@ -216,6 +217,7 @@ file(GLOB pfsd_HEADERS
      ${PROJECT_SOURCE_DIR}/src/pfs_core/pfs_api.h
      ${PROJECT_SOURCE_DIR}/src/pfs_core/pfs_trace_func.h
      ${PROJECT_SOURCE_DIR}/src/pfs_core/pfs_spdk.h
+     ${PROJECT_SOURCE_DIR}/src/pfs_core/pfs_option.h
      ${PROJECT_SOURCE_DIR}/src/pfsd/pfsd.h
 )
 

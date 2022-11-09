@@ -39,7 +39,7 @@
 #define	MAX_NTHRD	64
 #define	MIN_NTHRD	8
 static int64_t loadthread_count = MIN_NTHRD;
-PFS_OPTION_REG(loadthread_count, pfs_check_ival_normal);
+PFS_OPTION_REG(loadthread_count, "8", pfs_check_lval_normal);
 
 #define CHECK_META 0
 

@@ -28,7 +28,6 @@
 #include <string.h>
 #include <limits.h>
 #include <semaphore.h>
-#include <gflags/gflags.h>
 #include <unistd.h>
 
 #include <spdk/env.h>
@@ -48,6 +47,7 @@
 #include "pfs_util.h"
 #include "pfs_iomem.h"
 #include "pfs_futex_event.h"
+#include "pfs_option.h"
 
 #define BUF_TYPE "pfs_iobuf"
 #define io_buf io_iov[0].iov_base
@@ -110,12 +110,15 @@ typedef struct pfs_spdk_ioq {
 } pfs_spdk_ioq_t;
 
 static const int64_t g_iodepth = 128;
-DEFINE_int32(pfs_spdk_driver_poll_delay, 0,
-  "pfs spdk driver busy poll delay time(us)");
-DEFINE_int32(pfs_spdk_driver_error_interval, 1,
-  "pfs spdk driver DMA buffer allocation failure report interval (seconds)");
-DEFINE_bool(pfs_spdk_driver_auto_dma, true,
-  "pfs spdk driver always use dma buffer if not allocated");
+static int64_t FLAGS_pfs_spdk_driver_poll_delay;
+PFS_OPTION_REG2(pfs_spdk_driver_poll_delay, FLAGS_pfs_spdk_driver_poll_delay,
+	OPT_LONG, "128", NULL);
+static int FLAGS_pfs_spdk_driver_error_interval = 1;
+PFS_OPTION_REG2(pfs_spdk_driver_error_interval, FLAGS_pfs_spdk_driver_error_interval,
+	OPT_INT, "1", NULL);
+static int FLAGS_pfs_spdk_driver_auto_dma = true;
+PFS_OPTION_REG2(pfs_spdk_driver_auto_dma, FLAGS_pfs_spdk_driver_auto_dma,
+	OPT_INT, "1", NULL);
 
 #define PFS_MAX_CACHED_SPDK_IOCB        128
 static __thread SLIST_HEAD(, pfs_spdk_iocb) tls_free_iocb = {NULL};

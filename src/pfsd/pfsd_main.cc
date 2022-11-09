@@ -42,6 +42,30 @@
 #include "pfsd.h"
 #include "pfs_api.h"
 #include "pfs_spdk.h"
+#include "pfs_option.h"
+
+DEFINE_bool(daemon, false, "become daemon process");
+DEFINE_int32(server_id, 0, "PFSD server id");
+DEFINE_string(pbd_name, "", "PBD name");
+DEFINE_string(shm_dir, PFSD_SHM_PATH, "pfsd shared memory dir");
+DEFINE_int32(pollers, 2, "PFSD pollers");
+DEFINE_int32(workers, 50, "PFSD pollers");
+DEFINE_string(spdk_nvme_controller, "", "SPDK nvme controller");
+DEFINE_string(spdk_rpc_address, "/tmp/pfs_spdk.sock", "SPDK rpc address");
+DEFINE_int32(pfs_spdk_driver_poll_delay, 0, "spdk driver poller delay");
+
+void set_pfs_options()
+{
+	pfs_option_set("daemon", FLAGS_daemon);
+	pfs_option_set("server_id", FLAGS_server_id);
+	pfs_option_set("pbd_name", FLAGS_pbd_name);
+	pfs_option_set("shm_dir", FLAGS_shm_dir);
+	pfs_option_set("pollers", FLAGS_pollers);
+	pfs_option_set("workers", FLAGS_workers);
+	pfs_option_set("spdk_nvme_controller", FLAGS_spdk_nvme_controller);
+	pfs_option_set("spdk_rpc_address", FLAGS_spdk_rpc_address);
+	pfs_option_set("pfs_spdk_driver_poll_delay", FLAGS_pfs_spdk_driver_poll_delay);
+}
 
 static void
 signal_handler(int num)
@@ -186,6 +210,7 @@ main(int argc, char *argv[])
     spdk_log_open(glog_spdk_func);
     pfs_set_trace_func(glog_pfs_func);
     setup_sigaction();
+    set_pfs_options();
     if (pfs_spdk_setup())
         return 1;
     if (pfsd_start(1))

@@ -111,10 +111,10 @@ struct expand_info_ctl {
 
 static expand_info_ctl *expand_info;
 
-PFS_OPTION_REG(nc_max, pfs_check_ival_normal);
-PFS_OPTION_REG(nc_enable, pfs_check_ival_switch);
-PFS_OPTION_REG(nc_lru_window, pfs_check_ival_normal);
-PFS_OPTION_REG(nc_max_bucket_len, pfs_check_ival_normal);
+PFS_OPTION_REG(nc_max, "8192", pfs_check_lval_normal);
+PFS_OPTION_REG(nc_enable, "1", pfs_check_lval_switch);
+PFS_OPTION_REG(nc_lru_window, "100000", pfs_check_lval_normal);
+PFS_OPTION_REG(nc_max_bucket_len, "200", pfs_check_lval_normal);
 
 static void rehash_namecache(void);
 

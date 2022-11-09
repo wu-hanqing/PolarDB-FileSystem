@@ -43,7 +43,7 @@ static int __thread tls_free_devio_num = 0;
 
 /* disable iostat by default */
 static int64_t		devstat_enable = PFS_OPT_DISABLE;
-PFS_OPTION_REG(devstat_enable, pfs_check_ival_switch);
+PFS_OPTION_REG(devstat_enable, "0", pfs_check_lval_switch);
 
 extern char pfs_trace_pbdname[PFS_MAX_PBDLEN];
 extern struct pfs_devops pfs_diskdev_ops;

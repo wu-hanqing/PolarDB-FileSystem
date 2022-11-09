@@ -200,37 +200,39 @@ static int	pfs_mntstat_start(pfs_mount_t *mnt);
 static void	pfs_mntstat_stop(pfs_mount_t *mnt);
 
 static int64_t discard_interval = 5;
-PFS_OPTION_REG(discard_interval, pfs_check_ival_normal);
+PFS_OPTION_REG(discard_interval, "5", pfs_check_lval_normal);
 
 static int64_t discard_period = 100;
-PFS_OPTION_REG(discard_period, pfs_check_ival_normal);
+PFS_OPTION_REG(discard_period, "100", pfs_check_lval_normal);
 
 static int64_t discard_ninp = 500;
-PFS_OPTION_REG(discard_ninp, pfs_check_ival_normal);
+PFS_OPTION_REG(discard_ninp, "500", pfs_check_lval_normal);
 
 static int64_t poll_interval = 1;
-PFS_OPTION_REG(poll_interval, pfs_check_ival_normal);
+PFS_OPTION_REG(poll_interval, "1", pfs_check_lval_normal);
 
 static int64_t orphan_interval = 1;
-PFS_OPTION_REG(orphan_interval, pfs_check_ival_normal);
+PFS_OPTION_REG(orphan_interval, "1", pfs_check_lval_normal);
 
 bool
-pfs_check_ival_orphan_select(void *data)
+pfs_check_lval_orphan_select(struct pfs_option *, const char *data)
 {
-	int64_t integer_val = *(int64_t*)data;
+	int64_t integer_val;
+	if (pfs_strtol(data, &integer_val))
+		return false;
 	if (integer_val <= 0 || integer_val > MAX_NORPHAN)
 		return false;
 	return true;
 }
 
 static int64_t orphan_select_max_num = 100;
-PFS_OPTION_REG(orphan_select_max_num, pfs_check_ival_orphan_select);
+PFS_OPTION_REG(orphan_select_max_num, "100", pfs_check_lval_orphan_select);
 
 static int64_t readtx_skip_sync = PFS_OPT_ENABLE;
-PFS_OPTION_REG(readtx_skip_sync, pfs_check_ival_switch);
+PFS_OPTION_REG(readtx_skip_sync, "1", pfs_check_lval_switch);
 
 static int64_t inodetree_lru_size = 65536;
-PFS_OPTION_REG(inodetree_lru_size, pfs_check_ival_normal);
+PFS_OPTION_REG(inodetree_lru_size, "65536", pfs_check_lval_normal);
 
 static int
 pfs_load_log(pfs_mount_t *mnt)

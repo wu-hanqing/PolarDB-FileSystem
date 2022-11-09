@@ -2,13 +2,14 @@
 #include "pfs_memory.h"
 #include "pfs_impl.h"
 #include "pfs_util.h"
+#include "pfs_option.h"
 
 #include <unistd.h>
 #include <rte_stack.h>
 
-#include "gflags/gflags.h"
-
-DEFINE_int32(pfs_spdk_iobuf_cache, 4000, "pfs spdk iobuf cache");
+static int FLAGS_pfs_spdk_iobuf_cache = 4000;
+PFS_OPTION_REG2(pfs_spdk_iobuf_cache, FLAGS_pfs_spdk_iobuf_cache, OPT_INT,
+	"4000", NULL);
 
 #define IOMEM "pfs_iobuf"
 

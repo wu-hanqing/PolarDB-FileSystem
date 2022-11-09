@@ -187,36 +187,36 @@ static log_req_handler_t log_req_handlers[] = {
  */
 /* memory threshold, 128MB */
 static int64_t trimgroup_nsect_threshold = 32768;
-PFS_OPTION_REG(trimgroup_nsect_threshold, pfs_check_ival_normal);
+PFS_OPTION_REG(trimgroup_nsect_threshold, "32768", pfs_check_lval_normal);
 
 /* ntx threshold */
 static int64_t trimgroup_ntx_threshold = 20000;
-PFS_OPTION_REG(trimgroup_ntx_threshold, pfs_check_ival_normal);
+PFS_OPTION_REG(trimgroup_ntx_threshold, "20000", pfs_check_lval_normal);
 
 /* ntx threshold (hard), upper bound of trimgroups */
 static int64_t trimgroup_ntx_threshold_hard = 40000 - 1;
-PFS_OPTION_REG(trimgroup_ntx_threshold_hard, pfs_check_ival_normal);
+PFS_OPTION_REG(trimgroup_ntx_threshold_hard, "39999", pfs_check_lval_normal);
 
 /* trim interval(unit:second) */
 static int64_t log_trim_interval = 10;
-PFS_OPTION_REG(log_trim_interval, pfs_check_ival_normal);
+PFS_OPTION_REG(log_trim_interval, "10", pfs_check_lval_normal);
 
 /* log thread swap in pages max one time.
  * 2562 is the max dirty pages count for truncate 10GB tx.
  */
 static int64_t trimgroup_nsects_swapinmax = 2562;
-PFS_OPTION_REG(trimgroup_nsects_swapinmax, pfs_check_ival_normal);
+PFS_OPTION_REG(trimgroup_nsects_swapinmax, "2562", pfs_check_lval_normal);
 
 /*
  * At least, the log thread should wake up every second to
  * update its paxos lease.
  */
 static int64_t log_paxos_lease = 1;
-PFS_OPTION_REG(log_paxos_lease, pfs_check_ival_normal);
+PFS_OPTION_REG(log_paxos_lease, "1", pfs_check_lval_normal);
 
 /* look one logentry ahead of journal's head as skip-poll flag */
 static int64_t log_skip_journal_probe = 1;
-PFS_OPTION_REG(log_skip_journal_probe, pfs_check_ival_normal);
+PFS_OPTION_REG(log_skip_journal_probe, "1", pfs_check_lval_normal);
 
 static int
 node_cmp(const void *fst, const void *snd)

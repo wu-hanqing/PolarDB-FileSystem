@@ -40,15 +40,17 @@ typedef int pfs_blkio_fn_t(
  */
 static int64_t block_io_atomic = 0;
 
-static bool pfs_check_ival(void *data)
+static bool pfs_check_atomic_val(struct pfs_option *, const char *data)
 {
-	int64_t integer_val = *(int64_t*)data;
-	if (integer_val < 0 || integer_val > 1)
+	int64_t val;
+	if (pfs_strtol(data, &val))
+		return false;
+	if (val < 0 || val > 1)
 		return false;
 	return true;
 }
 
-PFS_OPTION_REG(block_io_atomic, pfs_check_ival);
+PFS_OPTION_REG(block_io_atomic, "0", pfs_check_atomic_val);
 
 /*
  * pfs_blkio_align:
