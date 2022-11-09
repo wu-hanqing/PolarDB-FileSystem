@@ -15,12 +15,14 @@
 #include <gtest/gtest.h>
 #include "pfs_spdk.h"
 #include "pfs_api.h"
+#include "pfs_option.h"
 
 using namespace std;
 
 DEFINE_string(cluster, "", "cluster name");
 DEFINE_int32(host_id, 1, "hosit id");
 DEFINE_string(pbd_name, "", "pbdname name");                       
+DEFINE_string(spdk_nvme_controller, "", "nvme controller");                       
 
 extern int                                                                             
 pfs_spdk_dev_io_get_cpu_stats(const char *devname,                              
@@ -33,6 +35,8 @@ int main(int argc, char **argv)
 	int hostid = FLAGS_host_id;
 	string cluster = FLAGS_cluster;
 	string pbdname = FLAGS_pbd_name;
+
+	pfs_option_set("spdk_nvme_controller", FLAGS_spdk_nvme_controller.c_str());
 
 	if (cluster.empty()) {
 		std::cout << "cluster is empty";
