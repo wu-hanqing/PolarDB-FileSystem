@@ -42,7 +42,7 @@ set(SPDK_DIR /usr/local/spdk CACHE STRING "spdk directory")
 list(APPEND CMAKE_PREFIX_PATH "${DPDK_DIR}" "${SPDK_DIR}")
 set(SANITIZE_ADDRESS OFF CACHE BOOL "enable -fsanitize=address")
 set(STACK_PROTECT OFF CACHE BOOL "enable -fstack-protector")
-set(USE_BTHREAD true CACHE BOOL "enable using bthread")
+set(USE_BTHREAD false CACHE BOOL "enable using bthread")
 
 pkg_check_modules(dpdk REQUIRED libdpdk)
 include_directories(${dpdk_INCLUDE_DIRS})
