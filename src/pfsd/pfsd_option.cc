@@ -34,7 +34,7 @@ static std::string FLAGS_pbd_name;
 PFS_OPTION_REG2(pbd_name, FLAGS_pbd_name, OPT_STR, "", NULL);
 
 static std::string FLAGS_shm_dir = PFSD_SHM_PATH;
-PFS_OPTION_REG2(shm_dir, FLAGS_shm_dir, OPT_STR, pfs_to_string(PFSD_SHM_PATH),
+PFS_OPTION_REG2(shm_dir, FLAGS_shm_dir, OPT_STR, PFSD_SHM_PATH,
 	NULL);
 
 static int FLAGS_pollers = 2;

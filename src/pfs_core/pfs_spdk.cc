@@ -110,10 +110,10 @@ PFS_OPTION_REG2(spdk_log_flags, FLAGS_spdk_log_flags, OPT_STR,  "", NULL);
 //PFS_OPTION_REG2(spdk_log_flags, FLAGS_spdk_log_flags, OPT_STR,  "bdev,thread,nvme", NULL);
 
 int FLAGS_spdk_log_level = SPDK_LOG_INFO;
-PFS_OPTION_REG2(spdk_log_level, FLAGS_spdk_log_level, OPT_INT, pfs_to_string(SPDK_LOG_INFO), NULL);
+PFS_OPTION_REG2(spdk_log_level, FLAGS_spdk_log_level, OPT_INT, "3", NULL);
 
 int FLAGS_spdk_log_print_level = SPDK_LOG_INFO;
-PFS_OPTION_REG2(spdk_log_print_level, FLAGS_spdk_log_print_level, OPT_INT, pfs_to_string(SPDK_LOG_INFO), NULL);
+PFS_OPTION_REG2(spdk_log_print_level, FLAGS_spdk_log_print_level, OPT_INT, "3", NULL);
 
 std::string FLAGS_spdk_nvme_controller;
 PFS_OPTION_REG2(spdk_nvme_controller, FLAGS_spdk_nvme_controller, OPT_STR, "", NULL);
