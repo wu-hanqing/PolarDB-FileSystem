@@ -409,17 +409,13 @@ err_exit:
     } else {
         err = pthread_create(&dkdev->dk_pthread, NULL, bdev_thread_msg_loop, dkdev);
         if (err) {
-            pfs_etrace("can not create pthread");
+            pfs_etrace("can not create spdk poller pthread");
         }
     }
 
     if (err) {
         spdk_put_io_channel(dkdev->dk_ioch);
         spdk_bdev_close(dkdev->dk_desc);
-        pfs_spdk_gc_thread(spdk_thread);
-        dkdev->dk_spdk_thread = NULL;
-        pfs_etrace("can not create device msg thread %s, %s\n", dev->d_devname,
-                   strerror(err));
         goto err_exit;
     }
 
