@@ -51,11 +51,13 @@ add_library(gflags SHARED IMPORTED)
 set_target_properties(gflags PROPERTIES IMPORTED_LOCATION ${ExtProjLocalDir}/lib/libgflags.so)
 add_dependencies(gflags gflags_prj)
 
-install(FILES
-    ${ExtProjLocalDir}/lib/libgflags.so.2.2.2
-    DESTINATION
-        "${PKG_DIR}/lib"
-)
+# USE_BTHREAD should be reconsidered when builds with curvebs
+# don't install it
+#install(FILES
+#    ${ExtProjLocalDir}/lib/libgflags.so.2.2.2
+#    DESTINATION
+#       "${PKG_DIR}/lib"
+#)
 
 ExternalProject_Add(glog_prj
     DOWNLOAD_DIR ${ExtProjDownloadDir}/glog
@@ -74,12 +76,13 @@ set_target_properties (glog PROPERTIES IMPORTED_LOCATION ${ExtProjLocalDir}/lib/
 add_dependencies(glog glog_prj)
 add_dependencies(glog_prj gflags_prj gtest_prj)
 
-install(FILES
-    ${ExtProjLocalDir}/lib/libglog.so.0.4.0
-    DESTINATION
-        "${PKG_DIR}/lib"
-)
-
+# USE_BTHREAD should be reconsidered when builds with curvebs
+# don't install it
+#install(FILES
+#    ${ExtProjLocalDir}/lib/libglog.so.0.4.0
+#    DESTINATION
+#        "${PKG_DIR}/lib"
+#)
 
 ExternalProject_Add(leveldb_prj
     DOWNLOAD_DIR ${ExtProjDownloadDir}/leveldb
