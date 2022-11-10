@@ -26,22 +26,21 @@
 unsigned int server_id = 0; /* db ins id */
 
 static int FLAGS_daemon;
-PFS_OPTION_REG2(daemon, FLAGS_daemon, OPT_INT, "0", NULL);
+PFS_OPTION_REG2(daemon, FLAGS_daemon, OPT_INT, 0, OPT_INT);
 static int FLAGS_server_id = 0;
-PFS_OPTION_REG2(server_id, FLAGS_server_id, OPT_INT, "0", NULL);
+PFS_OPTION_REG2(server_id, FLAGS_server_id, OPT_INT, 0, OPT_INT);
 
 static std::string FLAGS_pbd_name;
-PFS_OPTION_REG2(pbd_name, FLAGS_pbd_name, OPT_STR, "", NULL);
+PFS_OPTION_REG2(pbd_name, FLAGS_pbd_name, OPT_STR, "", OPT_CSTR);
 
 static std::string FLAGS_shm_dir = PFSD_SHM_PATH;
-PFS_OPTION_REG2(shm_dir, FLAGS_shm_dir, OPT_STR, PFSD_SHM_PATH,
-	NULL);
+PFS_OPTION_REG2(shm_dir, FLAGS_shm_dir, OPT_STR, PFSD_SHM_PATH, OPT_CSTR);
 
 static int FLAGS_pollers = 2;
-PFS_OPTION_REG2(pollers, FLAGS_pollers, OPT_INT, "2", NULL);
+PFS_OPTION_REG2(pollers, FLAGS_pollers, OPT_INT, 2, OPT_INT);
 
 static int FLAGS_workers = 50;
-PFS_OPTION_REG2(workers, FLAGS_workers, OPT_INT, "50", NULL);
+PFS_OPTION_REG2(workers, FLAGS_workers, OPT_INT, 50, OPT_INT);
 
 pfsd_option_t g_pfsd_option;
 

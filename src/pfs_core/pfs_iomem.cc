@@ -9,7 +9,7 @@
 
 static int FLAGS_pfs_spdk_iobuf_cache = 4000;
 PFS_OPTION_REG2(pfs_spdk_iobuf_cache, FLAGS_pfs_spdk_iobuf_cache, OPT_INT,
-	"4000", NULL);
+	4000, OPT_INT);
 
 #define IOMEM "pfs_iobuf"
 

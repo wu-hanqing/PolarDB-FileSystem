@@ -52,74 +52,74 @@
 #include <sys/param.h>  // For roundup
 
 std::string FLAGS_spdk_name;
-PFS_OPTION_REG2(spdk_name, FLAGS_spdk_name, OPT_STR, "", NULL);
+PFS_OPTION_REG2(spdk_name, FLAGS_spdk_name, OPT_STR, "", OPT_CSTR);
 
 std::string FLAGS_spdk_core_mask;
-PFS_OPTION_REG2(spdk_core_mask, FLAGS_spdk_core_mask, OPT_STR, "", NULL);
+PFS_OPTION_REG2(spdk_core_mask, FLAGS_spdk_core_mask, OPT_STR, "", OPT_CSTR);
 
 int FLAGS_spdk_shm_id = -1;
-PFS_OPTION_REG2(spdk_shm_id, FLAGS_spdk_shm_id, OPT_INT, "-1", NULL);
+PFS_OPTION_REG2(spdk_shm_id, FLAGS_spdk_shm_id, OPT_INT, -1, OPT_INT);
 
 int FLAGS_spdk_mem_channel = -1;
-PFS_OPTION_REG2(spdk_mem_channel, FLAGS_spdk_mem_channel, OPT_INT, "-1", NULL);
+PFS_OPTION_REG2(spdk_mem_channel, FLAGS_spdk_mem_channel, OPT_INT, -1, OPT_INT);
 
 int FLAGS_spdk_main_core = -1;
-PFS_OPTION_REG2(spdk_main_core, FLAGS_spdk_main_core, OPT_INT, "-1", NULL);
+PFS_OPTION_REG2(spdk_main_core, FLAGS_spdk_main_core, OPT_INT, -1, OPT_INT);
 
 int FLAGS_spdk_mem_size = -1;
-PFS_OPTION_REG2(spdk_mem_size, FLAGS_spdk_mem_size, OPT_INT, "-1", NULL);
+PFS_OPTION_REG2(spdk_mem_size, FLAGS_spdk_mem_size, OPT_INT, -1, OPT_INT);
 
 int FLAGS_spdk_no_pci = 0;
-PFS_OPTION_REG2(spdk_no_pci, FLAGS_spdk_no_pci, OPT_INT, "0", NULL);
+PFS_OPTION_REG2(spdk_no_pci, FLAGS_spdk_no_pci, OPT_INT, 0, OPT_INT);
 
 int FLAGS_spdk_hugepage_single_segments = 0;
 PFS_OPTION_REG2(spdk_hugepage_single_segments, FLAGS_spdk_hugepage_single_segments,
-        OPT_INT, "0", NULL);
+        OPT_INT, 0, OPT_INT);
 
 int FLAGS_spdk_unlink_hugepage = 0;
 PFS_OPTION_REG2(spdk_unlink_hugepage, FLAGS_spdk_unlink_hugepage,
-	OPT_INT, "0", NULL);
+	OPT_INT, 0, OPT_INT);
 
 std::string FLAGS_spdk_hugedir;
-PFS_OPTION_REG2(spdk_hugedir, FLAGS_spdk_hugedir, OPT_STR, "", NULL);
+PFS_OPTION_REG2(spdk_hugedir, FLAGS_spdk_hugedir, OPT_STR, "", OPT_CSTR);
 
 std::string FLAGS_spdk_pci_blocked;
-PFS_OPTION_REG2(spdk_pci_blocked, FLAGS_spdk_pci_blocked, OPT_STR, "", NULL);
+PFS_OPTION_REG2(spdk_pci_blocked, FLAGS_spdk_pci_blocked, OPT_STR, "", OPT_CSTR);
 
 std::string FLAGS_spdk_pci_allowed;
-PFS_OPTION_REG2(spdk_pci_allowed, FLAGS_spdk_pci_allowed, OPT_STR, "", NULL);
+PFS_OPTION_REG2(spdk_pci_allowed, FLAGS_spdk_pci_allowed, OPT_STR, "", OPT_CSTR);
 
 std::string FLAGS_spdk_iova_mode = "va";
-PFS_OPTION_REG2(spdk_iova_mode, FLAGS_spdk_iova_mode, OPT_STR, "va", NULL);
+PFS_OPTION_REG2(spdk_iova_mode, FLAGS_spdk_iova_mode, OPT_STR, "va", OPT_CSTR);
 
 uint64_t FLAGS_spdk_base_virtaddr;
-PFS_OPTION_REG2(spdk_base_virtaddr, FLAGS_spdk_base_virtaddr, OPT_LONG, "0", NULL);
+PFS_OPTION_REG2(spdk_base_virtaddr, FLAGS_spdk_base_virtaddr, OPT_LONG, 0, OPT_LONG);
 
 std::string FLAGS_spdk_env_context;
-PFS_OPTION_REG2(spdk_env_context, FLAGS_spdk_env_context, OPT_STR, "", NULL);
+PFS_OPTION_REG2(spdk_env_context, FLAGS_spdk_env_context, OPT_STR, "", OPT_CSTR);
 
 std::string FLAGS_spdk_json_config_file;
-PFS_OPTION_REG2(spdk_json_config_file, FLAGS_spdk_json_config_file, OPT_STR, "", NULL);
+PFS_OPTION_REG2(spdk_json_config_file, FLAGS_spdk_json_config_file, OPT_STR, "", OPT_CSTR);
 
 std::string FLAGS_spdk_rpc_address;
-PFS_OPTION_REG2(spdk_rpc_address, FLAGS_spdk_rpc_address, OPT_STR,  "",  NULL);
+PFS_OPTION_REG2(spdk_rpc_address, FLAGS_spdk_rpc_address, OPT_STR,  "", OPT_CSTR);
 
 std::string FLAGS_spdk_log_flags;
 // std::string FLAGS_spdk_log_flags = "bdev,thread,nvme";
-PFS_OPTION_REG2(spdk_log_flags, FLAGS_spdk_log_flags, OPT_STR,  "", NULL);
-//PFS_OPTION_REG2(spdk_log_flags, FLAGS_spdk_log_flags, OPT_STR,  "bdev,thread,nvme", NULL);
+PFS_OPTION_REG2(spdk_log_flags, FLAGS_spdk_log_flags, OPT_STR,  "", OPT_CSTR);
+//PFS_OPTION_REG2(spdk_log_flags, FLAGS_spdk_log_flags, OPT_STR,  "bdev,thread,nvme", OPT_CSTR);
 
 int FLAGS_spdk_log_level = SPDK_LOG_INFO;
-PFS_OPTION_REG2(spdk_log_level, FLAGS_spdk_log_level, OPT_INT, "3", NULL);
+PFS_OPTION_REG2(spdk_log_level, FLAGS_spdk_log_level, OPT_INT, SPDK_LOG_INFO, OPT_INT);
 
 int FLAGS_spdk_log_print_level = SPDK_LOG_INFO;
-PFS_OPTION_REG2(spdk_log_print_level, FLAGS_spdk_log_print_level, OPT_INT, "3", NULL);
+PFS_OPTION_REG2(spdk_log_print_level, FLAGS_spdk_log_print_level, OPT_INT, SPDK_LOG_INFO, OPT_INT);
 
 std::string FLAGS_spdk_nvme_controller;
-PFS_OPTION_REG2(spdk_nvme_controller, FLAGS_spdk_nvme_controller, OPT_STR, "", NULL);
+PFS_OPTION_REG2(spdk_nvme_controller, FLAGS_spdk_nvme_controller, OPT_STR, "", OPT_CSTR);
 
 int FLAGS_spdk_delete_temp_json_file = 1;
-PFS_OPTION_REG2(spdk_delete_temp_json_file, FLAGS_spdk_delete_temp_json_file, OPT_INT, "1", NULL);
+PFS_OPTION_REG2(spdk_delete_temp_json_file, FLAGS_spdk_delete_temp_json_file, OPT_INT, 1, OPT_INT);
 
 static std::string g_spdk_temp_config_file;
 static pthread_mutex_t g_init_mutex = PTHREAD_MUTEX_INITIALIZER;

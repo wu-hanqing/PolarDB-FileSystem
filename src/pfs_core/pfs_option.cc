@@ -59,9 +59,10 @@ pfs_check_lval_switch(struct pfs_option *, const char *data)
 bool
 pfs_store_generic(struct pfs_option *opt, const char *data)
 {
+	int kind;
 	int64_t val;
 
-	switch(opt->o_kind) {
+	switch((kind = PFS_OPT_KIND(opt->o_flags))) {
 	case OPT_INT:
 		if (pfs_strtol(data, &val))
 			return false;
@@ -75,8 +76,72 @@ pfs_store_generic(struct pfs_option *opt, const char *data)
 	case OPT_STR:
 		*(std::string *)opt->o_valuep = data;
 		break;
+	default:
+		pfs_etrace("can not handle option value type: %d\n", kind);
+		break;
 	}
 	return true;
+}
+
+static int
+pfs_option_get_str(pfs_option_t *opt, bool pretty, char buf[], size_t len)
+{
+	int kind = 0;
+
+	buf[0] = 0;
+	switch((kind = PFS_OPT_KIND(opt->o_flags))) {
+	case OPT_INT:
+		if (!pretty)
+			snprintf(buf, len, "%d", *(int *)opt->o_valuep);
+		else
+			snprintf(buf, len, "%-10d", *(int *)opt->o_valuep);
+		break;
+	case OPT_LONG:
+		if (!pretty)
+			snprintf(buf, len, "%ld", *(long *)opt->o_valuep);
+		else
+			snprintf(buf, len, "%-10ld", *(long *)opt->o_valuep);
+		break;
+	case OPT_STR:
+		snprintf(buf, len, "%s", ((std::string *)opt->o_valuep)->c_str());
+		break;
+	default:
+		pfs_etrace("can not understand value type: %d\n", kind);
+		return -1;
+	}
+	return 0;
+}
+
+static int
+pfs_option_get_default_str(pfs_option_t *opt, bool pretty, char buf[], size_t len)
+{
+	int kind = 0;
+
+	buf[0] = 0;
+	switch((kind = PFS_OPT_DVAL_KIND(opt->o_flags))) {
+	case OPT_INT:
+		if (!pretty)
+			snprintf(buf, len, "%d", (int)opt->o_default);
+		else
+			snprintf(buf, len, "%-10d", (int)opt->o_default);
+		break;
+	case OPT_LONG:
+		if (!pretty)
+			snprintf(buf, len, "%ld", (long)opt->o_default);
+		else
+			snprintf(buf, len, "%-10ld", (long)opt->o_default);
+		break;
+	case OPT_STR:
+		snprintf(buf, len, "%s", ((std::string *)(void *)opt->o_default)->c_str());
+		break;
+	case OPT_CSTR:
+		snprintf(buf, len, "%s", (char *)opt->o_default);
+		break;
+	default:
+		pfs_etrace("can not understand default value type: %d\n", kind);
+		return -1;
+	}
+	return 0;
 }
 
 static int
@@ -84,6 +149,7 @@ pfs_option_list(admin_buf_t *ab)
 {
 	DATA_SET_DECL(pfs_option, _pfsopt);
 	pfs_option_t **optp, *opt;
+	char buf[1024], dval[1024];
 	int n;
 
 	n = pfs_adminbuf_printf(ab, "option\t\t\t\t\tcurrent\t\tdefault\n");
@@ -96,20 +162,9 @@ pfs_option_list(admin_buf_t *ab)
 		n = pfs_adminbuf_printf(ab, "%-36s\t", opt->o_name);
 		if (n < 0)
 			return n;
-		switch(opt->o_kind) {
-		case OPT_INT:
-			pfs_adminbuf_printf(ab, "%-10d\t", *(int *)(opt->o_valuep));
-			pfs_adminbuf_printf(ab, "%s\n", opt->o_default);
-			break;
-		case OPT_LONG:
-			pfs_adminbuf_printf(ab, "%-10ld\t", *(int64_t *)(opt->o_valuep));
-			pfs_adminbuf_printf(ab, "%s\n", opt->o_default);
-			break;
-		case OPT_STR:
-			pfs_adminbuf_printf(ab, "%s\t", ((std::string *)(opt->o_valuep))->c_str());
-			pfs_adminbuf_printf(ab, "%s\n", opt->o_default);
-			break;
-		}
+		pfs_option_get_str(opt, true, buf, sizeof(buf));
+		pfs_option_get_default_str(opt, true, dval, sizeof(dval));
+		pfs_adminbuf_printf(ab, "%s\t%s\n", buf, dval);
 	}
 	return 0;
 }
@@ -125,33 +180,6 @@ is_effect_after_restart_option(const char *option_name)
 		return true;
 	}
 	return false;
-}
-
-static int
-pfs_option_get_str(pfs_option_t *opt, char buf[], size_t len)
-{
-	buf[0] = 0;
-	switch(opt->o_kind) {
-	case OPT_INT:
-		snprintf(buf, len, "%d", *(int *)opt->o_valuep);
-		break;
-	case OPT_LONG:
-		snprintf(buf, len, "%ld", *(long *)opt->o_valuep);
-		break;
-	case OPT_STR:
-		snprintf(buf, len, "%s", *(char **)opt->o_valuep);
-		break;
-	default:
-		return -1;
-	}
-	return 0;
-}
-
-static int
-pfs_option_get_default_str(pfs_option_t *opt, char buf[], size_t len)
-{
-	snprintf(buf, len, "%s", opt->o_default);
-	return 0;
 }
 
 int
@@ -178,10 +206,11 @@ pfs_option_set(const char *name, const char *val)
 			return -EINVAL;
 		}
 
-		pfs_option_get_str(opt, buf, sizeof(buf));
-		pfs_itrace("option %s is changing from '%s' to %s\n",
-			   opt->o_name, buf, val);
-		opt->o_store(opt, val);
+		pfs_option_get_str(opt, false, buf, sizeof(buf));
+		bool rc = opt->o_store(opt, val);
+		pfs_itrace("option %s is changing from '%s' to '%s', %s\n",
+			   opt->o_name, buf, val, rc ? "success":"failure");
+
 		flag = true;
 		break;
 	}
@@ -231,6 +260,7 @@ pfs_option_set_ab(const char *name, const char *val, admin_buf_t *ab)
 		return n < 0 ? n : 0;
 	}
 
+	bool rc = false;
 	DATA_SET_FOREACH(optp, _pfsopt) {
 		opt = *optp;
 		if (strcmp(name, opt->o_name) != 0)
@@ -241,20 +271,21 @@ pfs_option_set_ab(const char *name, const char *val, admin_buf_t *ab)
 			ERR_RETVAL(EINVAL);
 		}
 
-		pfs_option_get_str(opt, buf, sizeof(buf));
-		pfs_itrace("option %s is changing from %s to %s\n",
-				opt->o_name, buf, val);
-		opt->o_store(opt, val);
+		pfs_option_get_str(opt, false, buf, sizeof(buf));
+		rc = opt->o_store(opt, val);
+		pfs_itrace("option %s is changing from '%s' to '%s', %s\n",
+			   opt->o_name, buf, val, rc ? "success":"failure");
 		flag = true;
 		break;
 	}
 
 	if (!flag) {
 		pfs_etrace("option %s is not found\n", name);
+		n = pfs_adminbuf_printf(ab, "option %s is not found\n", name);
 		ERR_RETVAL(EINVAL);
+	} else {
+		n = pfs_adminbuf_printf(ab, "%s\n", rc ? "succeed":"failure");
 	}
-
-	n = pfs_adminbuf_printf(ab, "succeeded\n");
 	return n < 0 ? n : 0;
 }
 
@@ -289,17 +320,16 @@ pfs_option_update_value(const char *name, const char *value, void *data)
 			return;
 		}
 
-		pfs_option_get_str(opt, buf, sizeof(buf));
+		pfs_option_get_str(opt, false, buf, sizeof(buf));
 
 		bool rc = opt->o_store(opt, value);
 
 		pfs_itrace("option %s is changing from '%s' to '%s', %s\n",
-			    opt->o_name, buf, value,
-			    rc ? "success":"failure");
+			    opt->o_name, buf, value, rc ? "success":"failure");
 
 		if (ab) {
-			pfs_option_get_default_str(opt, buf, sizeof(buf));
-			n = pfs_adminbuf_printf(ab,"%-36s\t%s\t%-10ld\t%s\n",
+			pfs_option_get_default_str(opt, false, buf, sizeof(buf));
+			n = pfs_adminbuf_printf(ab,"%-36s\t%s\t%s\t%s\n",
 				    opt->o_name, value, buf,
 				    rc ? "success":"failure");
 			if (n < 0)
@@ -343,13 +373,15 @@ pfs_option_set_default(void)
 	DATA_SET_DECL(pfs_option, _pfsopt);
 	pfs_option_t **optp, *opt;
 	int ret = true;
+	char buf[1024];
 
 	DATA_SET_FOREACH(optp, _pfsopt) {
 		opt = *optp;
+		pfs_option_get_default_str(opt, false, buf, sizeof(buf));
 
-		if (!opt->o_store(opt, opt->o_default)) {
+		if (!opt->o_store(opt, buf)) {
 			pfs_etrace("option %s can not set default value '%s'",
-				opt->o_name, opt->o_default);
+				opt->o_name, buf);
 			ret = false;
 		}
 	}

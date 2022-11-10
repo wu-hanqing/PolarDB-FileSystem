@@ -112,13 +112,13 @@ typedef struct pfs_spdk_ioq {
 static const int64_t g_iodepth = 128;
 static int64_t FLAGS_pfs_spdk_driver_poll_delay;
 PFS_OPTION_REG2(pfs_spdk_driver_poll_delay, FLAGS_pfs_spdk_driver_poll_delay,
-	OPT_LONG, "128", NULL);
+	OPT_LONG, 128, OPT_LONG);
 static int FLAGS_pfs_spdk_driver_error_interval = 1;
 PFS_OPTION_REG2(pfs_spdk_driver_error_interval, FLAGS_pfs_spdk_driver_error_interval,
-	OPT_INT, "1", NULL);
+	OPT_INT, 1, OPT_INT);
 static int FLAGS_pfs_spdk_driver_auto_dma = true;
 PFS_OPTION_REG2(pfs_spdk_driver_auto_dma, FLAGS_pfs_spdk_driver_auto_dma,
-	OPT_INT, "1", NULL);
+	OPT_INT, 1, OPT_INT);
 
 #define PFS_MAX_CACHED_SPDK_IOCB        128
 static __thread SLIST_HEAD(, pfs_spdk_iocb) tls_free_iocb = {NULL};

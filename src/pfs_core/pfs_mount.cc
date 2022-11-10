@@ -657,10 +657,6 @@ pfs_mount(const char *cluster, const char *pbdname, int host_id, int flags)
 	pfs_itrace("before mount, PBD(%s), hostid(%d), flags(0x%x)\n",
 	    pbdname, host_id, flags);
 
-	/* init pfs config from default path */
-	if (pfs_option_init(NULL) != CONFIG_OK)
-		pfs_etrace("pfs init option config failed, use default value PBD(%s), hostid(%d), flags(0x%x)\n",
-		    pbdname, host_id, flags);
 remount:
 	/* ensure the pbd is nonexistent */
 	me = mountentry_find_iter(mountentry_hasname, pbdname, RW_NOLOCK);
