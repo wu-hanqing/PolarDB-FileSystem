@@ -42,13 +42,13 @@ ExternalProject_Add(gflags_prj
     CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fPIC
                -DGFLAGS_INTTYPES_FORMAT=C99
                -DGFLAGS_NAMESPACE=gflags
-               -DBUILD_SHARED_LIBS=YES
+               -DBUILD_SHARED_LIBS=NO
                -DCMAKE_INSTALL_PREFIX=${ExtProjLocalDir}
                -DCMAKE_INSTALL_RPATH=${ExtProjInstallRPath}
 )
 
-add_library(gflags SHARED IMPORTED)
-set_target_properties(gflags PROPERTIES IMPORTED_LOCATION ${ExtProjLocalDir}/lib/libgflags.so)
+add_library(gflags STATIC IMPORTED)
+set_target_properties(gflags PROPERTIES IMPORTED_LOCATION ${ExtProjLocalDir}/lib/libgflags.a)
 add_dependencies(gflags gflags_prj)
 
 # USE_BTHREAD should be reconsidered when builds with curvebs
@@ -66,13 +66,13 @@ ExternalProject_Add(glog_prj
     URL_HASH SHA256=2eed7857379bf9d843b2a2fde78e9a746f98dd6ad8ecba902124e79dddf1bd89
     PATCH_COMMAND patch -p1 < ${CMAKE_SOURCE_DIR}/thirdparties/glog/glog.patch
     CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fPIC
-               -DBUILD_SHARED_LIBS=YES
+               -DBUILD_SHARED_LIBS=NO
                -DCMAKE_PREFIX_PATH=${ExtProjLocalDir}
                -DCMAKE_INSTALL_PREFIX=${ExtProjLocalDir}
                -DCMAKE_INSTALL_RPATH=${ExtProjInstallRPath}
 )
-add_library(glog SHARED IMPORTED)
-set_target_properties (glog PROPERTIES IMPORTED_LOCATION ${ExtProjLocalDir}/lib/libglog.so)
+add_library(glog STATIC IMPORTED)
+set_target_properties (glog PROPERTIES IMPORTED_LOCATION ${ExtProjLocalDir}/lib/libglog.a)
 add_dependencies(glog glog_prj)
 add_dependencies(glog_prj gflags_prj gtest_prj)
 
