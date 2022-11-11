@@ -29,8 +29,8 @@ extern "C" {
 
 int     pfs_option_init(const char *config_path);
 int     pfs_option_set_default(void);
-int     pfs_option_set_int(const char *name, int);
-int     pfs_option_set_long(const char *name, long);
+int     pfs_option_set_int(const char *name, int val);
+int     pfs_option_set_long(const char *name, long val);
 int     pfs_option_set(const char *name, const char *val);
 
 #ifdef __cplusplus
