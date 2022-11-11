@@ -23,13 +23,10 @@
 #ifndef _PFS_OPTION_API_H_
 #define _PFS_OPTION_API_H_
 
-#include <string>
-
 int	pfs_option_init(const char *config_path);
 int     pfs_option_set_default(void);
 int     pfs_option_set(const char *name, int);
 int     pfs_option_set(const char *name, long);
 int     pfs_option_set(const char *name, const char *val);
-int     pfs_option_set(const char *name, const std::string& val);
 
 #endif

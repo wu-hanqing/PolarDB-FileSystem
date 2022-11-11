@@ -239,12 +239,6 @@ pfs_option_set(const char *name, long val)
 	return pfs_option_set(name, buf);
 }
 
-int
-pfs_option_set(const char *name, const std::string &val)
-{
-	return pfs_option_set(name, val.c_str());
-}
-
 static int
 pfs_option_set_ab(const char *name, const char *val, admin_buf_t *ab)
 {
