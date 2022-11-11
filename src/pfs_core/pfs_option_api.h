@@ -23,10 +23,17 @@
 #ifndef _PFS_OPTION_API_H_
 #define _PFS_OPTION_API_H_
 
-int	pfs_option_init(const char *config_path);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int     pfs_option_init(const char *config_path);
 int     pfs_option_set_default(void);
-int     pfs_option_set(const char *name, int);
-int     pfs_option_set(const char *name, long);
+int     pfs_option_set_int(const char *name, int);
+int     pfs_option_set_long(const char *name, long);
 int     pfs_option_set(const char *name, const char *val);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

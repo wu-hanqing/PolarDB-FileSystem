@@ -224,7 +224,7 @@ pfs_option_set(const char *name, const char *val)
 }
 
 int
-pfs_option_set(const char *name, int val)
+pfs_option_set_int(const char *name, int val)
 {
 	char buf[128];
 	snprintf(buf, sizeof(buf), "%d", val);
@@ -232,7 +232,7 @@ pfs_option_set(const char *name, int val)
 }
 
 int
-pfs_option_set(const char *name, long val)
+pfs_option_set_long(const char *name, long val)
 {
 	char buf[128];
 	snprintf(buf, sizeof(buf), "%ld", val);
