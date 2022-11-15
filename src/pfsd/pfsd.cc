@@ -39,7 +39,7 @@ static sem_t     g_pfsd_main_sem;
 
 static void *pfsd_main_thread_entry(void *arg);
 
-int
+extern "C" int
 pfsd_start(int daemon_allowed)
 {
 	const char *pbdname;
@@ -101,7 +101,7 @@ pfsd_start(int daemon_allowed)
 	return 0;
 }
 
-int
+extern "C" int
 pfsd_stop(void)
 {
 	g_pfsd_stop = true;
@@ -109,7 +109,7 @@ pfsd_stop(void)
 	return 0;
 }
 
-int
+extern "C" int
 pfsd_wait_stop(void)
 {
 	if (!g_pfsd_started)
@@ -118,6 +118,12 @@ pfsd_wait_stop(void)
 	g_pfsd_started = 0;
 	g_pfsd_stop = 0;
 	return 0;
+}
+
+extern "C" int
+pfsd_is_started(void)
+{
+	return g_pfsd_started;
 }
 
 static void *
