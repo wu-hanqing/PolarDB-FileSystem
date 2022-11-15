@@ -56,20 +56,8 @@ void pfs_spdk_conf_set_name(const char *s);
 void pfs_spdk_conf_set_env_context(const char *s);
 void pfs_spdk_conf_set_controller(const char *s);
 
-int pfs_spdk_setup(void);
-void pfs_spdk_suspend(void);
-void pfs_spdk_cleanup(void);
 void pfs_spdk_gc_thread(struct spdk_thread *thread);
 void pfs_spdk_teardown_thread(struct spdk_thread *thread);
-
-struct pfs_spdk_driver_poller {
-    void* (*register_callback)(unsigned (*cb)(void *), void *arg);
-    void (*notify_callback)(void *handle);
-    void (*remove_callback)(void *handle);
-};
-
-void pfs_spdk_set_driver_poller(const struct pfs_spdk_driver_poller *);
-void pfs_spdk_get_driver_poller(struct pfs_spdk_driver_poller *);
 
 int pfs_get_pci_local_cpus(const char *pci_addr, cpu_set_t *setp);
 char* pfs_get_dev_pci_address(struct spdk_bdev *dev);
@@ -85,5 +73,7 @@ int pfs_is_prp_aligned(const void *addr, size_t len);
 
 #define pfs_is_sge_aligned(addr, len) \
 	pfs_is_prp_aligned(iov, iovcnt)
+
+#include "pfs_spdk_api.h"
 
 #endif
