@@ -23,8 +23,6 @@
 #ifndef _PFS_SPDK_API_H
 #define _PFS_SKDK_API_H
 
-#include <sys/types.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
