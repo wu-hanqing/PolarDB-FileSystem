@@ -84,6 +84,7 @@ add_dependencies(glog_prj gflags_prj gtest_prj)
 #        "${PKG_DIR}/lib"
 #)
 
+if (USE_BTHREAD)
 ExternalProject_Add(leveldb_prj
     DOWNLOAD_DIR ${ExtProjDownloadDir}/leveldb
     PREFIX ${ExtProjBuildDir}/leveldb
@@ -120,7 +121,6 @@ add_library(protobuf_lite SHARED IMPORTED)
 set_target_properties(protobuf_lite PROPERTIES IMPORTED_LOCATION ${ExtProjLocalDir}/lib/libprotobuf_lite.so)
 add_dependencies(protobuf_lite protobuf_prj)
 
-if (USE_BTHREAD)
 ExternalProject_Add(brpc_prj
     GIT_REPOSITORY git@github.com:opencurve/incubator-brpc.git
     GIT_TAG dpdk
@@ -147,8 +147,5 @@ foreach(lib brpc)# butil bvar bthread)
 endforeach()
 
 add_dependencies(brpc_prj leveldb_prj gflags_prj glog_prj protobuf_prj)
-endif()
-
 add_dependencies(protobuf_prj gflags_prj gtest_prj)
-
-
+endif()
