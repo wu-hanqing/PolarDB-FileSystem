@@ -382,7 +382,7 @@ pfs_option_set_default(void)
 {
 	DATA_SET_DECL(pfs_option, _pfsopt);
 	pfs_option_t **optp, *opt;
-	int ret = true;
+	int ret = 0;
 	char buf[1024];
 
 	DATA_SET_FOREACH(optp, _pfsopt) {
@@ -392,7 +392,7 @@ pfs_option_set_default(void)
 		if (!opt->o_store(opt, buf)) {
 			pfs_etrace("option %s can not set default value '%s'",
 				opt->o_name, buf);
-			ret = false;
+			ret = -1;
 		}
 	}
 
