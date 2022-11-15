@@ -405,15 +405,13 @@ pfs_option_release(void)
 {
 	DATA_SET_DECL(pfs_option, _pfsopt);
 	pfs_option_t **optp, *opt;
-	int ret = true;
-	char buf[1024];
 
 	DATA_SET_FOREACH(optp, _pfsopt) {
 		opt = *optp;
 		pfs_option_release_generic(opt);
 	}
 
-	return ret;
+	return 0;
 }
 
 /*
