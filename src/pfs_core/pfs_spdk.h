@@ -28,7 +28,6 @@
 #include <spdk/thread.h>
 #include <spdk/queue.h>
 
-#include <string>
 #include <sched.h>
 
 class pfs_spdk_thread_guard {
@@ -72,10 +71,10 @@ struct pfs_spdk_driver_poller {
 void pfs_spdk_set_driver_poller(const struct pfs_spdk_driver_poller *);
 void pfs_spdk_get_driver_poller(struct pfs_spdk_driver_poller *);
 
-int pfs_get_pci_local_cpus(const std::string &pci_addr, cpu_set_t *setp);
-std::string pfs_get_dev_pci_address(struct spdk_bdev *dev);
+int pfs_get_pci_local_cpus(const char *pci_addr, cpu_set_t *setp);
+char* pfs_get_dev_pci_address(struct spdk_bdev *dev);
 int pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *setp);
-std::string pfs_cpuset_to_string(const cpu_set_t *mask);
+char *pfs_cpuset_to_string(const cpu_set_t *mask);
 int pfs_parse_set(const char *input, cpu_set_t *setp);
 int pfs_cpuset_socket_id(cpu_set_t *setp);
 int pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt);

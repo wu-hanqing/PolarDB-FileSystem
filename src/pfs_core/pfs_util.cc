@@ -374,3 +374,25 @@ int pfs_strtol(const char* sval, int64_t* ival)
 
 	return 0;
 }
+
+int pfs_strtoi(const char* sval, int32_t* ival)
+{
+	long lval;
+	char *endptr;
+
+	errno = 0;
+	lval = strtol(sval, &endptr, 10);
+	if (endptr == sval || endptr != (sval + strlen(sval)))
+		return -1;
+
+	if (errno)
+		return -1;
+
+	if (lval > INT_MAX || lval < INT_MIN) {
+		errno = ERANGE;
+		return -1;
+	}
+
+	*ival = (int)lval;
+	return 0;
+}

@@ -60,7 +60,7 @@ typedef enum pfs_option_kind {
 		&var,							\
 		(uintptr_t)(void *)(def),				\
 		cf,							\
-		sf         		         			\
+		sf							\
 	};								\
 	static pfs_option_t *opt_##name##_ptr DATA_SET_ATTR(_pfsopt)	\
 	    = &opt_##name
@@ -68,13 +68,14 @@ typedef enum pfs_option_kind {
 
 #define PFS_OPTION_REG(name, def, check_func)			             \
 	PFS_OPTION_REG_FULL(name, name, OPT_LONG, name, OPT_LONG, check_func,\
-			pfs_store_generic)
+			pfs_option_store_generic)
 #define PFS_OPTION_REG2(name, var, _kind, def, _dkind)	\
-	PFS_OPTION_REG_FULL(name, var, _kind, def, _dkind, NULL, pfs_store_generic)
+	PFS_OPTION_REG_FULL(name, var, _kind, def, _dkind, NULL,\
+			    pfs_option_store_generic)
 
 bool	pfs_check_lval_normal(struct pfs_option *opt, const char *data);
 bool	pfs_check_lval_switch(struct pfs_option *opt, const char *data);
-bool	pfs_store_generic(struct pfs_option *opt, const char *data);
+bool	pfs_option_store_generic(struct pfs_option *opt, const char *data);
 int	pfs_option_handle(int sock, msg_header_t *mh, msg_option_t *msgopt);
 
 #include "pfs_option_api.h"

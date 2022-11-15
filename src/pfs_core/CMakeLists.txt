@@ -54,6 +54,7 @@ set(SRC_LIST
     pfs_tx.cc
     pfs_util.cc
     pfs_version.cc
+    lib/kstring.c
 )
 
 # lib pfs

@@ -28,17 +28,13 @@
 #include "pfs_util.h"
 #include "pfs_option.h"
 
+#include "lib/kvec.h"
+#include "lib/kstring.h"
+
 #include <ctype.h>
 #include <semaphore.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <memory>
-#include <stack>
-#include <vector>
-#include <list>
-
-#include <gflags/gflags.h>
 
 #include <spdk/init.h>
 #include <spdk/env.h>
@@ -51,10 +47,10 @@
 #include <sys/user.h>	// For PAGE_SIZE and PAGE_MASK
 #include <sys/param.h>  // For roundup
 
-std::string FLAGS_spdk_name;
+char* FLAGS_spdk_name;
 PFS_OPTION_REG2(spdk_name, FLAGS_spdk_name, OPT_STR, "", OPT_CSTR);
 
-std::string FLAGS_spdk_core_mask;
+char* FLAGS_spdk_core_mask;
 PFS_OPTION_REG2(spdk_core_mask, FLAGS_spdk_core_mask, OPT_STR, "", OPT_CSTR);
 
 int FLAGS_spdk_shm_id = -1;
@@ -80,32 +76,31 @@ int FLAGS_spdk_unlink_hugepage = 0;
 PFS_OPTION_REG2(spdk_unlink_hugepage, FLAGS_spdk_unlink_hugepage,
 	OPT_INT, 0, OPT_INT);
 
-std::string FLAGS_spdk_hugedir;
+char *FLAGS_spdk_hugedir;
 PFS_OPTION_REG2(spdk_hugedir, FLAGS_spdk_hugedir, OPT_STR, "", OPT_CSTR);
 
-std::string FLAGS_spdk_pci_blocked;
+char *FLAGS_spdk_pci_blocked;
 PFS_OPTION_REG2(spdk_pci_blocked, FLAGS_spdk_pci_blocked, OPT_STR, "", OPT_CSTR);
 
-std::string FLAGS_spdk_pci_allowed;
+char *FLAGS_spdk_pci_allowed;
 PFS_OPTION_REG2(spdk_pci_allowed, FLAGS_spdk_pci_allowed, OPT_STR, "", OPT_CSTR);
 
-std::string FLAGS_spdk_iova_mode = "va";
+char *FLAGS_spdk_iova_mode;
 PFS_OPTION_REG2(spdk_iova_mode, FLAGS_spdk_iova_mode, OPT_STR, "va", OPT_CSTR);
 
 uint64_t FLAGS_spdk_base_virtaddr;
 PFS_OPTION_REG2(spdk_base_virtaddr, FLAGS_spdk_base_virtaddr, OPT_LONG, 0, OPT_LONG);
 
-std::string FLAGS_spdk_env_context;
+char *FLAGS_spdk_env_context;
 PFS_OPTION_REG2(spdk_env_context, FLAGS_spdk_env_context, OPT_STR, "", OPT_CSTR);
 
-std::string FLAGS_spdk_json_config_file;
+char *FLAGS_spdk_json_config_file;
 PFS_OPTION_REG2(spdk_json_config_file, FLAGS_spdk_json_config_file, OPT_STR, "", OPT_CSTR);
 
-std::string FLAGS_spdk_rpc_address;
+char *FLAGS_spdk_rpc_address;
 PFS_OPTION_REG2(spdk_rpc_address, FLAGS_spdk_rpc_address, OPT_STR,  "", OPT_CSTR);
 
-std::string FLAGS_spdk_log_flags;
-// std::string FLAGS_spdk_log_flags = "bdev,thread,nvme";
+char *FLAGS_spdk_log_flags;
 PFS_OPTION_REG2(spdk_log_flags, FLAGS_spdk_log_flags, OPT_STR,  "", OPT_CSTR);
 //PFS_OPTION_REG2(spdk_log_flags, FLAGS_spdk_log_flags, OPT_STR,  "bdev,thread,nvme", OPT_CSTR);
 
@@ -115,13 +110,13 @@ PFS_OPTION_REG2(spdk_log_level, FLAGS_spdk_log_level, OPT_INT, SPDK_LOG_INFO, OP
 int FLAGS_spdk_log_print_level = SPDK_LOG_INFO;
 PFS_OPTION_REG2(spdk_log_print_level, FLAGS_spdk_log_print_level, OPT_INT, SPDK_LOG_INFO, OPT_INT);
 
-std::string FLAGS_spdk_nvme_controller;
+char *FLAGS_spdk_nvme_controller;
 PFS_OPTION_REG2(spdk_nvme_controller, FLAGS_spdk_nvme_controller, OPT_STR, "", OPT_CSTR);
 
-int FLAGS_spdk_delete_temp_json_file = 1;
+int FLAGS_spdk_delete_temp_json_file;
 PFS_OPTION_REG2(spdk_delete_temp_json_file, FLAGS_spdk_delete_temp_json_file, OPT_INT, 1, OPT_INT);
 
-static std::string g_spdk_temp_config_file;
+static char *g_spdk_temp_config_file;
 static pthread_mutex_t g_init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_rpc_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_rpc_cond = PTHREAD_COND_INITIALIZER;
@@ -129,7 +124,13 @@ static bool g_rpc_stop = false;
 static pthread_mutex_t g_gc_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_gc_cond = PTHREAD_COND_INITIALIZER;
 static bool g_gc_stop = false;
-static std::list<struct spdk_thread *> g_gc_list;
+struct spdk_thread_node {
+    TAILQ_ENTRY(spdk_thread_node) link;
+    struct spdk_thread *thread;
+};
+
+static TAILQ_HEAD(,spdk_thread_node) g_gc_list =
+	TAILQ_HEAD_INITIALIZER(g_gc_list);
 
 static bool g_init_stop = false;
 static pthread_t g_init_thread_id = 0;
@@ -137,6 +138,14 @@ static pthread_t g_rpc_thread_id = 0;
 static pthread_t g_gc_thread_id = 0;
 static bool g_spdk_env_initialized = false;
 struct pfs_spdk_driver_poller spdk_driver_poller = { NULL };
+
+static char *
+safe_strdup(const char *p)
+{
+    if (p == NULL)
+	return strdup("");
+    return strdup(p);
+}
 
 void
 pfs_spdk_set_driver_poller(const struct pfs_spdk_driver_poller *poller)
@@ -153,26 +162,26 @@ pfs_spdk_get_driver_poller(struct pfs_spdk_driver_poller *poller)
 static void
 parse_pci_address(struct spdk_env_opts *opts)
 {
-    std::string s;
-    char *cp, *t;
-    struct spdk_pci_addr **pa;
+    char *s = NULL;
+    char *cp = NULL, *t = NULL;
+    struct spdk_pci_addr **pa = NULL;
 
     opts->pci_blocked = NULL;
     opts->pci_allowed = NULL;
-    if (!FLAGS_spdk_pci_blocked.empty()) {
-        s = FLAGS_spdk_pci_blocked;
+    if (!pfs_empty_string(FLAGS_spdk_pci_blocked)) {
+        s = safe_strdup(FLAGS_spdk_pci_blocked);
         pa = &opts->pci_blocked;
     } else {
-        s = FLAGS_spdk_pci_allowed;
+        s = safe_strdup(FLAGS_spdk_pci_allowed);
         pa = &opts->pci_allowed;
     }
     *pa = NULL;
-    if (s.empty())
+    if (!strlen(s)) {
+        free(s);
         return;
+    }
 
-    std::unique_ptr<char, decltype(free)*> store(strdup(s.c_str()), free);
-
-    cp = store.get();
+    cp = s;
     opts->num_pci_addr = 0;
     while ((t = strsep(&cp, " ,"))) {
         struct spdk_pci_addr addr;
@@ -184,16 +193,18 @@ parse_pci_address(struct spdk_env_opts *opts)
             (*pa)[opts->num_pci_addr++] = addr;
         }
     }
+
+    free(s);
 }
 
 static void
-set_spdk_opts_from_gflags(struct spdk_env_opts *opts)
+set_spdk_opts_from_flags(struct spdk_env_opts *opts)
 {
-    if (!FLAGS_spdk_name.empty()) {
-        opts->name = FLAGS_spdk_name.c_str();
+    if (!pfs_empty_string(FLAGS_spdk_name)) {
+        opts->name = FLAGS_spdk_name;
     }
-    if (!FLAGS_spdk_core_mask.empty()) {
-        opts->core_mask = FLAGS_spdk_core_mask.c_str();
+    if (!pfs_empty_string(FLAGS_spdk_core_mask)) {
+        opts->core_mask = FLAGS_spdk_core_mask;
     }
     opts->shm_id = FLAGS_spdk_shm_id;
     opts->mem_channel = FLAGS_spdk_mem_channel;
@@ -203,17 +214,17 @@ set_spdk_opts_from_gflags(struct spdk_env_opts *opts)
     opts->hugepage_single_segments = FLAGS_spdk_hugepage_single_segments;
     opts->unlink_hugepage = FLAGS_spdk_unlink_hugepage;
     opts->num_pci_addr = 0;
-    if (!FLAGS_spdk_hugedir.empty()) {
-        opts->hugedir = FLAGS_spdk_hugedir.c_str();
+    if (!pfs_empty_string(FLAGS_spdk_hugedir)) {
+        opts->hugedir = FLAGS_spdk_hugedir;
     }
     parse_pci_address(opts);
-    if (!FLAGS_spdk_iova_mode.empty()) {
-        opts->iova_mode = FLAGS_spdk_iova_mode.c_str();
+    if (!pfs_empty_string(FLAGS_spdk_iova_mode)) {
+        opts->iova_mode = FLAGS_spdk_iova_mode;
     }
     if (FLAGS_spdk_base_virtaddr)
         opts->base_virtaddr = FLAGS_spdk_base_virtaddr;
-    if (!FLAGS_spdk_env_context.empty()) {
-        opts->env_context = (char *)FLAGS_spdk_env_context.c_str();
+    if (!pfs_empty_string(FLAGS_spdk_env_context)) {
+        opts->env_context = FLAGS_spdk_env_context;
     }
 }
 
@@ -231,7 +242,7 @@ pfs_generate_json_file(void)
     char temp[128];
     int fd;
 
-    if (FLAGS_spdk_nvme_controller.empty())
+    if (pfs_empty_string(FLAGS_spdk_nvme_controller))
         return 0;
 
     strcpy(temp, "/tmp/pfs_spdk_json_config_XXXXXX");
@@ -241,7 +252,7 @@ pfs_generate_json_file(void)
         return -1;
     }
 
-    const char* s1 = R"foo({
+const char* fmt = R"foo({
     "subsystems":
     [
         {
@@ -260,8 +271,8 @@ pfs_generate_json_file(void)
                     "params":
                     {
                         "trtype": "PCIe",
-                        "name":"replace1",
-                        "traddr":"replace2"
+                        "name":"%s",
+                        "traddr":"%s"
                     }
                 }
             ]
@@ -269,30 +280,23 @@ pfs_generate_json_file(void)
     ]
 })foo";
 
-    std::string s = s1;
-    auto pos = s.find("replace1");
-    if (std::string::npos == pos) {
-        pfs_fatal("cannot find substr replace1");
-        close(fd);
-        return -1;
-    }
-    s.replace(pos, 8, FLAGS_spdk_nvme_controller);
-    pos = s.find("replace2");
-    if (std::string::npos == pos) {
-        pfs_fatal("cannot find substr replace2");
-        close(fd);
-        return -1;
-    }
-    s.replace(pos, 8, FLAGS_spdk_nvme_controller);
-    int rc = write(fd, s.data(), s.length()); 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+    char *s = NULL;
+    int n = asprintf(&s, fmt, FLAGS_spdk_nvme_controller,
+                     FLAGS_spdk_nvme_controller);
+#pragma GCC diagnostic pop
+    int rc = write(fd, s, n); 
     if (rc == -1)
         pfs_etrace("cannot write file %s, %s", temp, strerror(errno));
     close(fd);
+    free(s);
     pfs_itrace("generated json config file: %s", temp);
     if (rc == -1) {
         return -1;
     }
-    g_spdk_temp_config_file = temp; 
+    free(g_spdk_temp_config_file);
+    g_spdk_temp_config_file = strdup(temp); 
     return 1;
 }
 
@@ -308,29 +312,32 @@ pfs_spdk_init_subsys_done(int rc, void *cb_arg)
     param->result = rc;
     param->done = true;
     if (FLAGS_spdk_delete_temp_json_file) {
-        unlink(g_spdk_temp_config_file.c_str());
+        unlink(g_spdk_temp_config_file);
     }
+    free(g_spdk_temp_config_file);
+    g_spdk_temp_config_file = NULL;
 }
 
 static void
 pfs_spdk_init_subsys_start(void *arg)
 {
     struct subsys_init_param *param = (struct subsys_init_param *) arg;
-    std::string json_file;
+    char *json_file;
 
     param->result = 0;
     param->done = false;
     json_file = g_spdk_temp_config_file;
-    if (json_file.empty()) {
-        if (FLAGS_spdk_json_config_file.empty())
+    if (pfs_empty_string(json_file)) {
+        if (pfs_empty_string(FLAGS_spdk_json_config_file)) {
             pfs_etrace("json config file is not set!");
+	}
         else
             json_file = FLAGS_spdk_json_config_file;
-        pfs_itrace("json config file: %s", json_file.c_str());
+        pfs_itrace("json config file: %s", json_file);
     }
 
     spdk_subsystem_init_from_json_config(
-        json_file.c_str(),
+        json_file,
         SPDK_DEFAULT_RPC_ADDR,
         pfs_spdk_init_subsys_done, param, true);
 }
@@ -367,9 +374,12 @@ pfs_spdk_gc_thread(struct spdk_thread *spdk_thread)
     if (spdk_get_thread() == spdk_thread)
         spdk_set_thread(NULL);
 
+    struct spdk_thread_node *node =
+	(struct spdk_thread_node *)malloc(sizeof(*node));
+    node->thread = spdk_thread;
     // kill spdk thread in gc thread context
     pthread_mutex_lock(&g_gc_mutex);
-    g_gc_list.push_back(spdk_thread);
+    TAILQ_INSERT_TAIL(&g_gc_list, node, link);
     pthread_cond_broadcast(&g_gc_cond);
     pthread_mutex_unlock(&g_gc_mutex);
 }
@@ -395,17 +405,17 @@ rpc_service(void *arg)
 
     spdk_thread = spdk_thread_create("rpc service", NULL);
     spdk_set_thread(spdk_thread);
-    if (!FLAGS_spdk_rpc_address.empty()) {
-        if (spdk_rpc_initialize(FLAGS_spdk_rpc_address.c_str())) {
+    if (!pfs_empty_string(FLAGS_spdk_rpc_address)) {
+        if (spdk_rpc_initialize(FLAGS_spdk_rpc_address)) {
             pfs_etrace("can not init spdk rpc server at : %s",
-                       FLAGS_spdk_rpc_address.c_str());
+                       FLAGS_spdk_rpc_address);
 
             pfs_spdk_teardown_thread(spdk_thread);
             return NULL;
         } else {
             spdk_rpc_set_state(SPDK_RPC_RUNTIME);
             pfs_itrace("init spdk rpc server at : %s",
-                       FLAGS_spdk_rpc_address.c_str());
+                       FLAGS_spdk_rpc_address);
         }
     }
 
@@ -437,20 +447,21 @@ gc_service(void *arg)
 
     pthread_mutex_lock(&g_gc_mutex);
     for (;;) {
-        if (g_gc_list.empty() && g_gc_stop)
+        if (TAILQ_EMPTY(&g_gc_list) && g_gc_stop)
             break;
 
         // poll my spdk thread
         spdk_set_thread(spdk_thread);
         spdk_thread_poll(spdk_thread, 0, 0);
         // poll discarded spdk threads
-        for (auto it = g_gc_list.begin(); it != g_gc_list.end();) {
-            struct spdk_thread *tmp = *it;
+        for (auto node = TAILQ_FIRST(&g_gc_list); node != NULL;) {
+            struct spdk_thread *tmp = node->thread;
             spdk_set_thread(tmp);
             while (spdk_thread_poll(tmp, 0, 0))
                 ;
             if (spdk_thread_is_exited(tmp)) {
-                it = g_gc_list.erase(it);
+		auto next = TAILQ_NEXT(node, link);
+                TAILQ_REMOVE(&g_gc_list, node, link);
                 const char *name = spdk_thread_get_name(tmp);
                 if (name)
                     pfs_itrace("spdk thread '%s' is garbage collected", name);
@@ -458,8 +469,10 @@ gc_service(void *arg)
                     pfs_itrace("spdk thread %p is garbage collected", tmp);
                 spdk_thread_destroy(tmp);
                 spdk_set_thread(NULL);
+                free(node);
+		node = next;
             } else {
-                it++;
+		node = TAILQ_NEXT(node, link);
             }
         }
         spdk_set_thread(spdk_thread);
@@ -543,7 +556,7 @@ out:
 
     memset(&opts, 0, sizeof(opts));
     spdk_env_opts_init(&opts);
-    set_spdk_opts_from_gflags(&opts);
+    set_spdk_opts_from_flags(&opts);
 
     if (spdk_env_init(&opts) < 0) {
         pfs_etrace("Unable to initialize SPDK env\n");
@@ -557,19 +570,19 @@ out:
     spdk_unaffinitize_thread();
     // end important ]
 
-    if (!FLAGS_spdk_log_flags.empty()) {
+    if (!pfs_empty_string(FLAGS_spdk_log_flags)) {
         // duplicate string
-        std::unique_ptr<char, decltype(free)*>
-            store(strdup(FLAGS_spdk_log_flags.c_str()), free);
-        char *log_flags = store.get();
+        char *log_flags = safe_strdup(FLAGS_spdk_log_flags);
         char *tok = strtok(log_flags, ",");
         do {
             rc = spdk_log_set_flag(tok);
             if (rc < 0) {
                 pfs_etrace("unknown spdk log flag %s\n", tok);
+		free(log_flags);
                 goto out;
             }
         } while ((tok = strtok(NULL, ",")) != NULL);
+        free(log_flags);
     }
 
     spdk_thread_lib_init(pfs_spdk_schedule_thread, 0);
@@ -658,7 +671,7 @@ pfs_spdk_dump_devices(void)
 {
     pfs_itrace("Found devices:\n");
     for (auto bdev = spdk_bdev_first(); bdev; bdev = spdk_bdev_next(bdev)) {
-        std::string cpuset_str;
+        char *cpuset_str = NULL;
         cpu_set_t cpuset;
         if (pfs_get_dev_local_cpus(bdev, &cpuset) == 0)
             cpuset_str = pfs_cpuset_to_string(&cpuset);
@@ -671,7 +684,8 @@ pfs_spdk_dump_devices(void)
              spdk_bdev_get_write_unit_size(bdev),
 	         spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_WRITE_ZEROES),
 	         spdk_bdev_get_buf_align(bdev),
-             cpuset_str.c_str());
+             cpuset_str);
+        free(cpuset_str);
     }
 }
 
@@ -787,44 +801,56 @@ pfs_spdk_cleanup(void)
 /* functions for mkfs */
 void pfs_spdk_conf_set_blocked_pci(const char *s)
 {
-    FLAGS_spdk_pci_blocked = s;
+    free(FLAGS_spdk_pci_blocked);
+    FLAGS_spdk_pci_blocked = strdup(s);
 }
 
 void pfs_spdk_conf_set_allowed_pci(const char *s)
 {
-    FLAGS_spdk_pci_allowed = s;
+    free( FLAGS_spdk_pci_allowed);
+    FLAGS_spdk_pci_allowed = strdup(s);
 }
 
 void pfs_spdk_conf_set_json_config_file(const char *s)
 {
-    FLAGS_spdk_json_config_file = s;
+    free(FLAGS_spdk_json_config_file);
+    FLAGS_spdk_json_config_file = strdup(s);
 }
 
 void pfs_spdk_conf_set_name(const char *s)
 {
-    FLAGS_spdk_name = s;
+    free(FLAGS_spdk_name);
+    FLAGS_spdk_name = strdup(s);
 }
 
 void pfs_spdk_conf_set_env_context(const char *s)
 {
-    FLAGS_spdk_env_context = s;
+    free(FLAGS_spdk_env_context);
+    FLAGS_spdk_env_context = strdup(s);
 }
 
 void pfs_spdk_conf_set_controller(const char *s)
 {
-    FLAGS_spdk_nvme_controller = s;
+    free(FLAGS_spdk_nvme_controller);
+    FLAGS_spdk_nvme_controller = strdup(s);
 }
 
 int
 pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *set)
 {
-    std::string pci_addr;
+    char* pci_addr;
 
     CPU_ZERO(set);
     pci_addr = pfs_get_dev_pci_address(bdev);
-    if (pci_addr.empty())
+    if (pci_addr == NULL)
+	return -1;
+    if (!strlen(pci_addr)) {
+	free(pci_addr);
         return -1;
-    return pfs_get_pci_local_cpus(pci_addr, set);
+    }
+    int rc = pfs_get_pci_local_cpus(pci_addr, set);
+    free(pci_addr);
+    return rc;
 }
 
 static int
@@ -837,21 +863,24 @@ json_write_cb(void *cb_ctx, const void *data, size_t size)
 	return rc == size ? 0 : -1;
 }
 
-std::string
+char *
 pfs_get_dev_pci_address(struct spdk_bdev *bdev)
 {
-    std::string address;
-    std::vector<spdk_json_val> values;
+    kvec_t(spdk_json_val) array;
     struct spdk_json_write_ctx *w;
-    char *json = NULL, *end;
+    char *address = NULL, *json = NULL, *end = NULL;
     size_t json_size = 0;
-    ssize_t values_cnt, rc;
-    struct spdk_json_val *nvme, *o, *v;
+    ssize_t values_cnt = 0, rc = 0;
+    struct spdk_json_val *nvme = NULL, *o = NULL, *v = NULL;
     FILE *f = open_memstream(&json, &json_size);
+
+    kv_init(array);
 
     if (0) {
 err:
-        return "";
+	kv_destroy(array);
+	free(json);
+        return NULL;
     }
 
     w = spdk_json_write_begin(json_write_cb, f, SPDK_JSON_WRITE_FLAG_FORMATTED);
@@ -862,8 +891,6 @@ err:
     fclose(f);
     f = NULL;
 
-    std::unique_ptr<char, decltype(free)*> json_store(json, free);
-
     rc = spdk_json_parse(json, json_size, NULL, 0, (void **)&end,
             SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
     if (rc < 0) {
@@ -871,16 +898,16 @@ err:
         goto err;
     }
 
-    values.resize(rc);
+    kv_resize(spdk_json_val, array, rc);
 
-    rc = spdk_json_parse(json, json_size, values.data(), values.size(),
+    rc = spdk_json_parse(json, json_size, array.a, kv_size(array),
              (void **)&end, SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
-    if (rc != values.size()) {
+    if (rc != kv_size(array)) {
         pfs_etrace("Parsing JSON configuration failed (%zd)\n", rc);
         goto err;
     }
 
-    rc = spdk_json_find_array(values.data(), "nvme", NULL, &nvme);
+    rc = spdk_json_find_array(array.a, "nvme", NULL, &nvme);
     if (rc) {
         pfs_etrace("No 'nvme' key in JSON.\n");
         goto err;
@@ -892,32 +919,34 @@ err:
             char *s = NULL;
             rc = spdk_json_decode_string(v, &s);
             if (rc == 0) {
+		// !!! must be freed by caller
                 address = s;
-                free(s);
                 break;
             }
         }
     }
 
+    kv_destroy(array);
+    free(json);
     return address;
 }
 
 int
-pfs_get_pci_local_cpus(const std::string& pci_addr, cpu_set_t *set)
+pfs_get_pci_local_cpus(const char *pci_addr, cpu_set_t *set)
 {
+    char sys_path[1024];
     size_t size = 0;
     char *line = NULL;
-    std::stack<uint32_t> local_cpus;
+    kvec_t(uint32_t) local_cpus;
     uint32_t mask;
     int widx;
     bool found = false;
 
-    if (pci_addr.empty())
+    if (!strlen(pci_addr))
         return -1;
 
-    std::string sys_path=std::string("/sys/bus/pci/devices/") + pci_addr +
-        "/local_cpus";
-    FILE *fp = fopen(sys_path.c_str(), "r");
+    snprintf(sys_path, sizeof(sys_path), "/sys/bus/pci/devices/%s/local_cpus", pci_addr);
+    FILE *fp = fopen(sys_path, "r");
     if (fp == NULL) {
         return -1;
     }
@@ -928,20 +957,21 @@ pfs_get_pci_local_cpus(const std::string& pci_addr, cpu_set_t *set)
     }
     fclose(fp);
 
+    kv_init(local_cpus);
     char *t, *p = line, *e = NULL;
     while ((t = strsep(&p, ","))) {
         mask = (uint32_t)strtol(t, &e, 16);
         if (*e != '\0' && *e != '\n') {
             pfs_etrace("can not pass cpu list\n");
+            kv_destroy(local_cpus);
             return -1;
         }
-        local_cpus.push(mask);
+        *(kv_pushp(uint32_t, local_cpus)) = mask;
     }
 
     widx = 0;
-    while (!local_cpus.empty()) {
-        mask = local_cpus.top();
-        local_cpus.pop();
+    while (kv_size(local_cpus)) {
+        mask = kv_pop(local_cpus);
         for (int i = 0; i < 32; ++i) {
             if (mask & (1 << i)) {
                 int cpu = (widx * 32) + i;
@@ -952,18 +982,20 @@ pfs_get_pci_local_cpus(const std::string& pci_addr, cpu_set_t *set)
         widx++;
     }
 
+    kv_destroy(local_cpus);
     if (found)
         return 0;
     return -1;
 }
 
-std::string
+char *
 pfs_cpuset_to_string(const cpu_set_t *mask)
 {
     int i = 0, j = 0;
     char buf[64];
-    std::string s;
+    kstring_t s;
 
+    bzero(&s, sizeof(s));
     for (i = 0; i < CPU_SETSIZE;) {
         if (CPU_ISSET(i, mask)) {
             int run = 0;
@@ -980,16 +1012,17 @@ pfs_cpuset_to_string(const cpu_set_t *mask)
                 sprintf(buf, "%d-%d,", i, i + run);
                 i += run;
             }
-            s += buf;
+            kputs(buf, &s);
             i = j;
         } else {
             i++;
         }
     }
-    if (!s.empty()) {
-        s.pop_back(); // remove last ','
+    if (ks_len(&s)) {
+        s.s[s.l-1] = '\0';
+        s.l--; // remove last ','
     }
-    return s;
+    return ks_release(&s);
 }
 
 int

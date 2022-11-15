@@ -17,8 +17,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <string>
-
 #include "pfs_admin.h"
 #include "pfs_option.h"
 #include "pfs_trace.h"
@@ -57,27 +55,43 @@ pfs_check_lval_switch(struct pfs_option *, const char *data)
 }
 
 bool
-pfs_store_generic(struct pfs_option *opt, const char *data)
+pfs_option_store_generic(struct pfs_option *opt, const char *data)
 {
 	int kind;
-	int64_t val;
+	int64_t lval;
+	int32_t ival;
 
 	switch((kind = PFS_OPT_KIND(opt->o_flags))) {
 	case OPT_INT:
-		if (pfs_strtol(data, &val))
+		if (pfs_strtoi(data, &ival))
 			return false;
-		*(int *)opt->o_valuep = val;
+		*(int *)opt->o_valuep = ival;
 		break;
 	case OPT_LONG:
-		if (pfs_strtol(data, &val))
+		if (pfs_strtol(data, &lval))
 			return false;
-		*(int64_t *)opt->o_valuep = val;
+		*(int64_t *)opt->o_valuep = lval;
 		break;
 	case OPT_STR:
-		*(std::string *)opt->o_valuep = data;
+		free(*((char **)opt->o_valuep));
+                *((char **)opt->o_valuep) = data ? strdup(data) : NULL;
 		break;
 	default:
 		pfs_etrace("can not handle option value type: %d\n", kind);
+		break;
+	}
+	return true;
+}
+
+bool
+pfs_option_release_generic(struct pfs_option *opt)
+{
+	int kind;
+
+	switch((kind = PFS_OPT_KIND(opt->o_flags))) {
+	case OPT_STR:
+		free(*((char **)opt->o_valuep));
+                *((char **)opt->o_valuep) = NULL;
 		break;
 	}
 	return true;
@@ -102,8 +116,10 @@ pfs_option_get_str(pfs_option_t *opt, bool pretty, char buf[], size_t len)
 		else
 			snprintf(buf, len, "%-10ld", *(long *)opt->o_valuep);
 		break;
-	case OPT_STR:
-		snprintf(buf, len, "%s", ((std::string *)opt->o_valuep)->c_str());
+	case OPT_STR: {
+		char *p = *(char **)opt->o_valuep;
+		snprintf(buf, len, "%s", p ? p : "");
+		}
 		break;
 	default:
 		pfs_etrace("can not understand value type: %d\n", kind);
@@ -131,11 +147,10 @@ pfs_option_get_default_str(pfs_option_t *opt, bool pretty, char buf[], size_t le
 		else
 			snprintf(buf, len, "%-10ld", (long)opt->o_default);
 		break;
-	case OPT_STR:
-		snprintf(buf, len, "%s", ((std::string *)(void *)opt->o_default)->c_str());
-		break;
-	case OPT_CSTR:
-		snprintf(buf, len, "%s", (char *)opt->o_default);
+	case OPT_CSTR: {
+		char *p = (char *)(void *)opt->o_default;
+		snprintf(buf, len, "%s", p ? p : "");
+		}
 		break;
 	default:
 		pfs_etrace("can not understand default value type: %d\n", kind);
@@ -361,6 +376,7 @@ pfs_option_reload(admin_buf_t *ab)
 	return ret;
 }
 
+__attribute__((constructor))
 int
 pfs_option_set_default(void)
 {
@@ -378,6 +394,23 @@ pfs_option_set_default(void)
 				opt->o_name, buf);
 			ret = false;
 		}
+	}
+
+	return ret;
+}
+
+__attribute__((destructor))
+int
+pfs_option_release(void)
+{
+	DATA_SET_DECL(pfs_option, _pfsopt);
+	pfs_option_t **optp, *opt;
+	int ret = true;
+	char buf[1024];
+
+	DATA_SET_FOREACH(optp, _pfsopt) {
+		opt = *optp;
+		pfs_option_release_generic(opt);
 	}
 
 	return ret;

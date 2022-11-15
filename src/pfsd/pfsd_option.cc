@@ -17,7 +17,6 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-#include <string>
 
 #include "pfsd_option.h"
 #include "pfsd_common.h"
@@ -30,16 +29,16 @@ PFS_OPTION_REG2(daemon, FLAGS_daemon, OPT_INT, 0, OPT_INT);
 static int FLAGS_server_id = 0;
 PFS_OPTION_REG2(server_id, FLAGS_server_id, OPT_INT, 0, OPT_INT);
 
-static std::string FLAGS_pbd_name;
+static char* FLAGS_pbd_name;
 PFS_OPTION_REG2(pbd_name, FLAGS_pbd_name, OPT_STR, "", OPT_CSTR);
 
-static std::string FLAGS_shm_dir = PFSD_SHM_PATH;
+static char *FLAGS_shm_dir;
 PFS_OPTION_REG2(shm_dir, FLAGS_shm_dir, OPT_STR, PFSD_SHM_PATH, OPT_CSTR);
 
-static int FLAGS_pollers = 2;
+static int FLAGS_pollers;
 PFS_OPTION_REG2(pollers, FLAGS_pollers, OPT_INT, 2, OPT_INT);
 
-static int FLAGS_workers = 50;
+static int FLAGS_workers;
 PFS_OPTION_REG2(workers, FLAGS_workers, OPT_INT, 50, OPT_INT);
 
 pfsd_option_t g_pfsd_option;
@@ -78,8 +77,8 @@ pfsd_parse_option(void)
 	g_pfsd_option.o_daemon = FLAGS_daemon;
 	g_pfsd_option.o_pollers = FLAGS_pollers;
 	g_pfsd_option.o_workers = FLAGS_workers;
-	strncpy(g_pfsd_option.o_shm_dir, FLAGS_shm_dir.c_str(), sizeof g_pfsd_option.o_shm_dir);
-	strncpy(g_pfsd_option.o_pbdname, FLAGS_pbd_name.c_str(), sizeof g_pfsd_option.o_pbdname);
+	strncpy(g_pfsd_option.o_shm_dir, FLAGS_shm_dir, sizeof g_pfsd_option.o_shm_dir);
+	strncpy(g_pfsd_option.o_pbdname, FLAGS_pbd_name, sizeof g_pfsd_option.o_pbdname);
 	server_id = FLAGS_server_id;
 	if (!sanity_check())
 		return -1;
