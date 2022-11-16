@@ -888,7 +888,6 @@ pfs_umount(const char *pbdname)
 	}
 	mnt = me->me_mount;
 	PFS_ASSERT(mnt != NULL);
-	pfs_file_close_all(mnt->mnt_id);
 	pfs_bd_stop(mnt);
 	pfs_poll_stop(mnt);
 
@@ -899,6 +898,7 @@ pfs_umount(const char *pbdname)
 	pfs_namecache_clear_mount(mnt);
 	pfs_leader_unload(mnt);
 	pfs_mntstat_stop(mnt);
+	pfs_file_close_all(mnt->mnt_id);
 	mnt->mnt_status = 0;
 	pfs_trace_ctx_stop();
 	pfs_destroy_mount(mnt);
