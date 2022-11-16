@@ -899,10 +899,11 @@ err:
     }
 
     kv_resize(spdk_json_val, array, rc);
+    kv_size(array) = rc;
 
-    rc = spdk_json_parse(json, json_size, array.a, kv_size(array),
+    rc = spdk_json_parse(json, json_size, array.a, kv_max(array),
              (void **)&end, SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
-    if (rc != kv_size(array)) {
+    if (rc < 0) {
         pfs_etrace("Parsing JSON configuration failed (%zd)\n", rc);
         goto err;
     }
