@@ -109,6 +109,7 @@ int	pfs_file_stat(pfs_inode_t *in, struct stat *st, uint64_t btime);
 typedef	struct admin_buf	admin_buf_t;
 int 	pfs_fdtbl_dump(admin_buf_t *ab);
 void	pfs_fdtbl_init();
+int	pfs_file_close_all(int mntid);
 
 /*
  * Helper inline functions to calculate block id and offset.

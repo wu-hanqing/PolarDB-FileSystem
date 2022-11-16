@@ -214,8 +214,10 @@ const int _gtype = GTYPE_MOUNT_NAMEI
 	if (_f == NULL)					\
 		ERR_RETVAL(EBADF);			\
 	_m = pfs_get_mount_byid(_f->f_mntid);		\
+	if (_m == NULL)					\
+		ERR_RETVAL(ENXIO);			\
 	/* Files must reset on a valid mount */		\
-	PFS_ASSERT(_m != NULL);				\
+	/* PFS_ASSERT(_m != NULL);	*/		\
 							\
 	*(mp) = _m;					\
 	*(fp) = _f;					\
@@ -359,10 +361,11 @@ static int
 _pfs_close(int fd)
 {
 	int err, old;
-	pfs_mount_t *mnt = NULL;
 	pfs_file_t *file = NULL;
 
-	GET_MOUNT_FILE(fd, WRLOCK_FLAG, &mnt, &file);
+	file = pfs_file_get(fd, WRLOCK_FLAG);
+	if (file == NULL)
+		ERR_RETVAL(EBADF);
 	file_unref(file);
 	/* remove refcount from GET_MOUNT_FILE */
 	err = pfs_file_close_locked(file);
@@ -370,8 +373,8 @@ _pfs_close(int fd)
 		/* must set as null so that it will not be put again. */
 		file = NULL;
 	}
-
-	PUT_MOUNT_FILE(mnt, file);
+	if (file)
+		pfs_file_put(file);
 	return err;
 }
 

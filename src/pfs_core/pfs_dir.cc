@@ -962,10 +962,10 @@ out:
 int
 pfs_memdir_close(pfs_mount_t *mnt, DIR *dir)
 {
-	bool stale;
+	bool stale = false;
 
-	stale = pfs_dir_isstale(mnt, dir);
-	if (!stale)
+	/* stale = pfs_dir_isstale(mnt, dir);
+	if (!stale) */
 		pfs_dir_close(mnt, dir);
 
 	pfs_mem_free(dir, M_DIR);

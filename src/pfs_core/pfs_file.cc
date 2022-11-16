@@ -282,7 +282,30 @@ fd_set_init()
 	pfs_max_nfd = file_max_nfd;
 	fdtbl_free_last = pfs_max_nfd;
 	fdtbl = (pfs_file_t**)pfs_mem_malloc(pfs_max_nfd * sizeof(pfs_file_t*), M_FDTBL_PTR);
+        memset(fdtbl, 0, pfs_max_nfd * sizeof(pfs_file_t*));
 	PFS_VERIFY(fdtbl != NULL);
+}
+
+int pfs_file_close_all(int mntid)
+{
+	fdtbl_wrlock();
+	for (int i = 0; i < file_max_nfd; ++i) {
+		pfs_file_t *file = fdtbl[i];
+		if (file == NULL)
+			continue;
+		if (((uintptr_t)file) & 1) {
+			continue;
+		}
+		if (file->f_mntid != mntid) {
+			continue;
+		}
+
+		pfs_inode_put(file->f_inode);
+		file->f_inode = NULL;
+		file->f_mntid = -1;
+	}
+	fdtbl_unlock();
+	return 0;
 }
 
 static inline int
