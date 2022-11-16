@@ -863,6 +863,7 @@ json_write_cb(void *cb_ctx, const void *data, size_t size)
 	return rc == size ? 0 : -1;
 }
 
+// return memory must be freed by caller
 char *
 pfs_get_dev_pci_address(struct spdk_bdev *bdev)
 {
@@ -899,14 +900,13 @@ err:
     }
 
     kv_resize(spdk_json_val, array, rc);
-    kv_size(array) = rc;
-
     rc = spdk_json_parse(json, json_size, array.a, kv_max(array),
              (void **)&end, SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
     if (rc < 0) {
         pfs_etrace("Parsing JSON configuration failed (%zd)\n", rc);
         goto err;
     }
+    kv_size(array) = rc;
 
     rc = spdk_json_find_array(array.a, "nvme", NULL, &nvme);
     if (rc) {
@@ -920,7 +920,6 @@ err:
             char *s = NULL;
             rc = spdk_json_decode_string(v, &s);
             if (rc == 0) {
-		// !!! must be freed by caller
                 address = s;
                 break;
             }
