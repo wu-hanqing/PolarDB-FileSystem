@@ -66,9 +66,11 @@ typedef enum pfs_option_kind {
 	    = &opt_##name
 
 
+// old, legacy option macro
 #define PFS_OPTION_REG(name, def, check_func)			             \
-	PFS_OPTION_REG_FULL(name, name, OPT_LONG, name, OPT_LONG, check_func,\
+	PFS_OPTION_REG_FULL(name, name, OPT_LONG, def, OPT_CSTR, check_func, \
 			pfs_option_store_generic)
+
 #define PFS_OPTION_REG2(name, var, _kind, def, _dkind)	\
 	PFS_OPTION_REG_FULL(name, var, _kind, def, _dkind, NULL,\
 			    pfs_option_store_generic)
