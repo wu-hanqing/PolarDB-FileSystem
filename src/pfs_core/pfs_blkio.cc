@@ -348,7 +348,7 @@ pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 			flags |= PFS_IO_WRITE_ZERO;
 		else if (!(flags & PFS_IO_WRITE_ZERO)) {
 			zerobuf = pfs_iomem_alloc(PFS_FRAG_SIZE);
-            memset(zerobuf, 0, PFS_FRAG_SIZE);
+			memset(zerobuf, 0, PFS_FRAG_SIZE);
 			PFS_VERIFY(zerobuf != NULL);
 			tmpiov.iov_base = zerobuf;
 			tmpiov.iov_len = PFS_FRAG_SIZE;
