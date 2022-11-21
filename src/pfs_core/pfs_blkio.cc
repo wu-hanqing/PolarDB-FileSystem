@@ -96,8 +96,8 @@ pfs_blkio_align(pfs_mount_t *mnt, pfs_bda_t bda, size_t length,
 #endif
 
 static pfs_bda_t
-pfs_blkio_align(pfs_mount_t *mnt, pfs_bda_t data_bda, size_t data_len,
-    size_t *io_len, size_t *op_len)
+pfs_blkio_align(pfs_mount_t *mnt, int is_write, pfs_bda_t data_bda,
+    size_t data_len, size_t *io_len, size_t *op_len)
 {
 	pfs_bda_t aligned_bda;
 	size_t sect_off, frag_off;
@@ -116,6 +116,11 @@ pfs_blkio_align(pfs_mount_t *mnt, pfs_bda_t data_bda, size_t data_len,
 		aligned_bda = data_bda;
 		*op_len = MIN(mnt->mnt_fragsize - frag_off, data_len);
 		*io_len = roundup(*op_len, sectsize);
+		if (is_write && *op_len != *io_len && *io_len > sectsize) {
+			/* 减少读然后写的量*/
+			*io_len -= sectsize;
+			*op_len = *io_len;
+		}
 	}
 
 	PFS_ASSERT(aligned_bda <= data_bda);
@@ -255,6 +260,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	void		*cookie[3];
 	int		cc = 0;
 	int		blk_lock = 0;
+	int		is_write = 0;
 
 	err = 0;
 	ioflags = (len >= 2*PFS_FRAG_SIZE) ? IO_NOWAIT : 0;
@@ -263,7 +269,8 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	if (flags & PFS_IO_WRITE_ZERO)
 		ioflags |= IO_ZERO;
 
-	if (pfs_blkio_write_segment == iofunc && !(flags & PFS_IO_NO_LOCK)) {
+	is_write = (pfs_blkio_write_segment == iofunc);
+	if (is_write && !(flags & PFS_IO_NO_LOCK)) {
 		/* for mode 0, because curve support 512 bytes sector io,
 		 * if our write-unit is larger than the 512, we have to use
 		 * io range-lock to do read-merge-write
@@ -280,7 +287,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	while (left > 0) {
 		allen = iolen = 0;
 		bda = blkno * mnt->mnt_blksize + off;
-		albda = pfs_blkio_align(mnt, bda, left, &allen, &iolen);
+		albda = pfs_blkio_align(mnt, is_write, bda, left, &allen, &iolen);
 
 		if (allen != iolen && albuf == NULL) {
 			albuf = (char *)pfs_iomem_alloc(PFS_FRAG_SIZE);
