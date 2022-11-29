@@ -131,6 +131,8 @@ typedef struct pfs_devops {
 #define DEV_CAP_FLUSH 	0x04
 #define DEV_CAP_ZERO  	0x08
 #define DEV_CAP_TRIM  	0x10
+#define DEV_CAP_SGL  	0x20
+#define DEV_CAP_SGL_DW 	0x40
 
 /* pfs device */
 typedef struct pfs_dev {

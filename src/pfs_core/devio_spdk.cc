@@ -33,6 +33,8 @@
 #include <spdk/env.h>
 #include <spdk/log.h>
 #include <spdk/string.h>
+#include <spdk/nvme.h>
+
 #include <rte_common.h>
 #include <rte_memcpy.h>
 #include <rte_thread.h>
@@ -52,6 +54,13 @@
 #define BUF_TYPE "pfs_iobuf"
 #define io_buf io_iov[0].iov_base
 
+extern "C" {
+// FIXME
+// The following function is declared in bdev_nvme.h which is not
+// installed by spdk.
+struct spdk_nvme_ctrlr *bdev_nvme_get_ctrlr(struct spdk_bdev *bdev);
+}
+
 typedef struct pfs_spdk_iocb pfs_spdk_iocb_t;
 
 typedef struct pfs_spdk_dev {
@@ -65,6 +74,8 @@ typedef struct pfs_spdk_dev {
     uint32_t    dk_block_size;
     uint32_t    dk_unit_size;
     int         dk_has_cache;
+    struct spdk_nvme_ctrlr *dk_ctrlr;
+    uint64_t    dk_ctrlr_flags;
 #define dk_bufalign dk_base.d_buf_align
     pthread_t   dk_pthread;
     struct      pfs_spdk_driver_poller dk_driver_poller;
@@ -78,7 +89,7 @@ typedef struct pfs_spdk_dev {
     pthread_mutex_t dk_work_mutex;
     pfs_futex_event_t dk_event;
     int         dk_running;
-    char        dk_path[128];
+    char        dk_path[PFS_MAX_PBDLEN];
 } pfs_spdk_dev_t;
 
 struct pfs_spdk_iocb {
@@ -372,6 +383,10 @@ err_exit:
         err = ENOMEM;
         goto err_exit;
     }
+    dkdev->dk_ctrlr = bdev_nvme_get_ctrlr(dkdev->dk_bdev);
+    if (dkdev->dk_ctrlr) { // is nvme device
+        dkdev->dk_ctrlr_flags = spdk_nvme_ctrlr_get_flags(dkdev->dk_ctrlr);
+    }
     strncpy(dkdev->dk_path, dev->d_devname, sizeof(dkdev->dk_path));
     dkdev->dk_path[sizeof(dkdev->dk_path)-1] = 0;
     dkdev->dk_block_num = spdk_bdev_get_num_blocks(dkdev->dk_bdev);
@@ -384,13 +399,19 @@ err_exit:
     if (dkdev->dk_bufalign < page_size)
         dkdev->dk_bufalign = page_size;
     dev->d_cap = DEV_CAP_RD | DEV_CAP_WR | DEV_CAP_FLUSH | DEV_CAP_TRIM;
+    if (dkdev->dk_ctrlr_flags & SPDK_NVME_CTRLR_SGL_SUPPORTED) {
+        dev->d_cap |= DEV_CAP_SGL;
+        if (dkdev->dk_ctrlr_flags & SPDK_NVME_CTRLR_SGL_REQUIRES_DWORD_ALIGNMENT) {
+           dev->d_cap |= DEV_CAP_SGL_DW;
+        }
+    }
     // SPDK unconditionally supports WRITE_ZEROS.
     // It ensures that all specified blocks will be zeroed out.
     // If a block device doesn't natively support a write zeroes command,
     // the bdev layer emulates it using write commands.                                                                 
     // yfxu@
     dev->d_cap |= DEV_CAP_ZERO;
-    dev->d_write_unit = dkdev->dk_sect_size; // copy info to base dev
+    dev->d_write_unit = dkdev->dk_sect_size; // copy into base dev
     PFS_ASSERT(RTE_IS_POWER_OF_2(dev->d_write_unit));
 
     pfs_itrace("open spdk device: '%s', block_num: %ld, "

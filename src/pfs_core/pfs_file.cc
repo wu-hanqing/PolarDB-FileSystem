@@ -37,6 +37,7 @@
 #include "pfs_stat.h"
 #include "pfs_tls.h"
 #include "pfs_brwlock.h"
+#include "pfs_spdk.h"
 
 /*-
  * FILE IO
@@ -284,6 +285,21 @@ fd_set_init()
 	fdtbl = (pfs_file_t**)pfs_mem_malloc(pfs_max_nfd * sizeof(pfs_file_t*), M_FDTBL_PTR);
         memset(fdtbl, 0, pfs_max_nfd * sizeof(pfs_file_t*));
 	PFS_VERIFY(fdtbl != NULL);
+}
+
+static void
+_pfs_check_and_clear_dma(pfs_mount_t *mnt, const struct iovec *iov, int iovcnt,
+	int *flags)
+{
+	int devi;
+	int caps;
+
+	if (!(*flags & PFS_IO_DMA_ON))
+		return;
+	devi = mnt->mnt_ioch_desc;
+	caps = pfsdev_get_cap(devi);
+	if (!pfs_iov_is_sge_aligned(iov, iovcnt, caps & DEV_CAP_SGL))
+		*flags &= ~PFS_IO_DMA_ON;
 }
 
 int pfs_file_close_all(int mntid)
@@ -1151,7 +1167,9 @@ pfs_file_xpread(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 	ssize_t rlen;
 	int err;
 	off_t off2;
+
 	MNT_STAT_BEGIN();
+	_pfs_check_and_clear_dma(mnt, iov, iovcnt, &flags);
 	if (off == OFFSET_FILE_POS)
 		off2 = file->f_offset;
 	else
@@ -1165,6 +1183,8 @@ pfs_file_xpread(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 	err = rlen < 0 ? rlen : 0;
 	pfs_inode_unlock(in);
 	tls_read_end(err);
+	if (rlen > 0 && (flags & PFS_IO_DMA_ON))
+		MNT_STAT_END_VALUE_BANDWIDTH2(MNT_STAT_FILE_READ_DMA, rlen);
 
 	if (err == 0 && off == -1)
 		__sync_add_and_fetch(&file->f_offset, rlen);
@@ -1186,6 +1206,7 @@ pfs_file_xpwrite(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 		return 0;
 
 	MNT_STAT_BEGIN();
+	_pfs_check_and_clear_dma(mnt, iov, iovcnt, &flags);
 	if (file->f_flags & O_APPEND)
 		off2 = OFFSET_FILE_SIZE;
 	else if (off == OFFSET_FILE_POS)
@@ -1231,6 +1252,9 @@ pfs_file_xpwrite(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 	       wlen = err;
 	else if (off == OFFSET_FILE_POS)
 		file->f_offset = off2;
+	if (wlen > 0 && (flags & PFS_IO_DMA_ON))
+		MNT_STAT_END_VALUE_BANDWIDTH2(MNT_STAT_FILE_WRITE_DMA, wlen);
+
 	MNT_STAT_END(MNT_STAT_FILE_WRITE);
 	return wlen;
 }

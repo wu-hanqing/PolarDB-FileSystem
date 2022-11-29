@@ -66,13 +66,17 @@ char *pfs_cpuset_to_string(const cpu_set_t *mask);
 int pfs_parse_set(const char *input, cpu_set_t *setp);
 int pfs_cpuset_socket_id(cpu_set_t *setp);
 int pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt);
+int pfs_iov_is_sgl_aligned(const struct iovec *iov, int iovcnt);
 int pfs_is_prp_aligned(const void *addr, size_t len);
+int pfs_is_sgl_aligned(const void *addr, size_t len);
 
-#define pfs_iov_is_sge_aligned(iov, iovcnt) \
-	pfs_iov_is_prp_aligned(iov, iovcnt)
-
-#define pfs_is_sge_aligned(addr, len) \
-	pfs_is_prp_aligned(iov, iovcnt)
+static inline int
+pfs_iov_is_sge_aligned(const struct iovec *iov, int iovcnt, bool sgl_supported)
+{
+	if (sgl_supported)
+		return pfs_iov_is_sgl_aligned(iov, iovcnt);
+	return pfs_iov_is_prp_aligned(iov, iovcnt);
+}
 
 #include "pfs_spdk_api.h"
 

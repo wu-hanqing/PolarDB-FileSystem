@@ -1287,3 +1287,41 @@ int pfs_is_prp_aligned(const void *addr, size_t len)
 	iov.iov_len = len;
 	return pfs_iov_is_prp_aligned(&iov, 1);
 }
+
+/* assume nvme sgl requires dword align */
+int
+pfs_iov_is_sgl_aligned(const struct iovec *iov, int iovcnt)
+{
+    uintptr_t addr = 0;
+    size_t len = 0, total = 0;
+    int i = 0;
+
+    if (iovcnt == 0)
+        return 0;
+
+    if (!__pfs_is_spdk_memv(iov, iovcnt)) // Is not spdk memory
+        return 0;
+
+    for (i = 0; i < iovcnt; ++i) {
+        addr = (uintptr_t)iov[i].iov_base;
+        if (addr & 3)
+            return 0;
+        len = iov[i].iov_len;
+        if (len % 3)
+            return 0;
+        total += len;
+    }
+    if (total % 512)
+        return 0;
+
+    return 1;
+}
+
+int pfs_is_sgl_aligned(const void *addr, size_t len)
+{
+    struct iovec iov;
+
+    iov.iov_base = (void *)addr;
+    iov.iov_len = len;
+    return pfs_iov_is_sgl_aligned(&iov, 1);
+}
