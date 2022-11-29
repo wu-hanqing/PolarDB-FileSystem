@@ -59,7 +59,7 @@ typedef struct pfs_spdk_dev {
     pfs_dev_t   dk_base;
     struct spdk_bdev_desc *dk_desc;
     struct spdk_bdev      *dk_bdev;
-    uint32_t    dk_sectsz;
+    uint32_t    dk_sect_size;
     uint64_t    dk_size;
     uint64_t    dk_block_num;
     uint32_t    dk_block_size;
@@ -377,7 +377,7 @@ err_exit:
     dkdev->dk_block_num = spdk_bdev_get_num_blocks(dkdev->dk_bdev);
     dkdev->dk_block_size = spdk_bdev_get_block_size(dkdev->dk_bdev);
     dkdev->dk_unit_size = spdk_bdev_get_write_unit_size(dkdev->dk_bdev);
-    dkdev->dk_sectsz = dkdev->dk_unit_size * dkdev->dk_block_size;
+    dkdev->dk_sect_size = dkdev->dk_unit_size * dkdev->dk_block_size;
     dkdev->dk_has_cache = spdk_bdev_has_write_cache(dkdev->dk_bdev);
     dkdev->dk_size = dkdev->dk_block_num * dkdev->dk_block_size;
     dkdev->dk_bufalign = spdk_bdev_get_buf_align(dkdev->dk_bdev);
@@ -390,8 +390,7 @@ err_exit:
     // the bdev layer emulates it using write commands.                                                                 
     // yfxu@
     dev->d_cap |= DEV_CAP_ZERO;
-    dev->d_write_unit = spdk_bdev_get_write_unit_size(dkdev->dk_bdev) *
-		spdk_bdev_get_block_size(dkdev->dk_bdev);
+    dev->d_write_unit = dkdev->dk_sect_size; // copy info to base dev
     PFS_ASSERT(RTE_IS_POWER_OF_2(dev->d_write_unit));
 
     pfs_itrace("open spdk device: '%s', block_num: %ld, "
@@ -489,7 +488,7 @@ pfs_spdk_dev_reload(pfs_dev_t *dev)
 static inline bool
 pfs_spdk_dev_dio_aligned(pfs_spdk_dev_t *dkdev, uint64_t val)
 {
-    return (val & (dkdev->dk_sectsz-1)) == 0;
+    return (val & (dkdev->dk_sect_size-1)) == 0;
 }
 
 static inline void
