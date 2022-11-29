@@ -340,9 +340,10 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
     pfs_spdk_thread_guard guard;
     static size_t page_size = sysconf(_SC_PAGESIZE);
     pfs_spdk_dev_t *dkdev = (pfs_spdk_dev_t *)dev;
-    struct spdk_thread *spdk_thread;
-    char thread_name[64];
-    int err;
+    struct spdk_thread *spdk_thread = NULL;
+    char thread_name[64] = {0};
+    char product_name[128] = {0};
+    int err = 0;
 
     snprintf(thread_name, sizeof(thread_name), "pfs-dev-%s", dev->d_devname);
  
@@ -386,6 +387,13 @@ err_exit:
     dkdev->dk_ctrlr = bdev_nvme_get_ctrlr(dkdev->dk_bdev);
     if (dkdev->dk_ctrlr) { // is nvme device
         dkdev->dk_ctrlr_flags = spdk_nvme_ctrlr_get_flags(dkdev->dk_ctrlr);
+	const struct spdk_nvme_ctrlr_data *cdata;
+	cdata = spdk_nvme_ctrlr_get_data(dkdev->dk_ctrlr);
+	snprintf(product_name, sizeof(product_name), "%-20.20s (%-20.20s)",
+		 cdata->mn, cdata->sn);
+    } else {
+	snprintf(product_name, sizeof(product_name), "%s",
+		 spdk_bdev_get_name(dkdev->dk_bdev));
     }
     strncpy(dkdev->dk_path, dev->d_devname, sizeof(dkdev->dk_path));
     dkdev->dk_path[sizeof(dkdev->dk_path)-1] = 0;
@@ -414,9 +422,9 @@ err_exit:
     dev->d_write_unit = dkdev->dk_sect_size; // copy into base dev
     PFS_ASSERT(RTE_IS_POWER_OF_2(dev->d_write_unit));
 
-    pfs_itrace("open spdk device: '%s', block_num: %ld, "
+    pfs_itrace("open spdk device: '%s', product: '%s', block_num: %ld, "
                "block_size: %d, write_unit_size: %d, has_cache: %d, buf_align:%d\n",
-               dev->d_devname, dkdev->dk_block_num, dkdev->dk_block_size,
+               dev->d_devname, product_name, dkdev->dk_block_num, dkdev->dk_block_size,
                dkdev->dk_unit_size, dkdev->dk_has_cache, dkdev->dk_bufalign);
 
     bdev_find_cpuset(dkdev);
