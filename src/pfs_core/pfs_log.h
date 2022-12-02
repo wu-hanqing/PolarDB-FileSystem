@@ -91,7 +91,7 @@ typedef struct pfs_log {
 	int		log_state;
 	int		log_flags;
 
-	pfs_thread_t	log_tid;	/* log IO thread */
+	pthread_t	log_tid;	/* log IO thread */
 	pfs_mutex_t	log_mtx;
 	pfs_cond_t	log_cond;
 	struct req_qhead log_reqhead;

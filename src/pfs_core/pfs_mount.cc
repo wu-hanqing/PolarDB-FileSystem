@@ -343,7 +343,7 @@ pfs_poll_start(pfs_mount_t *mnt)
 {
 	int err;
 
-	err = pfs_thread_create(&mnt->mnt_poll_tid, NULL, pfs_poll_thread_entry, mnt);
+	err = pthread_create(&mnt->mnt_poll_tid, NULL, pfs_poll_thread_entry, mnt);
 	if (err) {
 		mnt->mnt_poll_tid = 0;
 		pfs_etrace("cant create poll log thread: %d, %s\n", err,
@@ -364,7 +364,7 @@ pfs_poll_stop(pfs_mount_t *mnt)
 		cond_signal(&mnt->mnt_poll_cond);
 		mutex_unlock(&mnt->mnt_poll_mtx);
 
-		rv = pfs_thread_join(mnt->mnt_poll_tid, NULL);
+		rv = pthread_join(mnt->mnt_poll_tid, NULL);
 		PFS_VERIFY(rv == 0);
 		mnt->mnt_poll_tid = 0;
 	}
@@ -1660,7 +1660,7 @@ pfs_bd_start(pfs_mount_t *mnt)
 {
 	int err;
 
-	err = pfs_thread_create(&mnt->mnt_discard_tid, NULL,
+	err = pthread_create(&mnt->mnt_discard_tid, NULL,
 	    pfs_bd_thread_entry, mnt);
 	if (err) {
 		mnt->mnt_discard_tid = 0;
@@ -1682,7 +1682,7 @@ pfs_bd_stop(pfs_mount_t *mnt)
 		cond_signal(&mnt->mnt_discard_cond);
 		mutex_unlock(&mnt->mnt_discard_mtx);
 
-		rv = pfs_thread_join(mnt->mnt_discard_tid, NULL);
+		rv = pthread_join(mnt->mnt_discard_tid, NULL);
 		PFS_VERIFY(rv == 0);
 		mnt->mnt_discard_tid = 0;
 	}
@@ -2426,7 +2426,7 @@ pfs_mntstat_start(pfs_mount_t *mnt)
 {
 	int err;
 	pfs_mntstat_init();
-	err = pfs_thread_create(&mnt->mnt_stat_tid, NULL, pfs_mntstat_thread_entry,
+	err = pthread_create(&mnt->mnt_stat_tid, NULL, pfs_mntstat_thread_entry,
 	    mnt);
 	if (err) {
 		mnt->mnt_stat_tid = 0;
@@ -2447,7 +2447,7 @@ pfs_mntstat_stop(pfs_mount_t *mnt)
 		cond_signal(&mnt->mnt_stat_cond);
 		mutex_unlock(&mnt->mnt_stat_mtx);
 
-		rv = pfs_thread_join(mnt->mnt_stat_tid, NULL);
+		rv = pthread_join(mnt->mnt_stat_tid, NULL);
 		PFS_VERIFY(rv == 0);
 		mnt->mnt_stat_tid = 0;
 	}

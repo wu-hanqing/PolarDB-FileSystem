@@ -113,13 +113,13 @@ typedef struct pfs_mount {
 
 	pfs_mutex_t	mnt_poll_mtx;
 	pfs_cond_t	mnt_poll_cond;
-	pfs_thread_t	mnt_poll_tid;
+	pthread_t	mnt_poll_tid;
 	int		mnt_poll_stop;
 	int		mnt_poll_sync;
 
 	pfs_mutex_t	mnt_discard_mtx;
 	pfs_cond_t	mnt_discard_cond;
-	pfs_thread_t	mnt_discard_tid;
+	pthread_t	mnt_discard_tid;
 	int		mnt_discard_stop;
 
 	pfs_mutex_t	mnt_stat_mtx;
