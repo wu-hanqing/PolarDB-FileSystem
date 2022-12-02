@@ -32,6 +32,8 @@ using namespace bthread;
 void pfs_event_init(pfs_event_t *e)
 {
 	e->butex = butex_create();
+	butil::atomic<int> *value = (butil::atomic<int> *)e->butex;
+	value->store(0, butil::memory_order_relaxed);
 }
 
 void pfs_event_destroy(pfs_event_t *e)
@@ -52,7 +54,7 @@ void pfs_event_set(pfs_event_t *e)
 	butil::atomic_thread_fence(butil::memory_order_seq_cst);
 	if (value->load())
 		return;
-	value->store(1);
+	value->store(1, butil::memory_order_release);
 	butex_wake(e->butex);
 }
 
