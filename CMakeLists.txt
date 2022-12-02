@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required (VERSION 3.23.1)
+cmake_minimum_required (VERSION 3.11.1)
 project(curve_pfsd CXX C ASM)
 set(pfsd_VERSION_MAJOR 2)
 set(pfsd_VERSION_MINOR 1)
@@ -44,13 +44,11 @@ set(SANITIZE_ADDRESS OFF CACHE BOOL "enable -fsanitize=address")
 set(STACK_PROTECT OFF CACHE BOOL "enable -fstack-protector")
 set(USE_BTHREAD false CACHE BOOL "enable using bthread")
 
-pkg_check_modules(dpdk REQUIRED libdpdk)
-include_directories(${dpdk_INCLUDE_DIRS})
-link_directories(${dpdk_LIBRARY_DIRS})
+include_directories(${DPDK_DIR}/include)
+link_directories(${DPDK_DIR}/lib)
 
-pkg_check_modules(spdk_init REQUIRED spdk_init)
-include_directories(${spdk_init_INCLUDE_DIRS})
-link_directories(${spdk_init_LIBRARY_DIRS})
+include_directories(${SPDK_DIR}/include)
+link_directories(${SPDK_DIR}/lib)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
