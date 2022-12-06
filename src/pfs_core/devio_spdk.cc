@@ -373,7 +373,7 @@ err_exit:
         pfs_spdk_gc_thread(spdk_thread);
         pthread_mutex_destroy(&dkdev->dk_work_mutex);
         pfs_futex_event_destroy(&dkdev->dk_event);
-        return -err;
+        return err < 0 ? err : -err;
     }
     dkdev->dk_bdev = spdk_bdev_desc_get_bdev(dkdev->dk_desc);
     dkdev->dk_ioch = spdk_bdev_get_io_channel(dkdev->dk_desc);
