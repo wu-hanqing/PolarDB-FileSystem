@@ -1008,7 +1008,7 @@ pfs_meta_finish_chunk(pfs_chunk_t *ck)
  * device address is 4KB aligned.
  */
 typedef struct load_task {
-	pfs_thread_t	t_thrid;
+	pthread_t	t_thrid;
 	pfs_mount_t	*t_mnt;
 	int32_t		t_lckid;
 	int32_t		t_rckid;
@@ -1057,7 +1057,7 @@ pfs_meta_loadtask_start(load_task_t *task, pfs_mount_t *mnt, uint32_t startckid,
 	task->t_lckid = startckid;
 	task->t_rckid = startckid + nck;
 
-	rv = pfs_thread_create(&task->t_thrid, NULL,
+	rv = pthread_create(&task->t_thrid, NULL,
 	    pfs_meta_loadtask_run, (void *)task);
 	PFS_VERIFY(rv == 0);
 }
@@ -1068,7 +1068,7 @@ pfs_meta_loadtask_wait(load_task_t *task)
 	int rv;
 
 	PFS_ASSERT(task->t_thrid > 0);
-	rv = pfs_thread_join(task->t_thrid, NULL);
+	rv = pthread_join(task->t_thrid, NULL);
 	PFS_VERIFY(rv == 0);
 	return task->t_err;
 }
