@@ -39,6 +39,7 @@
 #include <rte_memcpy.h>
 #include <rte_thread.h>
 #include <rte_pause.h>
+#include <rte_prefetch.h>
 
 #include "pfs_trace.h"
 #include "pfs_devio.h"
@@ -94,16 +95,16 @@ typedef struct pfs_spdk_dev {
 } pfs_spdk_dev_t;
 
 struct pfs_spdk_iocb {
+    union {
+        SLIST_ENTRY(pfs_spdk_iocb) cb_free;
+        pfs_spdk_iocb_t *cb_next;
+    };
     pfs_devio_t             *cb_pfs_io;
     void                    *cb_dma_buf;
     pfs_spdk_dev_t          *cb_dev;
     struct pfs_spdk_ioq     *cb_ioq;
     spdk_msg_fn             cb_io_op;
     spdk_msg_fn             cb_io_done;
-    union {
-        SLIST_ENTRY(pfs_spdk_iocb) cb_free;
-        pfs_spdk_iocb_t *cb_next;
-    };
     struct spdk_bdev_io_wait_entry cb_bdev_io_wait;
 };
 
@@ -437,9 +438,11 @@ err_exit:
     PFS_ASSERT(RTE_IS_POWER_OF_2(dev->d_write_unit));
 
     pfs_itrace("open spdk device: '%s', product: '%s', block_num: %ld, "
-               "block_size: %d, write_unit_size: %d, has_cache: %d, buf_align:%d\n",
+               "block_size: %d, write_unit_size: %d, has_cache: %d, sgl: %s, buf_align:%d\n",
                dev->d_devname, product_name, dkdev->dk_block_num, dkdev->dk_block_size,
-               dkdev->dk_unit_size, dkdev->dk_has_cache, dkdev->dk_bufalign);
+               dkdev->dk_unit_size, dkdev->dk_has_cache,
+               (dev->d_cap & DEV_CAP_SGL) ? "yes":"no",
+               dkdev->dk_bufalign);
 
     bdev_find_cpuset(dkdev);
     dkdev->dk_spdk_thread = spdk_thread;
@@ -892,6 +895,7 @@ pfs_spdk_dev_pull_iocb(pfs_spdk_dev_t *dkdev)
     while (curr != NULL) {
         dkdev->dk_jobs++;
         next = curr->cb_next;
+        rte_prefetch1(next);
         curr->cb_io_op(curr);
         curr = next;
     }
