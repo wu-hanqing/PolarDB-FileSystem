@@ -857,7 +857,7 @@ pfs_spdk_dev_send_iocb(pfs_spdk_dev_t *dkdev,
     for (;;) {
         iocb->cb_next = head;
         if (__atomic_compare_exchange_n(&dkdev->dk_incoming, &head, iocb,
-                true, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED)) {
+                true, __ATOMIC_RELEASE, __ATOMIC_RELAXED)) {
             break;
         }
         rte_pause();
