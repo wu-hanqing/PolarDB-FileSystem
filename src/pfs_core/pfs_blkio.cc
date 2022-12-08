@@ -290,7 +290,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 		albda = pfs_blkio_align(mnt, is_write, bda, left, &allen, &iolen);
 
 		if (allen != iolen && albuf == NULL) {
-			albuf = (char *)pfs_iomem_alloc(PFS_FRAG_SIZE);
+			albuf = (char *)pfs_iomem_alloc(PFS_FRAG_SIZE, socket);
 			PFS_VERIFY(albuf != NULL);
 		}
 
@@ -354,7 +354,7 @@ pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 		if (cap & DEV_CAP_ZERO)
 			flags |= PFS_IO_WRITE_ZERO;
 		else if (!(flags & PFS_IO_WRITE_ZERO)) {
-			zerobuf = pfs_iomem_alloc(PFS_FRAG_SIZE);
+			zerobuf = pfs_iomem_alloc(PFS_FRAG_SIZE, socket);
 			memset(zerobuf, 0, PFS_FRAG_SIZE);
 			PFS_VERIFY(zerobuf != NULL);
 			tmpiov.iov_base = zerobuf;

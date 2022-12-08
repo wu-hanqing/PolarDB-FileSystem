@@ -32,7 +32,7 @@ static void pfs_iomem_init_once(void)
 }
 
 void *
-pfs_iomem_alloc(size_t size)
+pfs_iomem_alloc(size_t size, int cpu_socket)
 {
     void *buf;
 
@@ -42,8 +42,7 @@ pfs_iomem_alloc(size_t size)
     if (rte_stack_pop(stack, &buf, 1)) {
         return buf;
     }
-    return pfs_dma_malloc(IOMEM, pfs_getpagesize(), PFS_FRAG_SIZE,
-                          SOCKET_ID_ANY);
+    return pfs_dma_malloc(IOMEM, pfs_getpagesize(), PFS_FRAG_SIZE, cpu_socket);
 }
 
 void pfs_iomem_free(void *buf)

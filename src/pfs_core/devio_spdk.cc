@@ -68,6 +68,7 @@ typedef struct pfs_spdk_dev {
     pfs_dev_t   dk_base;
     struct spdk_bdev_desc *dk_desc;
     struct spdk_bdev      *dk_bdev;
+    cpu_set_t   dk_cpuset;
     uint32_t    dk_sect_size;
     uint64_t    dk_size;
     uint64_t    dk_block_num;
@@ -124,12 +125,15 @@ static const int64_t g_iodepth = 128;
 static int64_t FLAGS_pfs_spdk_driver_poll_delay;
 PFS_OPTION_REG2(pfs_spdk_driver_poll_delay, FLAGS_pfs_spdk_driver_poll_delay,
 	OPT_LONG, 128, OPT_LONG);
-static int FLAGS_pfs_spdk_driver_error_interval = 1;
+static int FLAGS_pfs_spdk_driver_error_interval;
 PFS_OPTION_REG2(pfs_spdk_driver_error_interval, FLAGS_pfs_spdk_driver_error_interval,
 	OPT_INT, 1, OPT_INT);
-static int FLAGS_pfs_spdk_driver_auto_dma = true;
+static int FLAGS_pfs_spdk_driver_auto_dma;
 PFS_OPTION_REG2(pfs_spdk_driver_auto_dma, FLAGS_pfs_spdk_driver_auto_dma,
 	OPT_INT, 1, OPT_INT);
+static int FLAGS_pfs_spdk_driver_auto_bind_cpu;
+PFS_OPTION_REG2(pfs_spdk_driver_auto_bind, FLAGS_pfs_spdk_driver_auto_bind_cpu,
+	OPT_INT, 0, OPT_INT);
 
 #define PFS_MAX_CACHED_SPDK_IOCB        128
 static __thread SLIST_HEAD(, pfs_spdk_iocb) tls_free_iocb = {NULL};
@@ -243,12 +247,11 @@ static int
 bdev_find_cpuset(pfs_spdk_dev_t *dkdev)
 {
     pfs_dev_t *dev = &dkdev->dk_base;
-    cpu_set_t cpuset;
     int err = 0;
 
-    err = pfs_get_dev_local_cpus(dkdev->dk_bdev, &cpuset);
+    err = pfs_get_dev_local_cpus(dkdev->dk_bdev, &dkdev->dk_cpuset);
     if (err == 0) {
-        dev->d_mem_socket_id = pfs_cpuset_socket_id(&cpuset);
+        dev->d_mem_socket_id = pfs_cpuset_socket_id(&dkdev->dk_cpuset);
         pfs_itrace("device %s's local cpu socket is %d", dev->d_devname,
                    dev->d_mem_socket_id);
     } else {
@@ -289,9 +292,20 @@ bdev_thread_msg_loop(void *arg)
 
     spdk_thread = dkdev->dk_spdk_thread;
     spdk_set_thread(spdk_thread);
-
     thread_name = spdk_thread_get_name(spdk_thread);
     pthread_setname_np(pthread_self(), thread_name);
+
+    if (FLAGS_pfs_spdk_driver_auto_bind_cpu) {
+        err = pthread_setaffinity_np(pthread_self(), sizeof(dkdev->dk_cpuset),
+             &dkdev->dk_cpuset);
+        if (err)
+            pfs_etrace("pthread_setaffinity_np failed, %s", strerror(err));
+        else {
+            char *cpuset_str = pfs_cpuset_to_string(&dkdev->dk_cpuset);
+            pfs_etrace("thread %s binds to cpus: %s", thread_name, cpuset_str);
+            free(cpuset_str);
+        }
+    }
 
     struct timespec timeout = {0, FLAGS_pfs_spdk_driver_poll_delay * 1000};
     if (FLAGS_pfs_spdk_driver_poll_delay) {
@@ -581,13 +595,14 @@ pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     pfs_spdk_iocb_t *iocb)
 {
     static struct timeval last;
+    pfs_dev_t *dev = &dkdev->dk_base;
 
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
     if (FLAGS_pfs_spdk_driver_auto_dma &&
         !(io->io_flags & IO_DMABUF)) {
-        iocb->cb_dma_buf = pfs_iomem_alloc(io->io_len);
+        iocb->cb_dma_buf = pfs_iomem_alloc(io->io_len, dev->d_mem_socket_id);
         if (iocb->cb_dma_buf == NULL) {
             struct timeval tv = error_time_interval;
             if (pfs_ratecheck(&last, &tv)) {
@@ -657,6 +672,7 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     pfs_spdk_iocb_t *iocb)
 {
     static struct timeval last;
+    pfs_dev_t *dev = &dkdev->dk_base;
     int rc;
 
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
@@ -664,7 +680,7 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
 
     if (FLAGS_pfs_spdk_driver_auto_dma &&
         !(io->io_flags & IO_DMABUF) && !(io->io_flags & IO_ZERO)) {
-        iocb->cb_dma_buf = pfs_iomem_alloc(io->io_len);
+        iocb->cb_dma_buf = pfs_iomem_alloc(io->io_len, dev->d_mem_socket_id);
         if (iocb->cb_dma_buf == NULL) {
             struct timeval tv = error_time_interval;
             if (pfs_ratecheck(&last, &tv)) {

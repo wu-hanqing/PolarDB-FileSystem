@@ -18,7 +18,7 @@
 
 #include <sys/types.h>
 
-void *pfs_iomem_alloc(size_t size);
+void *pfs_iomem_alloc(size_t size, int cpu_socket);
 void  pfs_iomem_free(void *buf);
 
 #endif
