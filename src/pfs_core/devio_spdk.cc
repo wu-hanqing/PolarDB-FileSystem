@@ -85,9 +85,9 @@ typedef struct pfs_spdk_dev {
     struct spdk_thread *dk_spdk_thread;
     struct spdk_io_channel *dk_ioch;
     int         dk_stop;
+    int         dk_jobs;
 
     pfs_spdk_iocb_t *dk_incoming __rte_aligned(RTE_CACHE_LINE_SIZE);
-    int         dk_jobs;
     pthread_mutex_t dk_work_mutex;
     pfs_futex_event_t dk_event;
     int         dk_running;
