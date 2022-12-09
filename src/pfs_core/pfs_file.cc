@@ -713,7 +713,7 @@ pfs_file_read(pfs_inode_t *in, const struct iovec *_iov, int iovcnt,
 			 *
 			 * We should re-check fsize after we re-lock inode.
 			 */
-			pfs_etrace("blkid %llu mapps to %lld\n in read",
+			pfs_etrace("blkid %" PRIu64 " mapps to %" PRIu64 "\n in read",
 			    blkid, dblkno);
 			if (iov != iov_space)
 				free(iov);
@@ -840,7 +840,7 @@ pfs_file_write(pfs_inode_t *in, const struct iovec *_iov, int iovcnt,
 			 * now cant find them, so there must be other
 			 * threads deleting it. Interesting to see.
 			 */
-			pfs_etrace("blkid %llu mapps to %lld in write\n",
+			pfs_etrace("blkid %" PRIu64 " mapps to %" PRIu64 " in write\n",
 			    blkid, dblkno);
 			if (iov != iov_space)
 				free(iov);

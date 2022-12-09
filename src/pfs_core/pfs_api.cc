@@ -1727,7 +1727,7 @@ pfs_rename2(const char *opath, const char *npath, int flags)
 	// error if there are other bits */
 	if ((flags & ~RENAME_NOREPLACE)) 
 		err = -EINVAL;
-	API_ENTER(DEBUG, "%s, %s, %s", PATH_ARG(opath), PATH_ARG(npath), flags);
+	API_ENTER(DEBUG, "%s, %s, %x", PATH_ARG(opath), PATH_ARG(npath), flags);
 
 	while (err == -EAGAIN) {
 		mutex_lock(&rename_mtx);

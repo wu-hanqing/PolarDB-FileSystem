@@ -215,7 +215,7 @@ pfs_spdk_dev_create_ioq(pfs_dev_t *dev)
     err = pfs_mem_memalign(&p, PFS_CACHELINE_SIZE, alloc_size,
 		M_SPDK_DEV_IOQ);
     if (err) {
-        pfs_etrace("create disk ioq failed: %d, %s\n", strerror(err));
+        pfs_etrace("create disk ioq failed: %d, %s\n", err, strerror(err));
         return NULL;
     }
     memset(p, 0, sizeof(*dkioq));
@@ -517,11 +517,11 @@ pfs_spdk_dev_info(pfs_dev_t *dev, struct pbdinfo *pi)
     pi->pi_disksize = (size / pi->pi_chunksize) * pi->pi_chunksize;
     pi->pi_rwtype = 1; // FIXME
 
-    pfs_itrace("%s get pi_pbdno %u, pi_rwtype %d, pi_unitsize %llu, "
-               "pi_chunksize %llu, pi_disksize %llu\n",
+    pfs_itrace("%s get pi_pbdno %u, pi_rwtype %d, pi_unitsize %" PRIu64 ", "
+               "pi_chunksize %" PRIu64 ", pi_disksize %" PRIu64 "\n",
                __func__, pi->pi_pbdno, pi->pi_rwtype,
                pi->pi_unitsize, pi->pi_chunksize, pi->pi_disksize);
-    pfs_itrace("%s waste size: %llu\n", __func__, size - pi->pi_disksize);
+    pfs_itrace("%s waste size: %zu\n", __func__, size - pi->pi_disksize);
     return 0;
 }
 

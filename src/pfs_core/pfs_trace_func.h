@@ -34,7 +34,7 @@ enum {
 };
 
 void    pfs_vtrace(int level, const char *file, const char *func, int line,
-	const char *fmt, ...);
+	const char *fmt, ...) __attribute__ ((format (printf, 5, 6)));
 
 typedef void (*pfs_trace_func_t)(int level, const char *filename,
 	const char *func, int line, const char *fmt, va_list ap);

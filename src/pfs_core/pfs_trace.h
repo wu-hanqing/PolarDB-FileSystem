@@ -17,6 +17,7 @@
 #define	_PFS_TRACE_H_
 
 #include <stdarg.h>
+#include <inttypes.h>
 #include "trace_pfs_ctx.h"
 #include "pfs_util.h"
 #include "pfs_trace_func.h"
