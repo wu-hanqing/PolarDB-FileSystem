@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <sys/param.h>
 
 #include "pfs_brwlock.h"
 
@@ -67,16 +68,18 @@ pfs_brwlock_init(pfs_brwlock_t *rwlock)
 {
 	struct pfs_brwlock *lck;
 	const int align = 64;
+	size_t alloc_size = 0;
 	int i;
 
-	lck = (struct pfs_brwlock *)aligned_alloc(align, sizeof(struct pfs_brwlock));
+	alloc_size = roundup(sizeof(struct pfs_brwlock), align);
+	lck = (struct pfs_brwlock *)aligned_alloc(align, alloc_size);
 	if (lck == NULL) {
 		return ENOMEM;
 	}
 	for (i = 0; i < leaf_count; ++i) {
 		void *ptr;
-		size_t alloc_size = ((sizeof(pthread_rwlock_t) + align - 1) / align) * align;
-		if (!(ptr = aligned_alloc(align,  alloc_size))) {
+		alloc_size = roundup(sizeof(pthread_rwlock_t), align);
+		if (!(ptr = aligned_alloc(align, alloc_size))) {
 			int err;
 			err = errno;
 			while (--i >= 0) {
