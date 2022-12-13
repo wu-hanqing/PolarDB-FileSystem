@@ -102,7 +102,6 @@ pfs_brwlock_destroy(pfs_brwlock_t *rwlock)
 		pthread_rwlock_destroy(lck->leaves[i]);
 		free(lck->leaves[i]);
 	}
-	free(lck->leaves);
 	free(lck);
 	*rwlock = NULL;
 }
