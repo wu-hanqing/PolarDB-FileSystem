@@ -298,7 +298,7 @@ _pfs_check_and_clear_dma(pfs_mount_t *mnt, const struct iovec *iov, int iovcnt,
 		return;
 	devi = mnt->mnt_ioch_desc;
 	caps = pfsdev_get_cap(devi);
-	if (!pfs_iov_is_sge_aligned(iov, iovcnt, caps & DEV_CAP_SGL))
+	if (!pfs_iov_is_sge_aligned(iov, iovcnt, !!(caps & DEV_CAP_SGL)))
 		*flags &= ~PFS_IO_DMA_ON;
 }
 
