@@ -1239,7 +1239,7 @@ int
 pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
 {
     uintptr_t addr;
-    size_t len;
+    size_t len, total_len = 0;
     int i;
 
     if (iovcnt == 0)
@@ -1257,6 +1257,7 @@ pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
     if (!_is_page_aligned(addr, PAGE_SIZE)) {
         return 0;
     }
+    total_len += iov[0].iov_len;
 
     for (i = 1; i < iovcnt - 1; ++i) {
         // middle page must be page aligned and size is times of page
@@ -1266,6 +1267,7 @@ pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
         len = iov[i].iov_len;
         if (len % PAGE_SIZE)
             return 0;
+        total_len += len;
     }
 
     addr = (uintptr_t)iov[i].iov_base;
@@ -1273,9 +1275,11 @@ pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
         return 0;
 
     len = iov[i].iov_len;
-    if (len % 512)
+    if (len % 3)
         return 0;
-
+    total_len += len;
+    if (total_len % 512)
+        return 0;
     return 1;
 }
 
