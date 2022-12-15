@@ -91,6 +91,7 @@ pfs_brwlock_init(pfs_brwlock_t *rwlock)
 		lck->leaves[i] = (pthread_rwlock_t *)ptr;
 		pthread_rwlock_init(lck->leaves[i], NULL);
 	}
+	lck->owner = 0;
 	*rwlock = lck;
 	return (0);
 }
