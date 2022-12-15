@@ -219,6 +219,8 @@ pfs_block_lock(pfs_mount_t *mnt, int64_t blkno, off_t woff,
 		*cc = *cc + 1;
 	}
 
+	lock_mid_end = MAX(lock_start, lock_mid_end);
+
 	if (lock_mid_end < lock_end) {
 		lock_end = RTE_ALIGN_CEIL(lock_end, dev_bsize);
 		cookie[*cc] = pfs_rangelock_wlock(rl, lock_mid_end,
