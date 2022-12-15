@@ -284,7 +284,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	}
 
 	left = len;
-	if (blk_lock && is_write)
+	if (blk_lock)
 		pfs_block_lock(mnt, blkno, off, len, &rl, cookie, &cc);
 	while (left > 0) {
 		allen = iolen = 0;
@@ -309,7 +309,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	}
 
 	err1 = pfs_blkio_done(mnt->mnt_ioch_desc, ioflags);
-	if (blk_lock && is_write)
+	if (blk_lock)
 		pfs_block_unlock(mnt, blkno, rl, cookie, cc);
 
 	if (albuf) {
