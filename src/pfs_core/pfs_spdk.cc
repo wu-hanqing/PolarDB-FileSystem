@@ -1275,7 +1275,7 @@ pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
         return 0;
 
     len = iov[i].iov_len;
-    if (len % 3)
+    if (len & 3)
         return 0;
     total_len += len;
     if (total_len % 512)
@@ -1311,7 +1311,7 @@ pfs_iov_is_sgl_aligned(const struct iovec *iov, int iovcnt)
         if (addr & 3)
             return 0;
         len = iov[i].iov_len;
-        if (len % 3)
+        if (len & 3)
             return 0;
         total += len;
     }
