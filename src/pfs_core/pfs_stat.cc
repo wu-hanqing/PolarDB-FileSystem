@@ -39,9 +39,8 @@ static pfs_mntstat_t mount_stat[MNT_STAT_SIZE][MNT_STAT_TYPE_COUNT];
 static pfs_mntstat_t mount_file_type_stat
     [MNT_STAT_SIZE][MNT_STAT_FILE_SPEC_TYPE_COUNT][FILE_TYPE_COUNT];
 
-#define IO_TYPE 7
 static uint32_t mount_file_type_stat_iosize
-    [MNT_STAT_SIZE][IO_TYPE][FILE_TYPE_COUNT];
+    [MNT_STAT_SIZE][MNT_STAT_IO_TYPE][FILE_TYPE_COUNT];
 
 static uint32_t mount_threads_stat[MNT_STAT_SIZE][MNT_STAT_TH_TYPE_COUNT];
 
@@ -108,6 +107,10 @@ static const char* mountstat_api_name[MNT_STAT_FILE_SPEC_TYPE_COUNT] = {
 
     "tx_write",
 
+    "read_dma",
+    "write_dma",
+    "write_pad",
+
     "open",
     "open_creat",
     "lseek",
@@ -121,9 +124,6 @@ static const char* mountstat_api_name[MNT_STAT_FILE_SPEC_TYPE_COUNT] = {
     "fsync",
     "fdatasync",
     "inode_cond_wait",
-    "read_dma",
-    "write_dma",
-    "write_pad",
 };
 
 static const char* mountstat_threads_name[MNT_STAT_TH_TYPE_COUNT] = {
@@ -267,7 +267,7 @@ pfs_file_type_stat_get_iosize(int64_t stat_time, int stat_type, int file_type,
     uint64_t count, double *iosize)
 {
 	int io_type;
-	if (count == 0 || stat_type >= IO_TYPE) {
+	if (count == 0 || stat_type >= MNT_STAT_IO_TYPE) {
 		*iosize = 0.0;
 		return;
 	}
@@ -366,7 +366,7 @@ pfs_mntstat_store(struct timeval* stat_begin, struct timeval* stat_end,
 		pfs_file_type_stat_add(stat_end->tv_sec, stat_type,
 		    file_type, stat_latency);
 		if (io_size != 0) {
-			PFS_ASSERT(stat_type < IO_TYPE);
+			PFS_ASSERT(stat_type < MNT_STAT_IO_TYPE);
 			io_type = stat_type;
 			pfs_file_type_stat_add_iosize(stat_end->tv_sec,
 			    io_type, file_type, io_size);
