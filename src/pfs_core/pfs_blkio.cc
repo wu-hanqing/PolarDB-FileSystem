@@ -173,7 +173,7 @@ pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 		else
 			pfs_copy_from_iovec_to_buf(&albuf[bda - albda], iov, len);
 		err = pfsdev_pwrite_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
-		MNT_STAT_END_VALUE_BANDWIDTH2(MNT_STAT_FILE_WRITE_PAD, len);
+		MNT_STAT_END_BANDWIDTH(MNT_STAT_FILE_WRITE_PAD, len);
 		return err;
 	}
 

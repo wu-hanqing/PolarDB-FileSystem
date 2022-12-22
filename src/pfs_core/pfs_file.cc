@@ -1184,7 +1184,7 @@ pfs_file_xpread(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 	pfs_inode_unlock(in);
 	tls_read_end(err);
 	if (rlen > 0 && (flags & PFS_IO_DMA_ON))
-		MNT_STAT_END_VALUE_BANDWIDTH2(MNT_STAT_FILE_READ_DMA, rlen);
+		MNT_STAT_END_BANDWIDTH(MNT_STAT_FILE_READ_DMA, rlen);
 
 	if (err == 0 && off == -1)
 		__sync_add_and_fetch(&file->f_offset, rlen);
@@ -1253,7 +1253,7 @@ pfs_file_xpwrite(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 	else if (off == OFFSET_FILE_POS)
 		file->f_offset = off2;
 	if (wlen > 0 && (flags & PFS_IO_DMA_ON))
-		MNT_STAT_END_VALUE_BANDWIDTH2(MNT_STAT_FILE_WRITE_DMA, wlen);
+		MNT_STAT_END_BANDWIDTH(MNT_STAT_FILE_WRITE_DMA, wlen);
 
 	MNT_STAT_END(MNT_STAT_FILE_WRITE);
 	return wlen;
