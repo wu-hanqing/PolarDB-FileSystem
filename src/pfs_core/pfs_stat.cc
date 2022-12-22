@@ -96,10 +96,6 @@ static const char* mountstat_name[MNT_STAT_TYPE_COUNT] = {
     "dev_flush",
     "meta_rdlock",
     "meta_wrlock",
-    "fsync",
-    "read_dma",
-    "write_dma",
-    "write_pad",
 };
 
 static const char* mountstat_api_name[MNT_STAT_FILE_SPEC_TYPE_COUNT] = {
@@ -125,6 +121,9 @@ static const char* mountstat_api_name[MNT_STAT_FILE_SPEC_TYPE_COUNT] = {
     "fsync",
     "fdatasync",
     "inode_cond_wait",
+    "read_dma",
+    "write_dma",
+    "write_pad",
 };
 
 static const char* mountstat_threads_name[MNT_STAT_TH_TYPE_COUNT] = {
