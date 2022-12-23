@@ -1230,6 +1230,8 @@ pfs_file_xpwrite(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 	pfs_inode_unlock(in);
 	// tls_read_end(mnt);
 
+	if (!pfs_inode_writemodify_inprogress2(in))
+		goto out;
 	/*
 	 * File with O_APPEND flag can't tolerate ETIMEDOUT error,
 	 * because new file size may be already written into journal
@@ -1247,7 +1249,7 @@ pfs_file_xpwrite(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 	ERR_UPDATE(err, err1);
 	pfs_inode_unlock(in);
 	tls_write_end(err);
-
+out:
 	if (err)
 	       wlen = err;
 	else if (off == OFFSET_FILE_POS)

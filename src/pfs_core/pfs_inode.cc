@@ -574,6 +574,13 @@ pfs_inode_writemodify_inprogress(const pfs_writemodify_t *wm)
 	return (wm->wm_dblkv || wm->wm_sizeinc);
 }
 
+bool
+pfs_inode_writemodify_inprogress2(pfs_inode_t *in)
+{
+	pfs_writemodify_t *wm = &in->in_write_modify;
+	return pfs_inode_writemodify_inprogress(wm);
+}
+
 void
 pfs_inode_writemodify_shrink_dblk_hole(pfs_inode_t *in, pfs_blkid_t blkid,
     off_t newbhoff, int32_t newbhlen)

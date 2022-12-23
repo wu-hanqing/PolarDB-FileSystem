@@ -257,4 +257,6 @@ pfs_inodephy_get_pvtid(pfs_mount_t *mnt, pfs_inode_phy_t *phyin)
 	return phyin->in_pvtid - 1;
 }
 
+bool pfs_inode_writemodify_inprogress2(pfs_inode_t *in);
+
 #endif	/* _PFS_INODE_H_ */
