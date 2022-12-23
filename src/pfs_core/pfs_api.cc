@@ -211,10 +211,10 @@ const int _gtype = GTYPE_MOUNT_NAMEI
 	pfs_mount_t *_m;				\
 							\
 	_f = pfs_file_get(fd, locktype);		\
-	if (_f == NULL)					\
+	if (unlikely(_f == NULL))			\
 		ERR_RETVAL(EBADF);			\
 	_m = pfs_get_mount_byid(_f->f_mntid);		\
-	if (_m == NULL)					\
+	if (unlikely(_m == NULL))			\
 		ERR_RETVAL(ENXIO);			\
 	/* Files must reset on a valid mount */		\
 	/* PFS_ASSERT(_m != NULL);	*/		\
@@ -227,11 +227,11 @@ const int _gtype = GTYPE_MOUNT_FILE
 #define	PUT_MOUNT_FILE(mnt, file) do {			\
 	char _a[_gtype == GTYPE_MOUNT_FILE ? 1 : -1]	\
 		__attribute__((unused));		\
-	if (mnt) {					\
+	if (likely(mnt != NULL)) {			\
 		pfs_put_mount(mnt);			\
 		mnt = NULL;				\
 	}						\
-	if (file) {					\
+	if (likely(file != NULL)) {			\
 		/* the file is still refered, put it */	\
 		pfs_file_put(file);			\
 		file = NULL;				\
