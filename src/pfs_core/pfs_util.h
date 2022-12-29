@@ -21,6 +21,8 @@
 #include <stdint.h>
 #include <stdarg.h>
 
+#define roundup2(x, y)  (((x)+((y)-1))&(~((y)-1))) /* if y is powers of two */ 
+
 #define GOLDEN_RATIO_32 0x61C88647
 #define GOLDEN_RATIO_64 0x61C8864680B583EBull
 

@@ -79,7 +79,7 @@ pfs_blkio_align(pfs_mount_t *mnt, int ioflags, int is_write, pfs_bda_t data_bda,
         	/* 是硬件IO单位的倍数，那么可以根据fragsize 去做IO*/
 		aligned_bda = data_bda;
 		*op_len = MIN(fragsize - frag_off, data_len);
-		*io_len = roundup(*op_len, sectsize);
+		*io_len = roundup2(*op_len, sectsize);
 		if (is_write && *op_len != *io_len && *io_len > sectsize) {
 			/* 减少读然后写的量*/
 			*io_len -= sectsize;
