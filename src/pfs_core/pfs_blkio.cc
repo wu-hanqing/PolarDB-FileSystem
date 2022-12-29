@@ -30,7 +30,7 @@
 #include "pfs_iomem.h"
 #include "pfs_stat.h"
 
-#define PFS_MAXPHYS (PFS_FRAG_SIZE * 4)
+#define PFS_MAXPHYS PBD_UNIT_SIZE
 
 typedef int pfs_blkio_fn_t(
     int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
