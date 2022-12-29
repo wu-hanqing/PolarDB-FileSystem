@@ -125,7 +125,7 @@ typedef struct pfs_spdk_ioq {
 static const int64_t g_iodepth = 128;
 static int64_t FLAGS_pfs_spdk_driver_poll_delay;
 PFS_OPTION_REG2(pfs_spdk_driver_poll_delay, FLAGS_pfs_spdk_driver_poll_delay,
-	OPT_LONG, 128, OPT_LONG);
+	OPT_LONG, 0, OPT_LONG);
 static int FLAGS_pfs_spdk_driver_error_interval;
 PFS_OPTION_REG2(pfs_spdk_driver_error_interval, FLAGS_pfs_spdk_driver_error_interval,
 	OPT_INT, 1, OPT_INT);
