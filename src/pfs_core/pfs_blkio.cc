@@ -30,7 +30,7 @@
 #include "pfs_iomem.h"
 #include "pfs_stat.h"
 
-#define PFS_MAXPHYS PBD_UNIT_SIZE
+#define PFS_MAXPHYS (PFS_FRAG_SIZE * 4)
 
 typedef int pfs_blkio_fn_t(
     int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
@@ -72,7 +72,6 @@ pfs_blkio_align(pfs_mount_t *mnt, int ioflags, int is_write, pfs_bda_t data_bda,
 		*op_len = MIN(sectsize - sect_off, data_len);
 		*io_len = sectsize;
 	} else {
- 		/* Normally 4M physio is enough */
 		if (ioflags & (IO_DMABUF | IO_ZERO)) {
 			fragsize = PFS_MAXPHYS;
 			frag_off = 0;
