@@ -19,6 +19,9 @@
 #include <iostream>
 #include <limits.h>
 #include <fcntl.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+
 
 using std::cout;
 using std::endl;
@@ -1938,17 +1941,21 @@ TEST_F(FileTest, pfs_ROFS_test)
 }
 #endif
 
+
 TEST_F(FileTest, pfs_large_rdwr)
 {
     char *wrbuf, *rdbuf;
     int repeat = UNIT_1G / UNIT_8M;
     int len = 0;
     int offset = 0;
+    struct rusage ru;
+    struct timeval tv1, tv2, tv3;
 
     wrbuf = (char *) calloc(1, UNIT_8M);
     rdbuf = (char *) calloc(1, UNIT_8M);
     ASSERT_TRUE(wrbuf);
     ASSERT_TRUE(rdbuf);
+
 
     len = pfs_pwrite(fd_, wrbuf, UNIT_4K, 0);
     offset += len;
@@ -1959,6 +1966,23 @@ TEST_F(FileTest, pfs_large_rdwr)
         offset += len + UNIT_4K;
     }
     CHECK_FILESIZE(fd_, UNIT_1G + UNIT_4K*repeat);
+
+    getrusage(RUSAGE_THREAD, &ru);
+    timeradd(&ru.ru_utime, &ru.ru_stime, &tv1);
+
+
+    offset = UNIT_4K;
+    for (int i =0; i< repeat; i++) {
+        len = pfs_pwrite(fd_, wrbuf, UNIT_8M, offset);
+        EXPECT_EQ(UNIT_8M, len);
+        offset += len + UNIT_4K;
+    }
+    CHECK_FILESIZE(fd_, UNIT_1G + UNIT_4K*repeat);
+ 
+    getrusage(RUSAGE_THREAD, &ru);
+    timeradd(&ru.ru_utime, &ru.ru_stime, &tv2);
+    timersub(&tv2, &tv1, &tv3);
+    printf("%f\n", tv3.tv_sec + (tv3.tv_usec*1.0)/1000000);
 
     offset = 0;
     len = 0;
@@ -1978,6 +2002,8 @@ TEST_F(FileTest, pfs_large_rdwr_dma)
     int repeat = UNIT_1G / UNIT_8M;
     int len = 0;
     int offset = 0;
+    struct rusage ru;
+    struct timeval tv1, tv2, tv3;
 
     wrbuf = (char *)rte_malloc("rdwr", UNIT_8M, 512);
     rdbuf = (char *)rte_malloc("rdwr", UNIT_8M, 512);
@@ -1996,6 +2022,21 @@ TEST_F(FileTest, pfs_large_rdwr_dma)
     }
     CHECK_FILESIZE(fd_, UNIT_1G + UNIT_4K*repeat);
 
+    getrusage(RUSAGE_THREAD, &ru);
+    timeradd(&ru.ru_utime, &ru.ru_stime, &tv1);
+
+    offset = UNIT_4K;
+    for (int i =0; i< repeat; i++) {
+        len = pfs_pwrite_dma(fd_, wrbuf, UNIT_8M, offset);
+        EXPECT_EQ(UNIT_8M, len);
+        offset += len + UNIT_4K;
+    }
+    CHECK_FILESIZE(fd_, UNIT_1G + UNIT_4K*repeat);
+    getrusage(RUSAGE_THREAD, &ru);
+    timeradd(&ru.ru_utime, &ru.ru_stime, &tv2);
+    timersub(&tv2, &tv1, &tv3);
+    printf("%f\n", tv3.tv_sec + (tv3.tv_usec*1.0)/1000000);
+
     offset = 0;
     len = 0;
     for (int i = 0; i< repeat; i++) {
@@ -2007,7 +2048,6 @@ TEST_F(FileTest, pfs_large_rdwr_dma)
     rte_free(wrbuf);
     rte_free(rdbuf);
 }
-
 
 TEST_F(FileTest, positive_pfs_align)
 {
@@ -2114,4 +2154,3 @@ TEST_F(FileTest, positive_pfs_align)
 	EXPECT_EQ(len, -1);
 	EXPECT_EQ(errno, EFBIG);
 }
-
