@@ -460,12 +460,13 @@ TEST_F(FileTest, pfs_pwritev)
 
 TEST_F(FileTest, pfs_pwrite_dma)
 {
+    const size_t to_write = 1024 * 1024 * 4;
     ssize_t len;
     char *buf;
 
-    buf = (char *) rte_malloc("", 4096, 4096);
-    len = pfs_pwrite_dma(fd_, buf+1, 512, 0);
-    CHECK_RET(len, 512);
+    buf = (char *) rte_malloc("", to_write, 4096);
+    len = pfs_pwrite_dma(fd_, buf, to_write, 0);
+    CHECK_RET(len, to_write);
     rte_free(buf);
 }
 

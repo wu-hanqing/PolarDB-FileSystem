@@ -52,56 +52,14 @@ static bool pfs_check_atomic_val(struct pfs_option *, const char *data)
 
 PFS_OPTION_REG(block_io_atomic, "0", pfs_check_atomic_val);
 
-/*
- * pfs_blkio_align:
- *
- * 	Align bda and calculate the io len. New IO bda and length
- * 	must be 512 aligned.
- *
- * 	@data_bda:	I/O, the bda for data PBD io.
- * 	@io_len: 	output, the len for PBD io.
- * 	@op_len: 	output, the actual len for op(read or write).
- *
- * 	return val:	the aligned bda.
- */
-#if 0
-pfs_bda_t
-pfs_blkio_align(pfs_mount_t *mnt, pfs_bda_t bda, size_t length,
-    size_t *iolength, size_t *oplength)
-{
-	pfs_bda_t iobda, endbda;
-	const pfs_bda_t alignsize = 512;
-
-	/*
-	 * iobda and iolength are always 512 aligned. It decides
-	 * the position of IO window's left edge. It may move IO
-	 * window to the left.
-	 */
-	iobda = bda & ~(alignsize - 1);
-	endbda = roundup(bda + length, alignsize);
-	if (endbda > iobda + mnt->mnt_fragsize)
-		endbda = iobda + mnt->mnt_fragsize;
-	PFS_ASSERT(endbda > 0 && (bda & ~(mnt->mnt_blksize - 1)) ==
-	    ((endbda - 1) & ~(mnt->mnt_blksize - 1)));
-
-	*iolength = endbda - iobda;
-	*oplength = MIN(endbda - bda, length);
-
-	PFS_ASSERT((*iolength & (alignsize - 1)) == 0);
-	PFS_ASSERT(iobda < mnt->mnt_disksize);
-	PFS_ASSERT(iobda + *iolength <= mnt->mnt_disksize);
-
-	return iobda;
-}
-#endif
-
 static pfs_bda_t
-pfs_blkio_align(pfs_mount_t *mnt, int is_write, pfs_bda_t data_bda,
+pfs_blkio_align(pfs_mount_t *mnt, int ioflags, int is_write, pfs_bda_t data_bda,
     size_t data_len, size_t *io_len, size_t *op_len)
 {
 	pfs_bda_t aligned_bda;
 	size_t sect_off, frag_off;
 	size_t sectsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
+	size_t fragsize = mnt->mnt_fragsize;
 
 	PFS_ASSERT(sectsize <= mnt->mnt_fragsize);
 	sect_off = data_bda & (sectsize - 1);
@@ -112,9 +70,14 @@ pfs_blkio_align(pfs_mount_t *mnt, int is_write, pfs_bda_t data_bda,
 		*op_len = MIN(sectsize - sect_off, data_len);
 		*io_len = sectsize;
 	} else {
+ 		/* Normally 4M physio is enough */
+		if (ioflags & (IO_DMABUF | IO_ZERO)) {
+			fragsize = PBD_UNIT_SIZE;
+			frag_off = 0;
+		}
         	/* 是硬件IO单位的倍数，那么可以根据fragsize 去做IO*/
 		aligned_bda = data_bda;
-		*op_len = MIN(mnt->mnt_fragsize - frag_off, data_len);
+		*op_len = MIN(fragsize - frag_off, data_len);
 		*io_len = roundup(*op_len, sectsize);
 		if (is_write && *op_len != *io_len && *io_len > sectsize) {
 			/* 减少读然后写的量*/
@@ -126,8 +89,8 @@ pfs_blkio_align(pfs_mount_t *mnt, int is_write, pfs_bda_t data_bda,
 	PFS_ASSERT(aligned_bda <= data_bda);
 	PFS_ASSERT(aligned_bda < mnt->mnt_disksize);
 	PFS_ASSERT(aligned_bda + *io_len <= mnt->mnt_disksize);
-	PFS_ASSERT(*io_len <= mnt->mnt_fragsize);
-	PFS_ASSERT((data_bda - aligned_bda) + *op_len <= mnt->mnt_fragsize);
+	PFS_ASSERT(*io_len <= fragsize);
+	PFS_ASSERT((data_bda - aligned_bda) + *op_len <= fragsize);
 
 	return aligned_bda;
 }
@@ -289,7 +252,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	while (left > 0) {
 		allen = iolen = 0;
 		bda = blkno * mnt->mnt_blksize + off;
-		albda = pfs_blkio_align(mnt, is_write, bda, left, &allen, &iolen);
+		albda = pfs_blkio_align(mnt, ioflags, is_write, bda, left, &allen, &iolen);
 
 		if (allen != iolen && albuf == NULL) {
 			albuf = (char *)pfs_iomem_alloc(PFS_FRAG_SIZE, socket);
