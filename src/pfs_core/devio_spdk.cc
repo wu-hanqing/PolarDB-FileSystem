@@ -164,7 +164,7 @@ pfs_spdk_dev_alloc_iocb(void)
     } else {
         /* allocate it by malloc from global heap */
         err = pfs_mem_memalign(&p, PFS_CACHELINE_SIZE, sizeof(*iocb),
-		M_SPDK_IOCB);
+                M_SPDK_IOCB);
         if (err) {
             pfs_etrace("create iocb failed, %s\n", strerror(err));
             abort();

@@ -46,7 +46,7 @@
 #define	PFS_NIN_PERCHUNK	2048	/* # inode per chunk */
 #define	PFS_NDE_PERCHUNK	PFS_NIN_PERCHUNK
 
-#define	PFS_MAX_NCHD		128	/* max # io channel descriptors */
+#define	PFS_MAX_NCHD		16	/* max # io device descriptors */
 #define	PFS_MAX_NMOUNT		PFS_MAX_NCHD
 
 //#define	PFS_MAX_COMPNTLEN	(64 - 3*4) /* max file name component length */
