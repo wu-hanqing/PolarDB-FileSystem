@@ -670,9 +670,6 @@ pfsdev_reopen(int devi, const char *cluster, const char *devname, int flags)
 const char *
 pfsdev_trace_pbdname(const char *cluster, const char *pbdname)
 {
-	int n;
-	char comp[3][PFS_MAX_PBDLEN];
-
 	switch (pfsdev_type(cluster, pbdname)) {
     case PFS_DEV_SPDK:
         return pbdname;
