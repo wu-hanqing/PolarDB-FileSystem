@@ -142,8 +142,6 @@ static __thread int tls_free_iocb_num = 0;
 
 #define error_time_interval {FLAGS_pfs_spdk_driver_error_interval, 0}
 
-static struct timeval err_time_interval={1,0};
-
 static void pfs_spdk_dev_io_fini_pread(void *iocb);
 static void pfs_spdk_dev_io_fini_pwrite(void *iocb);
 static void pfs_spdk_dev_io_fini_trim(void *iocb);
