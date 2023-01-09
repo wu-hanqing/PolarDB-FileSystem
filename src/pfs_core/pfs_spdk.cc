@@ -143,7 +143,7 @@ static char *
 safe_strdup(const char *p)
 {
     if (p == NULL)
-	return strdup("");
+        return strdup("");
     return strdup(p);
 }
 
@@ -330,7 +330,7 @@ pfs_spdk_init_subsys_start(void *arg)
     if (pfs_empty_string(json_file)) {
         if (pfs_empty_string(FLAGS_spdk_json_config_file)) {
             pfs_etrace("json config file is not set!");
-	}
+        }
         else
             json_file = FLAGS_spdk_json_config_file;
         pfs_itrace("json config file: %s", json_file);
@@ -843,9 +843,9 @@ pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *set)
     CPU_ZERO(set);
     pci_addr = pfs_get_dev_pci_address(bdev);
     if (pci_addr == NULL)
-	return -1;
+        return -1;
     if (!strlen(pci_addr)) {
-	free(pci_addr);
+        free(pci_addr);
         return -1;
     }
     int rc = pfs_get_pci_local_cpus(pci_addr, set);
@@ -879,8 +879,8 @@ pfs_get_dev_pci_address(struct spdk_bdev *bdev)
 
     if (0) {
 err:
-	kv_destroy(array);
-	free(json);
+        kv_destroy(array);
+        free(json);
         return NULL;
     }
 
@@ -1234,6 +1234,8 @@ _is_page_aligned(uint64_t address, uint64_t page_size)
  * A simple function to verify if iovec is PRP alignment.
  * Note we don't check if neighbours are contig memory areas,
  * it is enough for us.
+ * return: 1 is aligned
+ *         0 not aligned
  */
 int
 pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
