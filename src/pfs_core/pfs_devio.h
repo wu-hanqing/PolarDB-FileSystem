@@ -53,13 +53,6 @@ typedef struct pbdinfo {
 /* supported devices */
 typedef enum pfs_devtype {
 	PFS_DEV_INVALID	= 0,
-#ifndef PFS_DISK_IO_ONLY
-	PFS_DEV_POLAR,
-	PFS_DEV_PANGU,
-#endif
-	PFS_DEV_DISK,
-	PFS_DEV_CURVE,
-	PFS_DEV_CURVE2,
 	PFS_DEV_SPDK,
 	PFS_DEV_MAX,
 } pfs_devtype_t;

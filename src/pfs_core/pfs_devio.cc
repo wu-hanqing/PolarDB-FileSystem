@@ -674,23 +674,7 @@ pfsdev_trace_pbdname(const char *cluster, const char *pbdname)
 	char comp[3][PFS_MAX_PBDLEN];
 
 	switch (pfsdev_type(cluster, pbdname)) {
-	case PFS_DEV_DISK:
-		return MAGIC_PBDNAME;
-#ifndef PFS_DISK_IO_ONLY
-	case PFS_DEV_POLAR:
-		return pbdname;
-	case PFS_DEV_PANGU:
-		n = sscanf(pbdname, "pangu-%[^-]-%[^-]-%[^-]",
-			comp[0], comp[1], comp[2]);
-		PFS_VERIFY(n == 3);	// XXX: namei should guarantee it ok
-		n = snprintf(pfs_trace_pbdname, sizeof(pfs_trace_pbdname),
-			"%s-1", comp[1]);
-		PFS_VERIFY(n < PFS_MAX_PBDLEN);
-		pfs_itrace("pangu device %s uses %s as its pbdname for"
-		    " tracing\n", pbdname, pfs_trace_pbdname);
-		return pfs_trace_pbdname;
-#endif
-    case PFS_DEV_CURVE:
+    case PFS_DEV_SPDK:
         return pbdname;
 	default:
 		return NULL;
