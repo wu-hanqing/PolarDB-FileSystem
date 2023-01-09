@@ -402,13 +402,13 @@ err_exit:
     dkdev->dk_ctrlr = bdev_nvme_get_ctrlr(dkdev->dk_bdev);
     if (dkdev->dk_ctrlr) { // is nvme device
         dkdev->dk_ctrlr_flags = spdk_nvme_ctrlr_get_flags(dkdev->dk_ctrlr);
-	const struct spdk_nvme_ctrlr_data *cdata;
-	cdata = spdk_nvme_ctrlr_get_data(dkdev->dk_ctrlr);
-	snprintf(product_name, sizeof(product_name), "%-20.20s (%-20.20s)",
-		 cdata->mn, cdata->sn);
+        const struct spdk_nvme_ctrlr_data *cdata;
+        cdata = spdk_nvme_ctrlr_get_data(dkdev->dk_ctrlr);
+        snprintf(product_name, sizeof(product_name), "%-20.20s (%-20.20s)",
+                cdata->mn, cdata->sn);
     } else {
-	snprintf(product_name, sizeof(product_name), "%s",
-		 spdk_bdev_get_name(dkdev->dk_bdev));
+        snprintf(product_name, sizeof(product_name), "%s",
+                spdk_bdev_get_name(dkdev->dk_bdev));
     }
     strncpy(dkdev->dk_path, dev->d_devname, sizeof(dkdev->dk_path));
     dkdev->dk_path[sizeof(dkdev->dk_path)-1] = 0;
