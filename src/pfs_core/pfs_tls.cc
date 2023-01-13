@@ -107,7 +107,7 @@ pfs_g_tls_create()
 {
 	pfs_g_tls_t *tls;
 
-	tls = (pfs_g_tls_t *)pfs_mem_malloc(sizeof(*tls), M_TLS);
+	tls = (pfs_g_tls_t *)pfs_mem_dalloc(sizeof(*tls), M_TLS);
 	PFS_ASSERT(tls != NULL);
 
 	memset(tls, 0, sizeof(*tls));
