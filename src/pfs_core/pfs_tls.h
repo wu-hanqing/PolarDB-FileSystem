@@ -57,10 +57,6 @@ typedef struct pfs_tls {
 	 * it corresponds to.
 	 */
 	pfs_ioq_t	*tls_ioqueue[PFS_MAX_NCHD];	/* private data for dev */
-	/*
-	 * This field is only used by disk dev to convert
-	 * unaligned ptr to aligned ptr.
-	 */
 	char		*tls_directio_buf;
 
 	int		tls_fdtbl_rdlock_count;
