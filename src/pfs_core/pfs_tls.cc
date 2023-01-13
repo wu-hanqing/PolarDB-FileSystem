@@ -52,24 +52,26 @@ pfs_tls_create()
 {
 	pfs_tls_t *tls;
 
-	tls = (pfs_tls_t *)pfs_mem_malloc(sizeof(*tls), M_TLS);
+	tls = (pfs_tls_t *)pfs_mem_dalloc(sizeof(*tls), M_TLS);
 	PFS_ASSERT(tls != NULL);
 
 	memset(tls, 0, sizeof(*tls));
+/*
 	tls->tls_tx = NULL;
 	tls->tls_req_ttl = 0;
 	tls->tls_bdi = NULL;
 	tls->tls_meta_locked = false;
-
 	tls->tls_stat_ver = 0;
+*/
 	tls->tls_stat_api_type = MNT_STAT_BASE;
 	tls->tls_stat_file_type = FILE_PFS_INITED;
 	pfs_mntstat_bthreads_change(1);
 
+/*
 	for (int i = 0; i < PFS_MAX_NCHD; i++) {
 		tls->tls_ioqueue[i] = NULL;
 	}
-
+*/
 	return tls;
 }
 
