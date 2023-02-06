@@ -354,7 +354,7 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
     static size_t page_size = sysconf(_SC_PAGESIZE);
     pfs_spdk_dev_t *dkdev = (pfs_spdk_dev_t *)dev;
     struct spdk_thread *spdk_thread = NULL;
-    char thread_name[64] = {0};
+    char thread_name[128] = {0};
     char product_name[128] = {0};
     int err = 0;
 
