@@ -18,7 +18,7 @@ endif()
 string(REPLACE "\n" "" RAW_GIT_DESC ${RAW_GIT_DESC})
 message(STATUS "build git version: (\"${RAW_GIT_DESC} \")")
 
-if (CMAKE_BUILD_TYPE STREQUAL "Release")
+if ($<CONFIG:Release>)
     execute_process(COMMAND date OUTPUT_VARIABLE RAW_DATE)
     string(REPLACE "\n" "" RAW_DATE ${RAW_DATE})
     message(STATUS "build date: (\"${RAW_DATE} \")")
