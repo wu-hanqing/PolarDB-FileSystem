@@ -19,6 +19,11 @@ set(pfsd_VERSION_PATCH 2)
 set(pfsd_VERSION 
     ${pfsd_VERSION_MAJOR}.${pfsd_VERSION_MINOR}.${pfsd_VERSION_MATCH})
 
+#set default build type to Release
+if (NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
+endif()
+
 include(ProcessorCount)
 include(CheckIncludeFile)
 include(ExternalProject)
@@ -138,56 +143,48 @@ include_directories(${ExtProjLocalDir}/include SYSTEM)
 link_directories(${ExtProjLocalDir}/lib)
 
 set(COMMON_FLAGS
-  -fno-strict-aliasing
-  -Wall
-  -Werror
-  -Wno-deprecated-declarations
-  -Wno-unused-result
-  -Wno-format-overflow
-  -Wno-misleading-indentation
-  -Wno-format-truncation
-  -Wno-stringop-truncation
-  -Wno-int-in-bool-context
-  -Wno-stringop-overflow
-  -Wno-error=attributes
-  -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
-  -Wno-missing-declarations -fno-strict-aliasing
-  -Wformat -Wformat-security -Wformat-nonliteral
-  -mssse3
-  -g
-  -D_GNU_SOURCE
-  -DPFS_USE_BTHREAD=${PFS_USE_BTHREAD_VAL}
-  -D__PFS_BUILD__
+  "-fno-strict-aliasing\
+  -Wall\
+  -Werror\
+  -Wno-deprecated-declarations\
+  -Wno-unused-result\
+  -Wno-format-overflow\
+  -Wno-misleading-indentation\
+  -Wno-format-truncation\
+  -Wno-stringop-truncation\
+  -Wno-int-in-bool-context\
+  -Wno-stringop-overflow\
+  -Wno-error=attributes\
+  -Wextra -Wno-unused-parameter -Wno-missing-field-initializers\
+  -Wno-missing-declarations -fno-strict-aliasing\
+  -Wformat -Wformat-security -Wformat-nonliteral\
+  -mssse3\
+  -g\
+  -D_GNU_SOURCE\
+  -DPFS_USE_BTHREAD=${PFS_USE_BTHREAD_VAL}\
+  -D__PFS_BUILD__"
   )
 
 if (SANITIZE_ADDRESS)
-   list(APPEND COMMON_FLAGS -fsanitize=address)
+   string(APPEND COMMON_FLAGS " -fsanitize=address")
 endif()
 if (STACK_PROTECT)
-   list(APPEND COMMON_FLAGS -fstack-protector)
+   string(APPEND COMMON_FLAGS " -fstack-protector")
 endif()
 
 set(CXX_FLAGS
-  ${COMMON_FLAGS}
-  -std=c++11
-  -Wno-deprecated
-  -Wno-unused-local-typedefs
-  -Wno-sign-compare
-  -fpermissive
-  -Wno-unused-variable
-  -Wno-unused-function
+  "${COMMON_FLAGS}\
+  -Wno-deprecated\
+  -Wno-unused-local-typedefs\
+  -Wno-sign-compare\
+  -fpermissive\
+  -Wno-unused-variable\
+  -Wno-unused-function"
 )
 
-set(C_FLAGS
-  ${COMMON_FLAGS}
-)
-
-string(REPLACE ";" " " CXX_FLAGS "${CXX_FLAGS}")
-string(REPLACE ";" " " C_FLAGS "${C_FLAGS}")
-string(APPEND CMAKE_CXX_FLAGS "${CXX_FLAGS}")
-string(APPEND CMAKE_C_FLAGS "${C_FLAGS}")
-
-message("build log level release level " ${RELEASE_LEVEL} " debug level " ${DEBUG_LEVEL})
+string(APPEND CMAKE_C_FLAGS " ${COMMON_FLAGS}")
+string(APPEND CMAKE_CXX_FLAGS " ${COMMON_FLAGS} ${CXX_FLAGS}")
+set(CMAKE_CXX_STANDARD 11)
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
