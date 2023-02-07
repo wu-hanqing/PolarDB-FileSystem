@@ -163,7 +163,6 @@ endif()
 set(CXX_FLAGS
   "${COMMON_FLAGS}\
   -Wno-sign-compare\
-  -fpermissive\
   -Wno-unused-variable\
   -Wno-unused-function"
 )
