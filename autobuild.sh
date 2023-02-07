@@ -19,7 +19,7 @@ cd $BASE_DIR
 echo -e "\033[33m begin compile pfsdaemon|pfs|libpfs.a|libpfsd.a \033[0m"
 mkdir -p build
 pushd build
-cmake -DCMAKE_BUILD_TYPE:STRING=Release .. && cmake --build . --config Release -j 1
+cmake -DCMAKE_BUILD_TYPE:STRING=Release .. && cmake --build . --config Release -j 1 && cmake --build . --config Release --target package
 popd
 
 echo -e "\033[33m end compile, binary's in ./bin, library's in ./lib \033[0m"
