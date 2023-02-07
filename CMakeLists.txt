@@ -11,13 +11,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required (VERSION 3.11.1)
-project(curve_pfsd CXX C ASM)
-set(pfsd_VERSION_MAJOR 2)
-set(pfsd_VERSION_MINOR 1)
-set(pfsd_VERSION_PATCH 2)
-set(pfsd_VERSION 
-    ${pfsd_VERSION_MAJOR}.${pfsd_VERSION_MINOR}.${pfsd_VERSION_MATCH})
+cmake_minimum_required (VERSION 3.13)
+project(pfsd LANGUAGES CXX C VERSION 2.1.2)
 
 #set default build type to Release
 if (NOT CMAKE_BUILD_TYPE)
