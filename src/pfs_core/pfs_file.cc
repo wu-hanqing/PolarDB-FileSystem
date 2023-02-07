@@ -359,7 +359,7 @@ fd_get(pfs_file_t *file)
 static inline void
 fd_put(int fd)
 {
-	PFS_ASSERT(fdtbl != NULL);
+	PFS_DEBUG(fdtbl != NULL);
 	/*
 	 * Push into the linked list with its head position changed to
 	 * the input fd.
@@ -372,7 +372,7 @@ fd_put(int fd)
 static inline pfs_file_t*
 fd_to_file(int fd)
 {
-	PFS_ASSERT(fdtbl != NULL);
+	PFS_DEBUG(fdtbl != NULL);
 	if (((intptr_t)fdtbl[fd]) % 2 == 1)
 		return NULL;
 	return fdtbl[fd];
@@ -413,7 +413,7 @@ fd_free(pfs_file_t *file, bool file_is_locked)
 	 * File can only be closed when holding fdtbl wrlock.
 	 */
 	fdtbl_wrlock();
-	PFS_ASSERT(fdtbl != NULL);
+	PFS_DEBUG(fdtbl != NULL);
 	PFS_ASSERT(0 <= fd && fd < pfs_max_nfd);
 	PFS_ASSERT(fdtbl[fd] == file);
 	if (fdtbl[fd]->f_refcnt <= 0) {

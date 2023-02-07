@@ -145,6 +145,15 @@ void	pfs_abort(const char *action, const char *cond, const char *func,
 } while(0)
 #endif
 
+#ifdef NDEBUG
+#define	PFS_DEBUG(cond)
+#else
+#define	PFS_DEBUG(cond)	do {					\
+	if (unlikely(!(cond)))					\
+		pfs_abort("debug", #cond, __func__, __LINE__);	\
+} while(0)
+#endif
+
 #define	PFS_ASSERT(cond)	do {				\
 	if (unlikely(!(cond)))					\
 		pfs_abort("assert", #cond, __func__, __LINE__);	\
