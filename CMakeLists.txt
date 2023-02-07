@@ -146,7 +146,6 @@ set(COMMON_FLAGS
   -Wno-unused-result\
   -Wno-format-truncation\
   -Wno-stringop-truncation\
-  -Wno-stringop-overflow\
   -Wextra -Wno-unused-parameter\
   -fno-strict-aliasing\
   ${CPU_FLAGS} \
@@ -165,8 +164,6 @@ endif()
 
 set(CXX_FLAGS
   "${COMMON_FLAGS}\
-  -Wno-deprecated\
-  -Wno-unused-local-typedefs\
   -Wno-sign-compare\
   -fpermissive\
   -Wno-unused-variable\
