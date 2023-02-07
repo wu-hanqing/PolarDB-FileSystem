@@ -78,7 +78,9 @@ pfsd_parse_option(void)
 	g_pfsd_option.o_pollers = FLAGS_pollers;
 	g_pfsd_option.o_workers = FLAGS_workers;
 	strncpy(g_pfsd_option.o_shm_dir, FLAGS_shm_dir, sizeof g_pfsd_option.o_shm_dir);
+	g_pfsd_option.o_shm_dir[sizeof(g_pfsd_option.o_shm_dir)-1] = '\0';
 	strncpy(g_pfsd_option.o_pbdname, FLAGS_pbd_name, sizeof g_pfsd_option.o_pbdname);
+	g_pfsd_option.o_pbdname[sizeof(g_pfsd_option.o_pbdname)-1] = '\0';
 	server_id = FLAGS_server_id;
 	if (!sanity_check())
 		return -1;

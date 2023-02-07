@@ -160,6 +160,7 @@ int parse_options(int ac, char* av[])
 			case 'a':
 				strncpy(g_config.shm_dir, optarg,
 				    sizeof g_config.shm_dir);
+				g_config.shm_dir[sizeof(g_config.shm_dir)-1] = '\0';
 				break;
 
 			case 'h':
@@ -180,7 +181,8 @@ int parse_options(int ac, char* av[])
 		if (optind + 1 != ac)
 			return -1;
 
-		strncpy(g_config.pbdname, av[optind], PFS_MAX_NAMELEN);
+		strncpy(g_config.pbdname, av[optind], sizeof(g_config.pbdname));
+		g_config.pbdname[sizeof(g_config.pbdname)-1] = '\0';
 	} else {
 		printf("missing pbdname\n");
 		return -1;

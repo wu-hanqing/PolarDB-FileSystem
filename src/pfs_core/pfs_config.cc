@@ -194,6 +194,7 @@ add_new_key_value(pfs_config_t *config, const char *sect_name, const char *key, 
 	if (key_len < sizeof(kv->kv_key) && value_len < sizeof(kv->kv_value)) {
 		strncpy(kv->kv_key, key, sizeof(kv->kv_key));
 		strncpy(kv->kv_value, value, sizeof(kv->kv_value));
+		kv->kv_value[sizeof(kv->kv_value)-1] = '\0';
 	} else {
 		pfs_mem_free(kv, M_CONFIG_KV);
 		return NULL;
