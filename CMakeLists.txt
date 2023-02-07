@@ -144,7 +144,6 @@ set(COMMON_FLAGS
   -Werror\
   -Wno-deprecated-declarations\
   -Wno-unused-result\
-  -Wno-format-truncation\
   -Wno-stringop-truncation\
   -Wextra -Wno-unused-parameter\
   -fno-strict-aliasing\

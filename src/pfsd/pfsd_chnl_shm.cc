@@ -79,9 +79,9 @@ pfsd_accept_begin(void *ctx, void *op, int conn_id_hint, const char *cluster,
 /* Server side */
 static uint32_t
 get_file_mode(chnl_ctx_shm_t *ctx, const char *filename) {
-	char pidfile[PFSD_MAX_SVR_ADDR_SIZE];
+	char pidfile[PFSD_MAX_SVR_ADDR_SIZE+1024];
 	/* Can't overflow */
-	snprintf(pidfile, PFSD_MAX_SVR_ADDR_SIZE, "%s/%s", ctx->ctx_pidfile_dir,
+	snprintf(pidfile, sizeof(pidfile), "%s/%s", ctx->ctx_pidfile_dir,
 	    filename);
 	struct stat st;
 	if (stat(pidfile, &st) == 0) {
@@ -97,9 +97,9 @@ chnl_accept_shm_sync(chnl_ctx_shm_t *ctx, pfsd_chnl_op_t *op,
 {
 #ifdef PFSD_SERVER
 	pidfile_data_t file_data;
-	char pidfile[PFSD_MAX_SVR_ADDR_SIZE];
+	char pidfile[PFSD_MAX_SVR_ADDR_SIZE+1024];
 	/* Can't overflow */
-	snprintf(pidfile, PFSD_MAX_SVR_ADDR_SIZE, "%s/%s", ctx->ctx_pidfile_dir,
+	snprintf(pidfile, sizeof(pidfile), "%s/%s", ctx->ctx_pidfile_dir,
 	    filename);
 
 	/* O_SYNC: must write to disk */
@@ -293,8 +293,8 @@ chnl_close_shm_svr(chnl_ctx_shm_t *ctx, const char *filename, uint32_t name_len,
 	struct stat st;
 	pidfile_data_t file_data;
 
-	char path[PFSD_MAX_SVR_ADDR_SIZE];
-	snprintf(path, PFSD_MAX_SVR_ADDR_SIZE, "%s/%s", ctx->ctx_pidfile_dir,
+	char path[PFSD_MAX_SVR_ADDR_SIZE+1024];
+	snprintf(path, sizeof(path), "%s/%s", ctx->ctx_pidfile_dir,
 	    filename);
 	filename = path;
 
