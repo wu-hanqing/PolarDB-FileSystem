@@ -145,7 +145,7 @@ set(COMMON_FLAGS
   -Wno-stringop-overflow\
   -Wno-error=attributes\
   -Wextra -Wno-unused-parameter\
-  -Wno-missing-declarations -fno-strict-aliasing\
+  -fno-strict-aliasing\
   -mssse3\
   -g\
   -D_GNU_SOURCE\
