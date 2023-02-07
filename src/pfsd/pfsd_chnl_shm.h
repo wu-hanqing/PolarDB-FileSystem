@@ -88,6 +88,10 @@ typedef struct chnl_ctx_shm {
 	};
 } chnl_ctx_shm_t;
 
+#ifdef PFSD_CLIENT                                                              
+extern unsigned s_mount_epoch;
+#endif 
+
 void pfsd_chnl_shm_client_init();
 
 #endif //PFSD_CHNL_SHM_H_

@@ -102,7 +102,7 @@ forward_iovec_iter(struct iovec **itp, int *iovcnt, int len)
 	struct iovec *it = *itp;
 
 	while (len > 0) {
-		if (it->iov_len <= len) {
+		if (it->iov_len <= size_t(len)) {
 			it->iov_base = ((char *)it->iov_base) + it->iov_len;
 			len -= it->iov_len;
 			*iovcnt = *iovcnt - 1;

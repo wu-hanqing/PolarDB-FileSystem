@@ -469,7 +469,7 @@ TEST_F(FileTest, pfs_pwrite_dma)
 
     buf = (char *) rte_malloc("", to_write, 4096);
     len = pfs_pwrite_dma(fd_, buf, to_write, 0);
-    CHECK_RET(len, to_write);
+    CHECK_RET((size_t)len, to_write);
     rte_free(buf);
 }
 

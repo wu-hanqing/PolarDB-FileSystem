@@ -46,7 +46,7 @@ static void *s_mount_local_info = NULL;
 static char s_pbdname[PFS_MAX_NAMELEN];
 static int s_mnt_flags = 0;
 static int s_mnt_hostid = -1;
-int s_mount_epoch = 0;
+unsigned int s_mount_epoch = 0;
 
 static int s_mode = PFSD_SDK_PROCESS;
 static char s_svraddr[PFS_MAX_PATHLEN];

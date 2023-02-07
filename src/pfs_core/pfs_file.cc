@@ -638,13 +638,13 @@ out:
 }
 
 static void
-iovec_memset(struct iovec *iov, char c, int len)
+iovec_memset(struct iovec *iov, char c, ssize_t len)
 {
 	int i = 0;
 	int tmp = 0;
 
 	while (len > 0) {
-		tmp = RTE_MIN(iov[i].iov_len, len);
+		tmp = RTE_MIN(iov[i].iov_len, (size_t)len);
 		memset(iov[i].iov_base, c, tmp);
 		len -= tmp;
 		i++;

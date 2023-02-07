@@ -91,7 +91,7 @@ get_sect_name(char *p, char **section)
 static inline pfs_config_section*
 add_new_sect(pfs_config_t *config, const char *sect_name)
 {
-	int key_len = 0;
+	size_t key_len = 0;
 	if(!config || !sect_name)
 		return NULL;
 
@@ -171,8 +171,8 @@ get_key_value(char *p, char **key, char **value)
 static inline pfs_config_kv_t*
 add_new_key_value(pfs_config_t *config, const char *sect_name, const char *key, const char *value)
 {
-	int key_len = 0;
-	int value_len = 0;
+	size_t key_len = 0;
+	size_t value_len = 0;
 	pfs_config_section_t *sect = NULL;
 	pfs_config_kv_t *kv = NULL;
 
