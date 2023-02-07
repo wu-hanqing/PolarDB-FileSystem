@@ -139,12 +139,12 @@ if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
 endif()
 
 set(COMMON_FLAGS
-  "-fno-strict-aliasing\
-  -Wall\
+  "-Wall\
   -Werror\
+  -Wextra\
   -Wno-deprecated-declarations\
   -Wno-unused-result\
-  -Wextra -Wno-unused-parameter\
+  -Wno-unused-parameter\
   -fno-strict-aliasing\
   ${CPU_FLAGS} \
   -g\
