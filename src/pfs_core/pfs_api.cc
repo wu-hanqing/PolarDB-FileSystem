@@ -311,8 +311,7 @@ _pfs_ftruncate(int fd, off_t len)
 }
 
 static int
-_pfs_open(const char *pbdpath, __attribute__((unused)) int flags,
-    __attribute__((unused)) mode_t mode)
+_pfs_open(const char *pbdpath, int flags, __attribute__((unused)) mode_t mode)
 {
 	int err, fd, tmp;
 	nameinfo_t ni;
