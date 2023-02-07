@@ -113,7 +113,7 @@ typedef struct admin_info {
 	admin_event_t	ai_event[ADMIN_NEVENT];
 } admin_info_t;
 
-int
+static int
 uds_recv(int sock, void *buf, int len, int flags)
 {
 	int n, rsum;
@@ -139,7 +139,7 @@ uds_recv(int sock, void *buf, int len, int flags)
 	return rsum;
 }
 
-int
+static int
 uds_send(int sock, void *buf, int len, int flags)
 {
 	int n, ssum;

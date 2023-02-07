@@ -175,8 +175,6 @@ typedef	struct admin_buf 	admin_buf_t;
 admin_info_t *	pfs_admin_init(const char *pbdname);
 int 		pfs_admin_fini(admin_info_t *ai, const char *pbdname);
 int		pfs_admin_reply(int sock, int type, int op, int error, admin_buf_t *ab);
-int 		uds_recv(int sock, void *buf, int len, int flags);
-int 		uds_send(int sock, void *buf, int len, int flags);
 
 admin_buf_t *	pfs_adminbuf_create(int sock, int type, int op, int size);
 void		pfs_adminbuf_destroy(admin_buf_t *ab, int error);
