@@ -134,6 +134,10 @@ include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
 include_directories(${ExtProjLocalDir}/include SYSTEM)
 link_directories(${ExtProjLocalDir}/lib)
 
+if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
+    set(CPU_FLAGS "-mssse3")
+endif()
+
 set(COMMON_FLAGS
   "-fno-strict-aliasing\
   -Wall\
@@ -145,7 +149,7 @@ set(COMMON_FLAGS
   -Wno-stringop-overflow\
   -Wextra -Wno-unused-parameter\
   -fno-strict-aliasing\
-  -mssse3\
+  ${CPU_FLAGS} \
   -g\
   -D_GNU_SOURCE\
   -DPFS_USE_BTHREAD=${PFS_USE_BTHREAD_VAL}\
