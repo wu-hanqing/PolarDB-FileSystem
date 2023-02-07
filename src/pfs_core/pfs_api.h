@@ -43,7 +43,6 @@
 #define	MNTFLG_RDWR		(MNTFLG_RD|MNTFLG_WR)
 #define	MNTFLG_LOG		0x0010
 #define	MNTFLG_PFSD		0x0100
-#define	MNTFLG_PFSD_INTERNAL	0x0200
 #define	MNTFLG_TOOL		0x1000	/* Only pfstool will set this flag,
 				   	   to get max hostid to instead itself */
 #define MNTFLG_DISCARD_BYFORCE	0x100000	/* discard by force */
