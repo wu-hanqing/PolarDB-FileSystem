@@ -143,7 +143,6 @@ set(COMMON_FLAGS
   -Wno-format-truncation\
   -Wno-stringop-truncation\
   -Wno-stringop-overflow\
-  -Wno-error=attributes\
   -Wextra -Wno-unused-parameter\
   -fno-strict-aliasing\
   -mssse3\
