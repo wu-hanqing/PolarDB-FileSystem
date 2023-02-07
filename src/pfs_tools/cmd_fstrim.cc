@@ -36,7 +36,7 @@ static struct option long_opts[] = {
 	{ "endid", optional_argument,		NULL,	'e' },
 	{ "all", optional_argument,		NULL,	'a' },
 	{ "quiet", optional_argument,		NULL,	'q' },
-	{ 0 },
+	{ 0, 0, 0, 0 },
 };
 
 void

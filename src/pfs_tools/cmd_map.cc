@@ -29,7 +29,7 @@ typedef struct opts_map {
 
 static struct option long_opts[] = {
 	{ "offset", optional_argument,		NULL,	'o' },
-	{ 0 },
+	{ 0, 0, 0, 0},
 };
 
 void

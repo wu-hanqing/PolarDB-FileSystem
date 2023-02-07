@@ -30,7 +30,7 @@ typedef struct pfsd_memory {
 	int64_t		mt_count_free;
 } pfsd_memtype_t;
 
-#define	MEMTYPE_ENTRY(tag)	[tag] = { #tag, PTHREAD_MUTEX_INITIALIZER, }
+#define	MEMTYPE_ENTRY(tag)	[tag] = { #tag, PTHREAD_MUTEX_INITIALIZER, 0, 0, 0, 0}
 static pfsd_memtype_t pfsd_mem_type[MD_NTYPE] = {
 	MEMTYPE_ENTRY(MD_NONE),
 	MEMTYPE_ENTRY(MD_DIR),

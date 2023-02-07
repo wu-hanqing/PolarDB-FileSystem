@@ -155,7 +155,7 @@ static struct option long_opts_dumpfs[] = {
 	{ "type",		required_argument,	NULL,	't' },
 	{ "chunk",		required_argument,	NULL,	'c' },
 	{ "object",		required_argument,	NULL,	'o' },
-	{ 0 },
+	{ 0, 0, 0, 0 },
 };
 
 void

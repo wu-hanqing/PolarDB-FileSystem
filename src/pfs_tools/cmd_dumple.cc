@@ -33,7 +33,7 @@
 #define	MODULAR_CUT(off, len, modulus)		\
 	((off + len > modulus) ? (modulus - off) : len)
 
-static const pfs_logentry_phy_t	emptyle = {0};
+static const pfs_logentry_phy_t	emptyle = {};
 
 typedef struct opts_dumple {
 	opts_common_t	common;
@@ -54,7 +54,7 @@ static struct option long_opts_dumple[] = {
 	{ "btno",	required_argument,	NULL,	'b' },
 	{ "deno",	required_argument,	NULL,	'd' },
 	{ "inno",	required_argument,	NULL,	'i' },
-	{ 0 },
+	{ 0, 0, 0, 0 },
 };
 
 void

@@ -238,7 +238,7 @@ static struct option long_opts_common[] = {
 	{ "enable_pfsd", required_argument,	NULL,	'E' },
     { "spdk_json", required_argument, NULL, 'J' },
     { "spdk_init", no_argument, NULL, 'S' },
-	{ 0 },
+	{ 0, 0, 0, 0 },
 };
 
 int

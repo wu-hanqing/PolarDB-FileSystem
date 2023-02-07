@@ -113,7 +113,7 @@ static struct option long_opts_fscp[] = {
 	{ "crc_check",		no_argument,		NULL,	'c' },
 	{ "src_cluster",	optional_argument,	NULL,	'S' },
 	{ "dst_cluster",	optional_argument,	NULL,	'D' },
-	{ 0 },
+	{ 0, 0, 0, 0 },
 };
 
 void

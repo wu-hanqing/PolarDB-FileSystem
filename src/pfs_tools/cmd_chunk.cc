@@ -148,7 +148,7 @@ static struct option chunk_long_opts[] = {
 	{ "chunkid",		required_argument,	NULL,	'c' },
 	{ "endchunkid",		optional_argument,	NULL,	'e' },
 	{ "force",		optional_argument,	NULL,	'f' },
-	{ 0 },
+	{ 0, 0, 0, 0 },
 };
 
 void

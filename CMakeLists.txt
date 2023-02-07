@@ -155,7 +155,7 @@ set(COMMON_FLAGS
   -Wno-int-in-bool-context\
   -Wno-stringop-overflow\
   -Wno-error=attributes\
-  -Wextra -Wno-unused-parameter -Wno-missing-field-initializers\
+  -Wextra -Wno-unused-parameter \
   -Wno-missing-declarations -fno-strict-aliasing\
   -Wformat -Wformat-security -Wformat-nonliteral\
   -mssse3\

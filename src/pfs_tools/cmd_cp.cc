@@ -58,7 +58,7 @@ static struct option long_opts_cp[] = {
 	{ "dst_cluster",	optional_argument,	NULL,	'D' },
 	{ "src_hostid",		optional_argument,	NULL,	's' },
 	{ "dst_hostid",		optional_argument,	NULL,	'd' },
-	{ 0 },
+	{ 0, 0, 0, 0 },
 };
 
 void

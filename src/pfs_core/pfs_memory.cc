@@ -31,7 +31,7 @@ typedef struct pfs_memtype {
 	int64_t		__pad[3];
 } pfs_memtype_t;
 
-#define	MEMTYPE_ENTRY(tag)	[tag] = { #tag }
+#define	MEMTYPE_ENTRY(tag)	[tag] = { #tag, 0, 0, 0, 0, {0, 0, 0} }
 static pfs_memtype_t	pfs_mem_type[M_NTYPE] __attribute__((aligned(64))) = {
 	MEMTYPE_ENTRY(M_NONE),
 	MEMTYPE_ENTRY(M_SECTOR),

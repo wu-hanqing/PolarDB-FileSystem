@@ -110,7 +110,7 @@ static struct option mkfs_long_opts[] = {
 	{ "sector-size", optional_argument,	NULL,	's' },
 	{ "num-users",	optional_argument,	NULL,	'u' },
 	{ "force", optional_argument,		NULL,	'f' },
-	{ 0 },
+	{ 0, 0, 0, 0 },
 };
 
 void
@@ -774,7 +774,7 @@ static struct option growfs_long_opts[] = {
 	{ "oldcknum",	required_argument,	NULL,	'o' },
 	{ "newcknum",	required_argument,	NULL,	'n' },
 	{ "force",	optional_argument,	NULL,	'f' },
-	{ 0 },
+	{ 0, 0, 0, 0 },
 };
 
 void

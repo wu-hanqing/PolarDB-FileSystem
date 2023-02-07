@@ -137,7 +137,7 @@ static pthread_t g_init_thread_id = 0;
 static pthread_t g_rpc_thread_id = 0;
 static pthread_t g_gc_thread_id = 0;
 static bool g_spdk_env_initialized = false;
-struct pfs_spdk_driver_poller spdk_driver_poller = { NULL };
+struct pfs_spdk_driver_poller spdk_driver_poller = { NULL, NULL, NULL };
 
 static char *
 safe_strdup(const char *p)
