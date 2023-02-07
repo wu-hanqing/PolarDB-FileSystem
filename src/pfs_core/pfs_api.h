@@ -157,18 +157,6 @@ struct direntplus *pfs_readdirplus(DIR *dir);
 #define PFS_FD_RAW(fd)							\
 	(int)((unsigned int)(fd) & ~(1U << PFS_FD_VALIDBIT))
 
-#define PFS_PATH_ISVALID(path)						\
-	(path != NULL &&						\
-	 ((path[0] == '/' && isdigit((path)[1])) || path[0] == '.'	\
-	  || strncmp(path, "/pangu-", 7) == 0				\
-	  || strncmp(path, "/sd", 3) == 0				\
-	  || strncmp(path, "/sf", 3) == 0				\
-	  || strncmp(path, "/vd", 3) == 0				\
-	  || strncmp(path, "/nvme", 5) == 0				\
-	  || strncmp(path, "/loop", 5) == 0				\
-	  || strncmp(path, "/mapper_", 8) ==0				\
-	  || strstr(path, "@@") != 0))
-
 #define PFS_DIR_ISVALID(dir)						\
 	( (dir) && ( (intptr_t)(dir) & 0x01 ) )
 

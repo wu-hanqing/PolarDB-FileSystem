@@ -125,13 +125,26 @@ getopt_cp(int argc, char *argv[], cmd_opts_t *co)
 	return optind;
 }
 
+#define PFS_PATH_ISVALID(path)						\
+	(path != NULL &&						\
+	 ((path[0] == '/' && isdigit((path)[1])) || path[0] == '.'	\
+	  || strncmp(path, "/pangu-", 7) == 0				\
+	  || strncmp(path, "/sd", 3) == 0				\
+	  || strncmp(path, "/sf", 3) == 0				\
+	  || strncmp(path, "/vd", 3) == 0				\
+	  || strncmp(path, "/nvme", 5) == 0				\
+	  || strncmp(path, "/loop", 5) == 0				\
+	  || strncmp(path, "/mapper_", 8) ==0				\
+	  || strstr(path, "@@") != 0))
+
 static int
 get_pbdname(const char *pbdpath, char *pbdname, size_t nlen)
 {
+/*
 	if (PFS_PATH_ISVALID(pbdpath) == false) {
 		return -1;
 	}
-
+*/
 	pbdpath_split(pbdpath, pbdname, nlen, NULL, 0);
 	return 0;
 }
