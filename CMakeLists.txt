@@ -148,16 +148,12 @@ set(COMMON_FLAGS
   -Werror\
   -Wno-deprecated-declarations\
   -Wno-unused-result\
-  -Wno-format-overflow\
-  -Wno-misleading-indentation\
   -Wno-format-truncation\
   -Wno-stringop-truncation\
-  -Wno-int-in-bool-context\
   -Wno-stringop-overflow\
   -Wno-error=attributes\
-  -Wextra -Wno-unused-parameter \
+  -Wextra -Wno-unused-parameter\
   -Wno-missing-declarations -fno-strict-aliasing\
-  -Wformat -Wformat-security -Wformat-nonliteral\
   -mssse3\
   -g\
   -D_GNU_SOURCE\
