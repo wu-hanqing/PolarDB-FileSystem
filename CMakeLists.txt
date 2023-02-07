@@ -19,15 +19,12 @@ if (NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-include(ProcessorCount)
 include(CheckIncludeFile)
 include(ExternalProject)
 include(FindPkgConfig)
 if (NOT PKG_CONFIG_FOUND)
     message(FATAL_ERROR "pkg_config not found")
 endif()
-
-ProcessorCount(NCPU)
 
 set(PKG_ROOT "/usr/local/curvestore/")
 set(PKG_DIR "${PKG_ROOT}/pfsd")
