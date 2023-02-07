@@ -144,35 +144,8 @@ pfs_mutex_t	rename_mtx;
 } while(0)
 
 #define	API_EXIT(err) do {					\
-	if (err < 0) {						\
-		errno_convert(err);				\
-	}							\
+	errno_convert(err);					\
 } while(0)
-
-static int error_number[] = {
-	EACCES,
-	EAGAIN,
-	EBADF,
-	EEXIST,
-	EFBIG,
-	EINVAL,
-	EISDIR,
-	EMFILE,
-	ENAMETOOLONG,
-	ENODEV,
-	ENOENT,
-	ENOTEMPTY,
-	ENOMEM,
-	ENOSPC,
-	ENOTDIR,
-	EXDEV,
-	EOVERFLOW,
-	EPFS_FILE_2MANY,
-	EROFS,
-	EBUSY,
-	ERANGE,
-	0,	/* sentinel */
-};
 
 enum {
 	GTYPE_MOUNT_NAMEI = 1,
@@ -255,20 +228,13 @@ const int _gtype = GTYPE_MOUNT_DIR
 	}						\
 } while (0)
 
-static void
+static inline void
 errno_convert(int err)
 {
-	int eno = 0;
-	size_t i = 0;
-
-	PFS_ASSERT(err < 0);
-	for (i = 0; (eno = error_number[i]) != 0; i++) {
-		if (-err == eno) {
-			errno = eno;
-			return;
-		}
-	}
-	errno = EIO;	/* the default error no */
+	if (err < 0)
+		errno = -err;
+	else if (err)
+		errno = err;
 }
 
 static int
