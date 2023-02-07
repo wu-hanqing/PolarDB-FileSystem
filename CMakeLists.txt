@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required (VERSION 3.13)
+cmake_minimum_required(VERSION 3.13)
 project(pfsd LANGUAGES CXX C VERSION 2.1.2)
 
 #set default build type to Release
