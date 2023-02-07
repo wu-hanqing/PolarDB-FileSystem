@@ -31,7 +31,7 @@ set(PKG_DIR "${PKG_ROOT}/pfsd")
 
 include(thirdparties/CMakeLists.txt)
 
-include_directories(${ExtProjLocalDir}/include SYSTEM)                          
+include_directories(${ExtProjLocalDir}/include SYSTEM)
 link_directories(${ExtProjLocalDir}/lib)
 
 set(DPDK_DIR /usr/local/dpdk CACHE STRING "dpdk directory")
