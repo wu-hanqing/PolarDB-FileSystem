@@ -285,7 +285,7 @@ fd_set_init()
 	pfs_max_nfd = file_max_nfd;
 	fdtbl_free_last = pfs_max_nfd;
 	fdtbl = (pfs_file_t**)pfs_mem_malloc(pfs_max_nfd * sizeof(pfs_file_t*), M_FDTBL_PTR);
-        memset(fdtbl, 0, pfs_max_nfd * sizeof(pfs_file_t*));
+	memset(fdtbl, 0, pfs_max_nfd * sizeof(pfs_file_t*));
 }
 
 static void
