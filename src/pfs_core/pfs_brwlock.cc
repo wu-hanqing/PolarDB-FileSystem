@@ -26,7 +26,9 @@
 #include <stdio.h>
 #include <sys/param.h>
 
+#include "pfs_sync.h"
 #include "pfs_brwlock.h"
+#include "pfs_tls.h"
 
 #define leaf_count 32
 #define leaf_mask  31
@@ -36,8 +38,8 @@
 #endif
 
 struct pfs_brwlock {
-	pthread_rwlock_t	*leaves[leaf_count];
-	pthread_t		owner;
+	pfs_rwlock_t	*leaves[leaf_count];
+	pfs_tls_t	*owner;
 };
 
 static int next_thread_id;
@@ -78,18 +80,18 @@ pfs_brwlock_init(pfs_brwlock_t *rwlock)
 	}
 	for (i = 0; i < leaf_count; ++i) {
 		void *ptr;
-		alloc_size = roundup(sizeof(pthread_rwlock_t), align);
+		alloc_size = roundup(sizeof(pfs_rwlock_t), align);
 		if (!(ptr = aligned_alloc(align, alloc_size))) {
 			int err;
 			err = errno;
 			while (--i >= 0) {
-				pthread_rwlock_destroy(lck->leaves[i]);
+				pfs_rwlock_destroy(lck->leaves[i]);
 			}
 			free(lck);
 			return (err);
 		}
-		lck->leaves[i] = (pthread_rwlock_t *)ptr;
-		pthread_rwlock_init(lck->leaves[i], NULL);
+		lck->leaves[i] = (pfs_rwlock_t *)ptr;
+		pfs_rwlock_init(lck->leaves[i]);
 	}
 	lck->owner = 0;
 	*rwlock = lck;
@@ -103,7 +105,7 @@ pfs_brwlock_destroy(pfs_brwlock_t *rwlock)
 	int i;
 
 	for (i = 0; i < leaf_count; ++i) {
-		pthread_rwlock_destroy(lck->leaves[i]);
+		pfs_rwlock_destroy(lck->leaves[i]);
 		free(lck->leaves[i]);
 	}
 	free(lck);
@@ -114,17 +116,17 @@ int
 pfs_brwlock_tryrdlock(pfs_brwlock_t *rwlock)
 {
 	struct pfs_brwlock *lck = *rwlock;
-	pthread_rwlock_t *leaf = lck->leaves[get_leaf_index()];
+	pfs_rwlock_t *leaf = lck->leaves[get_leaf_index()];
 
-	return pthread_rwlock_tryrdlock(leaf);
+	return pfs_rwlock_tryrdlock(leaf);
 }
 
 int
 pfs_brwlock_rdlock(pfs_brwlock_t *rwlock)
 {
 	struct pfs_brwlock *lck = *rwlock;
-	pthread_rwlock_t *leaf = lck->leaves[get_leaf_index()];
-	return pthread_rwlock_rdlock(leaf);
+	pfs_rwlock_t *leaf = lck->leaves[get_leaf_index()];
+	return pfs_rwlock_rdlock(leaf);
 }
 
 int
@@ -134,15 +136,15 @@ pfs_brwlock_wrlock(pfs_brwlock_t *rwlock)
 	int i, err;
 	
 	for (i = 0; i < leaf_count; ++i) {
-		err = pthread_rwlock_wrlock(lck->leaves[i]);
+		err = pfs_rwlock_wrlock(lck->leaves[i]);
 		if (err != 0) {
 			while (--i >= 0) {
-				pthread_rwlock_unlock(lck->leaves[i]);
+				pfs_rwlock_unlock(lck->leaves[i]);
 			}
 			return (err);
 		}
 	}
-	lck->owner = pthread_self();
+	lck->owner = pfs_current_tls();
 	return (0);
 }
 
@@ -153,15 +155,15 @@ pfs_brwlock_trywrlock(pfs_brwlock_t *rwlock)
 	int i, err;
 	
 	for (i = 0; i < leaf_count; ++i) {
-		err = pthread_rwlock_trywrlock(lck->leaves[i]);
+		err = pfs_rwlock_trywrlock(lck->leaves[i]);
 		if (err != 0) {
 			while (--i >= 0) {
-				pthread_rwlock_unlock(lck->leaves[i]);
+				pfs_rwlock_unlock(lck->leaves[i]);
 			}
 			return (err);
 		}
 	}
-	lck->owner = pthread_self();
+	lck->owner = pfs_current_tls();
 	return (0);
 }
 
@@ -169,19 +171,19 @@ int
 pfs_brwlock_unlock(pfs_brwlock_t *rwlock)
 {
 	struct pfs_brwlock *lck = *rwlock;
-	pthread_rwlock_t *leaf;
+	pfs_rwlock_t *leaf;
 	int i;
 
 	if (lck->owner != 0) {
-		if (lck->owner == pthread_self()) {
+		if (lck->owner == pfs_current_tls()) {
 			lck->owner = 0;
 			for (i = 0; i < leaf_count; ++i)
-				pthread_rwlock_unlock(lck->leaves[i]);
+				pfs_rwlock_unlock(lck->leaves[i]);
 			return (0);
 		}
 		return (EPERM);
 	}
 
 	leaf = lck->leaves[get_leaf_index()];
-	return pthread_rwlock_unlock(leaf);
+	return pfs_rwlock_unlock(leaf);
 }
