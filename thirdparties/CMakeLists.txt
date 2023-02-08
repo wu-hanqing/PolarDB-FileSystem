@@ -122,7 +122,7 @@ set_target_properties(protobuf_lite PROPERTIES IMPORTED_LOCATION ${ExtProjLocalD
 add_dependencies(protobuf_lite protobuf_prj)
 
 ExternalProject_Add(brpc_prj
-    GIT_REPOSITORY git@github.com:opencurve/incubator-brpc.git
+    GIT_REPOSITORY https://github.com/opencurve/incubator-brpc.git
     GIT_TAG dpdk
     PREFIX ${ExtProjBuildDir}/brpc
     GIT_PROGRESS true
