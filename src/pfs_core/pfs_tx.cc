@@ -770,8 +770,9 @@ pfs_tx_get(pfs_mount_t *mnt, int type, bool timeoutfail)
 		tx->t_opsroot = NULL;
 		tx->t_ncbs = 0;
 		TAILQ_INIT(&tx->t_cbs);
+	} else {
+		PFS_ASSERT(tx != NULL);
 	}
-	PFS_ASSERT(tx != NULL);
 	return tx;
 }
 
