@@ -23,6 +23,3 @@ cmake -DCMAKE_BUILD_TYPE:STRING=Release .. && cmake --build . --config Release -
 popd
 
 echo -e "\033[33m end compile, binary's in ./bin, library's in ./lib \033[0m"
-
-
-
