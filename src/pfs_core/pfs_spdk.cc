@@ -47,6 +47,8 @@
 #include <sys/user.h>	// For PAGE_SIZE and PAGE_MASK
 #include <sys/param.h>  // For roundup
 
+#include "pfs_errno_wrapper.h"
+
 char* FLAGS_spdk_name;
 PFS_OPTION_REG2(spdk_name, FLAGS_spdk_name, OPT_STR, "", OPT_CSTR);
 

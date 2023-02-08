@@ -39,6 +39,8 @@
 #include "pfs_brwlock.h"
 #include "pfs_spdk.h"
 
+#include "pfs_errno_wrapper.h"
+
 /*-
  * FILE IO
  * -------

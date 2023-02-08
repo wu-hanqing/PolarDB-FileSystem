@@ -36,6 +36,8 @@
 #include "pfs_stat.h"
 #include "pfs_namecache.h"
 
+#include "pfs_errno_wrapper.h"
+
 #define	MAX_NTHRD	64
 #define	MIN_NTHRD	8
 static int64_t loadthread_count = MIN_NTHRD;

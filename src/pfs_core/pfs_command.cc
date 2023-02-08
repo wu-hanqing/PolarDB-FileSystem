@@ -23,6 +23,8 @@
 #include "pfs_stat.h"
 #include "pfs_namecache.h"
 
+#include "pfs_errno_wrapper.h"
+
 #define	IO_SIZE		(64 << 10)
 
 static ssize_t

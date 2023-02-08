@@ -52,6 +52,8 @@
 #include "pfs_futex_event.h"
 #include "pfs_option.h"
 
+#include "pfs_errno_wrapper.h"
+
 #define BUF_TYPE "pfs_iobuf"
 #define io_buf io_iov[0].iov_base
 

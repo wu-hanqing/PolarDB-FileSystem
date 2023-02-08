@@ -24,6 +24,8 @@
 #include "pfs_memory.h"
 #include "pfs_trace.h"
 
+#include "pfs_errno_wrapper.h"
+
 #define COMMENT_CHARS		'#'    /* default comment chars */
 #define KEYVAL_SEP		'='    /* default key-val separator character */
 #define RESTART_SECTION_NAME	"restart"

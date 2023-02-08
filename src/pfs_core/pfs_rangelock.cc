@@ -32,6 +32,8 @@
 #include "pfs_impl.h"
 #include "pfs_tls.h"
 
+#include "pfs_errno_wrapper.h"
+
 #if PFS_USE_BTHREAD
 #define MAX_RQLE_CACHE 128
 #else

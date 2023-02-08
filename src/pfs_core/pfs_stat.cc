@@ -23,6 +23,8 @@
 #include "pfs_option.h"
 #include "pfs_config.h"
 
+#include "pfs_errno_wrapper.h"
+
 static int64_t		mountstat_enable = PFS_OPT_ENABLE;
 PFS_OPTION_REG(mountstat_enable, "1", pfs_check_lval_switch);
 

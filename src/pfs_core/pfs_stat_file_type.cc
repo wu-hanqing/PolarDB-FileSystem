@@ -17,6 +17,8 @@
 #include <string.h>
 #include "pfs_stat_file_type.h"
 
+#include "pfs_errno_wrapper.h"
+
 #define FULL_MATCH(a, b) \
 	(0 == memcmp((a), (b), sizeof(b) - 1))
 #define TAIL_MATCH(a, len, b) \

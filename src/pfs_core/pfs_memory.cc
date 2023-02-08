@@ -22,6 +22,8 @@
 #include "pfs_impl.h"
 #include "pfs_admin.h"
 
+#include "pfs_errno_wrapper.h"
+
 typedef struct pfs_memtype {
 	const char 	*mt_name;
 	ssize_t		mt_bytes_alloc;

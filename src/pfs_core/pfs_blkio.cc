@@ -30,6 +30,8 @@
 #include "pfs_iomem.h"
 #include "pfs_stat.h"
 
+#include "pfs_errno_wrapper.h"
+
 #define PFS_MAXPHYS PBD_UNIT_SIZE
 
 typedef int pfs_blkio_fn_t(

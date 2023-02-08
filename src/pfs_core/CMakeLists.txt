@@ -31,6 +31,7 @@ set(SRC_LIST
     pfs_devio.cc
     pfs_devstat.cc
     pfs_dir.cc
+    pfs_errno_wrapper.cc
     pfs_file.cc
     pfs_futex_event.cc
     pfs_iomem.cc

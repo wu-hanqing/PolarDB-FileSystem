@@ -31,6 +31,9 @@
 #include "pfs_mount.h"
 #include "pfs_trace.h"
 #include "pfs_util.h"
+
+#include "pfs_errno_wrapper.h"
+
 static const char	*meta_file_path = "/var/run/pfs";
 
 #define	CHUNKFILE_MAGIC		0x43CB40FA34

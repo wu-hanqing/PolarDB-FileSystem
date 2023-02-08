@@ -21,6 +21,8 @@
 #include "pfs_version.h"
 #include "pfs_devio.h"
 
+#include "pfs_errno_wrapper.h"
+
 static uint64_t	pfs_current_version	= 2;
 
 /* table of features supported by all versions */

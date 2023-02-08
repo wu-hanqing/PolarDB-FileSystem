@@ -22,6 +22,8 @@
 #include "pfs_trace.h"
 #include "pfs_config.h"
 
+#include "pfs_errno_wrapper.h"
+
 /*
  * define the config option which need restart to make effect
  */

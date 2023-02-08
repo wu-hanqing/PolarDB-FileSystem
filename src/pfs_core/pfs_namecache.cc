@@ -30,6 +30,8 @@
 #include <strings.h>
 #include <stdlib.h>
 
+#include "pfs_errno_wrapper.h"
+
 /* Estimated average bucket length */
 #define SEARCH_DEPTH	4UL
 

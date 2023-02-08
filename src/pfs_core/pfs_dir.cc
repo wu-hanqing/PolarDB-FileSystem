@@ -35,6 +35,8 @@
 #include "pfs_stat.h"
 #include "pfs_namecache.h"
 
+#include "pfs_errno_wrapper.h"
+
 #define d_sysde		d_deplus.dp_sysde	/* code compatible */
 
 static char		work_dir[PFS_MAX_PATHLEN];

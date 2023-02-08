@@ -30,6 +30,8 @@
 #include "pfs_stat.h"
 #include "pfs_config.h"
 
+#include "pfs_errno_wrapper.h"
+
 #define io_buf io_iov[0].iov_base
 
 #define PFS_MAX_CACHED_DEVIO 128

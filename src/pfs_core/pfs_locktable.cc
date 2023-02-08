@@ -30,6 +30,8 @@
 #include <rte_stack.h>
 #include <rte_malloc.h>
 
+#include "pfs_errno_wrapper.h"
+
 #define LOCKTABLE_BITS 10
 #define LOCKTABLE_SIZE (1 << LOCKTABLE_BITS)
 

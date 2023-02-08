@@ -35,6 +35,7 @@
 #include "pfs_stat.h"
 #include "pfs_spdk.h"
 
+#include "pfs_errno_wrapper.h"
 /*-
  *  This file implements the API layer of the PFS, whose main
  *  component diagram is depicted below. API layer is responsible for

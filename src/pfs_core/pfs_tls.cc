@@ -25,6 +25,8 @@
 #include "pfs_rangelock.h"
 #include "pfs_locktable.h"
 
+#include "pfs_errno_wrapper.h"
+
 /*
  * TLS manages txs, locks, and meta data exception handling.
  *

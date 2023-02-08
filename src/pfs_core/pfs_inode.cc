@@ -37,6 +37,8 @@
 #include "pfs_option.h"
 #include "pfs_stat.h"
 
+#include "pfs_errno_wrapper.h"
+
 /*
  * Be carefull! Do not change BLK_TABLE_BLK_CNT without discussion.
  * dblk_cnt use the lowest 4 bits of dblk_vect to save the count.

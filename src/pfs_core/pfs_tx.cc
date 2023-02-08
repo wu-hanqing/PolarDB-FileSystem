@@ -32,6 +32,8 @@
 #include "pfs_trace.h"
 #include "pfs_stat.h"
 
+#include "pfs_errno_wrapper.h"
+
 #define	TX_DEBUG_VERBOSE 0
 
 /*

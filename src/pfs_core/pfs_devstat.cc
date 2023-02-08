@@ -18,6 +18,8 @@
 #include "pfs_devio.h"
 #include "pfs_devstat.h"
 
+#include "pfs_errno_wrapper.h"
+
 extern uint64_t			pfs_devs_epoch;
 extern pfs_dev_t		*pfs_devs[PFS_MAX_NCHD];
 

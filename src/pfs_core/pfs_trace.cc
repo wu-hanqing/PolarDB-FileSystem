@@ -31,6 +31,8 @@
 #include "pfs_impl.h"
 #include "pfs_trace.h"
 
+#include "pfs_errno_wrapper.h"
+
 //static int tracelvl_threshold = PFS_TRACE_ERROR;
 
 #define	PFS_TRACE_LEN	1024

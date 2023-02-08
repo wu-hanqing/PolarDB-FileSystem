@@ -25,6 +25,8 @@
 #include "pfs_namecache.h"
 #include "pfs_namei.h"
 
+#include "pfs_errno_wrapper.h"
+
 #define INSTK_INC	8
 
 struct stkent {

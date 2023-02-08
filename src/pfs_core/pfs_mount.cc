@@ -43,6 +43,8 @@
 #include "pfs_locktable.h"
 #include "pfs_brwlock.h"
 
+#include "pfs_errno_wrapper.h"
+
 extern "C" {
     unsigned int __attribute__((weak)) server_id = 1984;
 }

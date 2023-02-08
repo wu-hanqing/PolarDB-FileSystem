@@ -36,6 +36,9 @@
 #include "pfs_trace.h"
 #include "pfs_tx.h"
 #include "pfs_stat.h"
+
+#include "pfs_errno_wrapper.h"
+
 /*
  * PFS log is for two purposes. First, it is to ensure the atomicity
  * of changing meta data of one PFS instance; Second, it is the way to

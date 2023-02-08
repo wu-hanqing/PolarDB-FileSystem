@@ -23,6 +23,8 @@
 #include "pfs_alloc.h"
 #include "pfs_meta.h"
 
+#include "pfs_errno_wrapper.h"
+
 static const char *metanames[] = {
 	[MT_NONE]	= "None",
 	[MT_BLKTAG]	= "Blktag",

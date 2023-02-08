@@ -30,6 +30,8 @@
 #include "pfs_brwlock.h"
 #include "pfs_tls.h"
 
+#include "pfs_errno_wrapper.h"
+
 #define leaf_count 32
 #define leaf_mask  31
 

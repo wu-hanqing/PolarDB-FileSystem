@@ -36,6 +36,7 @@
 #include "pfs_util.h"
 #include "pfs_command.h"
 #include "pfs_option.h"
+#include "pfs_errno_wrapper.h"
 
 typedef struct msg_errinject {
 	char		ei_file[PFS_MAX_PATHLEN];

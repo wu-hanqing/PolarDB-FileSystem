@@ -40,6 +40,7 @@
 #include "pfs_trace.h"
 #include "pfs_option.h"
 
+#include "pfs_errno_wrapper.h"
 
 #define	PFS_MAX_DISKS		4
 
