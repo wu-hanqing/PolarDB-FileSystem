@@ -976,7 +976,6 @@ pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
     pfs_spdk_dev_t *dkdev = (pfs_spdk_dev_t *)dev;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)ioq;
     pfs_devio_t *nio = nullptr;
-    bool locked = false, wait = false;
 
     while ((dkioq->dkq_inflight_count | dkioq->dkq_complete_count)) {
         TAILQ_FOREACH(nio, &dkioq->dkq_complete_queue, io_next) {
@@ -989,27 +988,7 @@ pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
                 break;
             }
 
-            if (dkdev->dk_poller_handle == NULL && // not external poller mode
-                !wait && FLAGS_pfs_spdk_driver_poll_delay) {
-                int running = __atomic_load_n(&dkdev->dk_running, __ATOMIC_RELAXED);
-                if (!locked && !running &&
-                    !pthread_mutex_trylock(&dkdev->dk_work_mutex)) {
-                    // set to 1 to avoid other threads run pthread_mutex_trylock
-                    __atomic_store_n(&dkdev->dk_running, 1, __ATOMIC_RELAXED);
-                    locked = true;
-                    spdk_set_thread(dkdev->dk_spdk_thread);
-                }
-                if (locked) {
-                    pfs_spdk_dev_pull_iocb(dkdev);
-                    spdk_thread_poll(dkdev->dk_spdk_thread, 64, 0);
-                } else {
-                    wait = true;
-                    goto wait_event;
-                }
-            } else {
-wait_event:
-                pfs_event_wait(&dkioq->dkq_done_ev);
-            }
+            pfs_event_wait(&dkioq->dkq_done_ev);
 
             for (iocb = __atomic_exchange_n(&dkioq->dkq_done_q, NULL,
                     __ATOMIC_ACQUIRE); iocb; iocb = next) {
@@ -1020,10 +999,6 @@ wait_event:
             pfs_spdk_dev_deq_complete_io(dkioq, nio);
             break;
         }
-    }
-    if (locked) {
-        spdk_set_thread(NULL);
-        pthread_mutex_unlock(&dkdev->dk_work_mutex);
     }
     return nio;
 }
