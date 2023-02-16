@@ -196,8 +196,8 @@ pfs_check_ival_shrink_size(struct pfs_option *, const char *data)
  * pbd base info option config
  * must init by restart
  */
-static int64_t file_max_nfd = 204800;
-PFS_OPTION_REG(file_max_nfd, "204800", pfs_check_ival_max_nfd);
+static int64_t file_max_nfd = 2048000;
+PFS_OPTION_REG(file_max_nfd, "2048000", pfs_check_ival_max_nfd);
 
 static pfs_file_t	**fdtbl;
 static int		fdtbl_nopen;
