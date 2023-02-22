@@ -112,7 +112,7 @@ int	pfs_setxattr(const char *pbdpath, const char *name, const void *value,
  * Check if memory region is spdk memory.
  * Return 1: yes, 0 : not
  */
-int     pfs_is_spdk_mem(void *p, size_t size);
+int     pfs_is_spdk_mem(const void *p, size_t size);
 int     pfs_is_spdk_memv(const struct iovec *iov, int iovcnt);
 
 /* directory */

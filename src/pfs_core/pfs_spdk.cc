@@ -1188,9 +1188,9 @@ pfs_cpuset_socket_id(cpu_set_t *cpusetp)
 }
 
 static int
-__pfs_is_spdk_mem(void *p, size_t size)
+__pfs_is_spdk_mem(const void *p, size_t size)
 {
-	char *cp = (char *)p;
+	const char *cp = (const char *)p;
 	size_t left = size;
 	while (left > 0) {
 		size_t tmp = left;
@@ -1215,7 +1215,7 @@ __pfs_is_spdk_memv(const struct iovec *iov, int iovcnt)
 }
 
 extern "C" int
-pfs_is_spdk_mem(void *p, size_t size)
+pfs_is_spdk_mem(const void *p, size_t size)
 {
 	return __pfs_is_spdk_mem(p, size);
 }
