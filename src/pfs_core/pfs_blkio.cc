@@ -231,7 +231,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	void		*cookie[3] = {NULL, NULL, NULL};
 	int		cc = 0;
 	int		blk_lock = 0;
-	int		is_write = 0;
+	const int       is_write = (pfs_blkio_write_segment == iofunc);
 
 	err = 0;
 	ioflags = (len >= 2*PFS_FRAG_SIZE) ? IO_NOWAIT : 0;
@@ -240,7 +240,6 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	if (flags & PFS_IO_WRITE_ZERO)
 		ioflags |= IO_ZERO;
 
-	is_write = (pfs_blkio_write_segment == iofunc);
 	if (is_write && !(flags & PFS_IO_NO_LOCK)) {
 		/* for mode 0, because curve supports 512 bytes sector io,
 		 * if our write-unit is larger than the 512, we have to use
