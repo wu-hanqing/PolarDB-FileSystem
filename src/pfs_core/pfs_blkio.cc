@@ -320,15 +320,19 @@ pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 
 	PFS_ASSERT(off + len <= mnt->mnt_blksize);
 	if (iov == NULL || *iov == NULL) {
-		if (cap & DEV_CAP_ZERO)
+		// NULL iov means zero-filling
+		if (cap & DEV_CAP_ZERO) // device supports zero-filling
 			flags |= PFS_IO_WRITE_ZERO;
 		else if (!(flags & PFS_IO_WRITE_ZERO)) {
+			// allocate a zero-filled buffer
 			zerobuf = pfs_iomem_alloc(PFS_FRAG_SIZE, socket);
 			memset(zerobuf, 0, PFS_FRAG_SIZE);
 			PFS_VERIFY(zerobuf != NULL);
 			tmpiov.iov_base = zerobuf;
 			tmpiov.iov_len = PFS_FRAG_SIZE;
 			flags |= PFS_IO_DMA_ON | PFS_IO_ZERO_BUF;
+		} else {
+			// caller asks device to write-zero
 		}
 		tmpiovp = &tmpiov;
 		iov = &tmpiovp;
