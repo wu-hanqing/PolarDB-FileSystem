@@ -58,8 +58,8 @@ static pfs_bda_t
 pfs_blkio_align(pfs_mount_t *mnt, int ioflags, int is_write, pfs_bda_t data_bda,
     size_t data_len, size_t *io_len, size_t *op_len)
 {
-	pfs_bda_t aligned_bda;
-	size_t sect_off, frag_off;
+	pfs_bda_t aligned_bda = -1L;
+	size_t sect_off = 0, frag_off = 0;
 	size_t sectsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
 	size_t fragsize = mnt->mnt_fragsize;
 
@@ -105,7 +105,7 @@ static int
 pfs_blkio_read_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
     pfs_bda_t bda, size_t len, struct iovec *iov, int iovcnt, int ioflags)
 {
-	int err;
+	int err = 0;
 
 	if (allen != len) {
 		PFS_ASSERT(albuf != NULL);
@@ -128,7 +128,7 @@ static int
 pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
     pfs_bda_t bda, size_t len, struct iovec *iov, int iovcnt, int ioflags)
 {
-	int err;
+	int err = 0;
 
 	if (allen != len) {
 		MNT_STAT_BEGIN();
@@ -220,15 +220,15 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
     off_t off, ssize_t len, pfs_blkio_fn_t *iofunc, int flags)
 {
 	char *albuf = NULL;
-	int err, err1, ioflags;
-	pfs_bda_t bda, albda;
-	size_t allen, iolen, left;
+	int err = 0, err1 = 0, ioflags = 0;
+	pfs_bda_t bda = -1L, albda = -1L;
+	size_t allen = 0, iolen = 0, left = 0;
 	const int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 	const size_t dev_bsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
 	const size_t buf_align = pfsdev_get_buf_align(mnt->mnt_ioch_desc);
-	int write_zero = !!(flags & PFS_IO_WRITE_ZERO);
+	const int write_zero = !!(flags & PFS_IO_WRITE_ZERO);
 	struct rangelock *rl = NULL;
-	void		*cookie[3];
+	void		*cookie[3] = {NULL, NULL, NULL};
 	int		cc = 0;
 	int		blk_lock = 0;
 	int		is_write = 0;
@@ -317,8 +317,8 @@ pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 	const size_t buf_align = pfsdev_get_buf_align(mnt->mnt_ioch_desc);
 	const int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 	const int cap = pfsdev_get_cap(mnt->mnt_ioch_desc);
-	struct iovec tmpiov = {0, 0}, *tmpiovp;
-	int tmpiovcnt;
+	struct iovec tmpiov = {0, 0}, *tmpiovp = NULL;
+	int tmpiovcnt = 0;
 
 	PFS_ASSERT(off + len <= mnt->mnt_blksize);
 	if (iov == NULL || *iov == NULL) {
