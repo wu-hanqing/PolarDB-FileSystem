@@ -32,8 +32,6 @@
 
 #include "pfs_errno_wrapper.h"
 
-#define PFS_MAXPHYS PBD_UNIT_SIZE
-
 typedef int pfs_blkio_fn_t(
     int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
     pfs_bda_t bda, size_t len, struct iovec *iov, int iovcnt, int ioflags);
@@ -74,11 +72,14 @@ pfs_blkio_align(pfs_mount_t *mnt, int ioflags, int is_write, pfs_bda_t data_bda,
 		*op_len = MIN(sectsize - sect_off, data_len);
 		*io_len = sectsize;
 	} else {
+		/* data_bda是硬件IO单位的倍数，那么可以根据fragsize去做IO
+		 * 这里因为我们没有cache层设计，就可以不对齐到cache block位置,
+		 * 所以设置frag_off = 0
+		 */
+		frag_off = 0;
 		if (ioflags & (IO_DMABUF | IO_ZERO)) {
-			fragsize = PFS_MAXPHYS;
-			frag_off = 0;
+			//fragsize = PFS_MAXPHYS;
 		}
-		/* 是硬件IO单位的倍数，那么可以根据fragsize 去做IO */
 		aligned_bda = data_bda;
 		*op_len = MIN(fragsize - frag_off, data_len);
 		*io_len = roundup2(*op_len, sectsize);
