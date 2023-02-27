@@ -84,7 +84,9 @@ pfs_blkio_align(pfs_mount_t *mnt, int ioflags, int is_write, pfs_bda_t data_bda,
 		*op_len = MIN(fragsize - frag_off, data_len);
 		*io_len = roundup2(*op_len, sectsize);
 		if (is_write && *op_len != *io_len && *io_len > sectsize) {
-			/* 减少读然后写的量*/
+			/* 如果要补齐读，不如做一次完整的部分写，然后剩余部分
+			 * 再读 & 写合并
+			 */
 			*io_len -= sectsize;
 			*op_len = *io_len;
 		}
