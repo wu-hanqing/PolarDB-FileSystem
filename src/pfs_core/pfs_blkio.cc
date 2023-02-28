@@ -59,29 +59,26 @@ pfs_blkio_align(pfs_mount_t *mnt, int ioflags, int is_write, pfs_bda_t data_bda,
     size_t data_len, size_t *io_len, size_t *op_len)
 {
 	pfs_bda_t aligned_bda = -1L;
-	size_t sect_off = 0, frag_off = 0;
+	size_t sect_off = 0;
 	size_t sectsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
 	size_t fragsize = mnt->mnt_fragsize;
 
 	PFS_ASSERT(sectsize <= mnt->mnt_fragsize);
 	sect_off = data_bda & (sectsize - 1);
-	frag_off = data_bda & (mnt->mnt_fragsize - 1);
-	/* 先处理硬件IO单位限制 */
+	/* 先处理硬件IO位置对齐限制 */
 	if (sect_off != 0) {
 		aligned_bda = data_bda - sect_off;
 		*op_len = MIN(sectsize - sect_off, data_len);
 		*io_len = sectsize;
 	} else {
-		/* data_bda是硬件IO单位的倍数，那么可以根据fragsize去做IO
-		 * 这里因为我们没有cache层设计，就可以不对齐到cache block位置,
-		 * 所以设置frag_off = 0
+		/* data_bda是硬件IO单位的倍数, 我们可以直接从这个data_bda位置
+		 * 开始IO
 		 */
-		frag_off = 0;
-		if (ioflags & (IO_DMABUF | IO_ZERO)) {
-			//fragsize = PFS_MAXPHYS;
-		}
+		//if (ioflags & (IO_DMABUF | IO_ZERO)) {
+		//fragsize = PFS_MAXPHYS;
+		//}
 		aligned_bda = data_bda;
-		*op_len = MIN(fragsize - frag_off, data_len);
+		*op_len = MIN(fragsize, data_len);
 		*io_len = roundup2(*op_len, sectsize);
 		if (is_write && *op_len != *io_len && *io_len > sectsize) {
 			/* 如果要补齐读，不如做一次完整的部分写，然后剩余部分
