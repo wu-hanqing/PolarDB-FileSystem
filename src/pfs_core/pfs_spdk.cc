@@ -1233,9 +1233,7 @@ _is_page_aligned(uint64_t address, uint64_t page_size)
 }
 
 /*
- * A simple function to verify if iovec is PRP alignment.
- * Note we don't check if neighbours are contig memory areas,
- * it is enough for us.
+ * A simple function to verify if an io vector is PRP aligned.
  * return: 1 is aligned
  *         0 not aligned
  */
@@ -1289,14 +1287,17 @@ pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
 
 int pfs_is_prp_aligned(const void *addr, size_t len)
 {
-	struct iovec iov;
+    struct iovec iov;
 
-	iov.iov_base = (void *)addr;
-	iov.iov_len = len;
-	return pfs_iov_is_prp_aligned(&iov, 1);
+    iov.iov_base = (void *)addr;
+    iov.iov_len = len;
+    return pfs_iov_is_prp_aligned(&iov, 1);
 }
 
-/* assume nvme sgl requires dword align */
+/*
+ * check if an io vector is nvme SGL aligned,
+ * We assume SGL requires dword alignment.
+ */
 int
 pfs_iov_is_sgl_aligned(const struct iovec *iov, int iovcnt)
 {
