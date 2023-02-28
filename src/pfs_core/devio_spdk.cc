@@ -363,8 +363,8 @@ pfs_spdk_dev_open(pfs_dev_t *dev)
     snprintf(thread_name, sizeof(thread_name), "pfs-dev-%s", dev->d_devname);
  
     /*
-     * pfs_spdk_setup should be called as soone as possible in
-     * application's main thread earlier, put it here is just easy
+     * pfs_spdk_setup should be called as soon as possible in
+     * application's main thread, put it here is just easy
      * for pfs tools.
      */
     if ((err = pfs_spdk_setup())) {
