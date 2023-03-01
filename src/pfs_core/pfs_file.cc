@@ -290,7 +290,7 @@ fd_set_init()
 
 static void
 _pfs_check_and_clear_dma(pfs_mount_t *mnt, const struct iovec *iov, int iovcnt,
-	int *flags)
+	off_t off, int *flags)
 {
 	int devi;
 	int caps;
@@ -299,7 +299,7 @@ _pfs_check_and_clear_dma(pfs_mount_t *mnt, const struct iovec *iov, int iovcnt,
 		return;
 	devi = mnt->mnt_ioch_desc;
 	caps = pfsdev_get_cap(devi);
-	if (!pfs_iov_is_sge_aligned(iov, iovcnt, !!(caps & DEV_CAP_SGL)))
+	if (!pfs_iov_is_sge_aligned(iov, iovcnt, off, !!(caps & DEV_CAP_SGL)))
 		*flags &= ~PFS_IO_DMA_ON;
 }
 
@@ -1170,12 +1170,13 @@ pfs_file_xpread(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 	off_t off2;
 
 	MNT_STAT_BEGIN();
-	_pfs_check_and_clear_dma(mnt, iov, iovcnt, &flags);
 	if (off == OFFSET_FILE_POS)
 		off2 = file->f_offset;
 	else
 		off2 = off;
 	PFS_ASSERT(off2 >= 0);
+
+	_pfs_check_and_clear_dma(mnt, iov, iovcnt, off2, &flags);
 
 	rlen = -1;
 	tls_read_begin(mnt);
@@ -1207,7 +1208,6 @@ pfs_file_xpwrite(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 		return 0;
 
 	MNT_STAT_BEGIN();
-	_pfs_check_and_clear_dma(mnt, iov, iovcnt, &flags);
 	if (file->f_flags & O_APPEND)
 		off2 = OFFSET_FILE_SIZE;
 	else if (off == OFFSET_FILE_POS)
@@ -1215,6 +1215,8 @@ pfs_file_xpwrite(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 	else
 		off2 = off;
 	PFS_ASSERT(off2 >= 0 || off2 == OFFSET_FILE_SIZE);
+
+	_pfs_check_and_clear_dma(mnt, iov, iovcnt, off2, &flags);
 
 	/*
 	 * pwrite is not protected by a tx, since it modify file data,
