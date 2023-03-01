@@ -65,17 +65,17 @@ int pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *setp);
 char *pfs_cpuset_to_string(const cpu_set_t *mask);
 int pfs_parse_set(const char *input, cpu_set_t *setp);
 int pfs_cpuset_socket_id(cpu_set_t *setp);
-int pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt);
-int pfs_iov_is_sgl_aligned(const struct iovec *iov, int iovcnt);
-int pfs_is_prp_aligned(const void *addr, size_t len);
-int pfs_is_sgl_aligned(const void *addr, size_t len);
+int pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt, off_t off);
+int pfs_iov_is_sgl_aligned(const struct iovec *iov, int iovcnt, off_t off);
+int pfs_is_prp_aligned(const void *addr, size_t len, off_t off);
+int pfs_is_sgl_aligned(const void *addr, size_t len, off_t off);
 
 static inline int
-pfs_iov_is_sge_aligned(const struct iovec *iov, int iovcnt, bool sgl_supported)
+pfs_iov_is_sge_aligned(const struct iovec *iov, int iovcnt, off_t off, bool sgl_supported)
 {
 	if (sgl_supported)
-		return pfs_iov_is_sgl_aligned(iov, iovcnt);
-	return pfs_iov_is_prp_aligned(iov, iovcnt);
+		return pfs_iov_is_sgl_aligned(iov, iovcnt, off);
+	return pfs_iov_is_prp_aligned(iov, iovcnt, off);
 }
 
 #include "pfs_spdk_api.h"

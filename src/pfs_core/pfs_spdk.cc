@@ -1238,11 +1238,14 @@ _is_page_aligned(uint64_t address, uint64_t page_size)
  *         0 not aligned
  */
 int
-pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
+pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt, off_t off)
 {
     uintptr_t addr;
     size_t len, total_len = 0;
     int i;
+
+    if (off % 512)
+        return 0;
 
     if (iovcnt == 0)
         return 0;
@@ -1285,13 +1288,13 @@ pfs_iov_is_prp_aligned(const struct iovec *iov, int iovcnt)
     return 1;
 }
 
-int pfs_is_prp_aligned(const void *addr, size_t len)
+int pfs_is_prp_aligned(const void *addr, size_t len, off_t off)
 {
     struct iovec iov;
 
     iov.iov_base = (void *)addr;
     iov.iov_len = len;
-    return pfs_iov_is_prp_aligned(&iov, 1);
+    return pfs_iov_is_prp_aligned(&iov, 1, off);
 }
 
 /*
@@ -1299,11 +1302,14 @@ int pfs_is_prp_aligned(const void *addr, size_t len)
  * We assume SGL requires dword alignment.
  */
 int
-pfs_iov_is_sgl_aligned(const struct iovec *iov, int iovcnt)
+pfs_iov_is_sgl_aligned(const struct iovec *iov, int iovcnt, off_t off)
 {
     uintptr_t addr = 0;
     size_t len = 0, total = 0;
     int i = 0;
+
+    if (off % 512) 
+        return 0;
 
     if (iovcnt == 0)
         return 0;
@@ -1326,11 +1332,11 @@ pfs_iov_is_sgl_aligned(const struct iovec *iov, int iovcnt)
     return 1;
 }
 
-int pfs_is_sgl_aligned(const void *addr, size_t len)
+int pfs_is_sgl_aligned(const void *addr, size_t len, off_t off)
 {
     struct iovec iov;
 
     iov.iov_base = (void *)addr;
     iov.iov_len = len;
-    return pfs_iov_is_sgl_aligned(&iov, 1);
+    return pfs_iov_is_sgl_aligned(&iov, 1, off);
 }
