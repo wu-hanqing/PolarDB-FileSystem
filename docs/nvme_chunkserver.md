@@ -72,7 +72,7 @@ sudo meson install
 ```
 git clone git@github.com:spdk/spdk.git
 cd spdk
-git checkout v22.01.x
+git checkout v22.05.x
 ./configure --prefix=/usr/local/spdk --with-dpdk=/usr/local/dpdk
 Q= LDFLAGS=-lbsd make
 sudo bash
