@@ -28,6 +28,11 @@ DEFINE_int32(host_id, 1, "hosit id");
 DEFINE_string(pbd_name, "", "pbdname name");                       
 DEFINE_string(spdk_nvme_controller, "", "nvme controller");                       
 
+/*
+ * usage:
+ * ./pfs_unittest -cluster=spdk -pbd_name=0000:3e:00:0n1 -spdk_nvme_controller=0000:3e:00:0
+ */
+
 int main(int argc, char **argv)
 {
 	gflags::ParseCommandLineFlags(&argc, &argv, true);
