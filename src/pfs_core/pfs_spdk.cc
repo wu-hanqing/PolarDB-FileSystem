@@ -94,7 +94,7 @@ uint64_t FLAGS_spdk_base_virtaddr;
 PFS_OPTION_REG2(spdk_base_virtaddr, FLAGS_spdk_base_virtaddr, OPT_LONG, 0, OPT_LONG);
 
 char *FLAGS_spdk_env_context;
-PFS_OPTION_REG2(spdk_env_context, FLAGS_spdk_env_context, OPT_STR, "", OPT_CSTR);
+PFS_OPTION_REG2(spdk_env_context, FLAGS_spdk_env_context, OPT_STR, "--in-memory", OPT_CSTR);
 
 char *FLAGS_spdk_json_config_file;
 PFS_OPTION_REG2(spdk_json_config_file, FLAGS_spdk_json_config_file, OPT_STR, "", OPT_CSTR);
