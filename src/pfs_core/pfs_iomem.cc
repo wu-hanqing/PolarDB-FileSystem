@@ -24,8 +24,8 @@ static void pfs_iomem_init(void)
     stack = rte_stack_create(name, FLAGS_pfs_spdk_iobuf_cache,
                              SOCKET_ID_ANY, RTE_STACK_F_LF);
     if (stack == NULL) {
-        fprintf(stderr, "can not create iomem rte_stack\n");
-        errno = ENOMEM;
+        fprintf(stderr, "can not create rte_stack, %s\n", __func__);
+        abort();
     }
 }
 
