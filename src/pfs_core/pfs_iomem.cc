@@ -18,7 +18,10 @@ static pthread_once_t once_init = PTHREAD_ONCE_INIT;
 
 static void pfs_iomem_init(void)
 {
-    stack = rte_stack_create(IOMEM, FLAGS_pfs_spdk_iobuf_cache,
+    char name[128];
+
+    snprintf(name, sizeof(name), "%s_%d", IOMEM, getpid());
+    stack = rte_stack_create(name, FLAGS_pfs_spdk_iobuf_cache,
                              SOCKET_ID_ANY, RTE_STACK_F_LF);
     if (stack == NULL) {
         fprintf(stderr, "can not create iomem rte_stack\n");
