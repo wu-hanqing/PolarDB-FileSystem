@@ -69,6 +69,12 @@ void pfs_event_wait(pfs_event_t *e)
 	value->store(0);
 }
 
+int pfs_event_timedwait(pfs_event_t *e, const struct timespec *abstime) {
+    pfs_event_wait(e);
+    // TODO(xuchaojie):   implement bthead version pfs_event_timedwait
+    return 0;
+}
+
 void pfs_event_set(pfs_event_t *e)
 {
 	butil::atomic<int> *value = (butil::atomic<int> *)e->butex;
@@ -94,6 +100,10 @@ void pfs_event_destroy(pfs_event_t *e)
 void pfs_event_wait(pfs_event_t *e)
 {
 	pfs_futex_event_wait(&e->value);
+}
+
+int pfs_event_timedwait(pfs_event_t *e, const struct timespec *abstime) {
+    return pfs_futex_event_timedwait(&e->value, abstime);
 }
 
 void pfs_event_set(pfs_event_t *e)

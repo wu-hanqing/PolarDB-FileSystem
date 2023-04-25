@@ -355,6 +355,7 @@ inline void* pfs_getspecific(pfs_key_t key)
 void pfs_event_init(pfs_event_t *e);
 void pfs_event_destroy(pfs_event_t *e);
 void pfs_event_wait(pfs_event_t *e);
+int pfs_event_timedwait(pfs_event_t *e, const struct timespec *abstime);
 void pfs_event_set(pfs_event_t *e);
 
 #endif // _PFS_SYNC_H
