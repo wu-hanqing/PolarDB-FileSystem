@@ -53,6 +53,7 @@ DEFINE_int32(workers, 50, "PFSD pollers");
 DEFINE_string(spdk_nvme_controller, "", "SPDK nvme controller");
 DEFINE_string(spdk_rpc_address, "/tmp/pfs_spdk.sock", "SPDK rpc address");
 DEFINE_int32(pfs_spdk_driver_poll_delay, 0, "spdk driver poller delay");
+DEFINE_int32(pfs_waitio_timeout_sec, 10, "spdk driver wait io time out (s)");
 
 void set_pfs_options()
 {
@@ -65,6 +66,7 @@ void set_pfs_options()
 	pfs_option_set("spdk_nvme_controller", FLAGS_spdk_nvme_controller.c_str());
 	pfs_option_set("spdk_rpc_address", FLAGS_spdk_rpc_address.c_str());
 	pfs_option_set_int("pfs_spdk_driver_poll_delay", FLAGS_pfs_spdk_driver_poll_delay);
+	pfs_option_set_int("pfs_waitio_timeout_sec", FLAGS_pfs_waitio_timeout_sec);
 }
 
 static void

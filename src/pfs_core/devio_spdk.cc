@@ -128,6 +128,9 @@ static const int64_t g_iodepth = 128;
 static int64_t FLAGS_pfs_spdk_driver_poll_delay;
 PFS_OPTION_REG2(pfs_spdk_driver_poll_delay, FLAGS_pfs_spdk_driver_poll_delay,
 	OPT_LONG, 0, OPT_LONG);
+static int64_t FLAGS_pfs_waitio_timeout_sec;
+PFS_OPTION_REG2(pfs_waitio_timeout_sec, FLAGS_pfs_waitio_timeout_sec,
+	OPT_LONG, 10, OPT_LONG);
 static int FLAGS_pfs_spdk_driver_error_interval;
 PFS_OPTION_REG2(pfs_spdk_driver_error_interval, FLAGS_pfs_spdk_driver_error_interval,
 	OPT_INT, 1, OPT_INT);
@@ -988,8 +991,14 @@ pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
                 break;
             }
 
-            pfs_event_wait(&dkioq->dkq_done_ev);
-
+            struct timespec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            struct timespec timeout = {FLAGS_pfs_waitio_timeout_sec, 0};
+            pfs_timespecadd(&ts, &timeout, &ts);
+            int err = pfs_event_timedwait(&dkioq->dkq_done_ev, &ts);
+            if (err) {
+		        pfs_fatal("wait io time runing out, err:%d/n", err);
+            }
             for (iocb = __atomic_exchange_n(&dkioq->dkq_done_q, NULL,
                     __ATOMIC_ACQUIRE); iocb; iocb = next) {
                 next = iocb->cb_next;
