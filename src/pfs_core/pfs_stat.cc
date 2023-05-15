@@ -231,6 +231,9 @@ static inline void
 pfs_file_type_stat_add_iosize(int64_t stat_time, int io_type, int file_type,
     uint32_t io_size)
 {
+	PFS_VERIFY(file_type < FILE_TYPE_COUNT);
+	PFS_VERIFY(io_type < MNT_STAT_IO_TYPE);
+
 	__atomic_fetch_add(
 	    &mount_file_type_stat_iosize
 	    [stat_time % MNT_STAT_SIZE][io_type][file_type], io_size,
