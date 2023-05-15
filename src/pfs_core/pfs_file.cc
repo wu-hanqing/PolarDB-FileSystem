@@ -889,9 +889,13 @@ pfs_file_write(pfs_inode_t *in, const struct iovec *_iov, int iovcnt,
 		if (locked)
 			pfs_inode_unlock(in);
 
+		int tmp_flags = flags;
+		if (filling_hole) {
+			tmp_flags = flags | PFS_IO_WRITE_ZERO;
+		}
 		wlen = pfs_blkio_write(mnt, update_iter ?  &iov_iter : NULL,
 				update_iter ? &iovcnt : NULL, dblkno, woff,
-				wlen, flags);
+				wlen, tmp_flags);
 
 		if (locked)
 			pfs_inode_lock(in);
@@ -1208,8 +1212,10 @@ pfs_file_xpwrite(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 		return 0;
 
 	MNT_STAT_BEGIN();
-	if (file->f_flags & O_APPEND)
+	if (file->f_flags & O_APPEND) {
 		off2 = OFFSET_FILE_SIZE;
+		flags &= ~PFS_IO_DMA_ON;
+	}
 	else if (off == OFFSET_FILE_POS)
 		off2 = file->f_offset;
 	else

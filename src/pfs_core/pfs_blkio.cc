@@ -216,27 +216,43 @@ static ssize_t
 pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t blkno,
     off_t off, ssize_t len, pfs_blkio_fn_t *iofunc, int flags)
 {
-	char *albuf = NULL;
+	const int caps = pfsdev_get_cap(mnt->mnt_ioch_desc);
+	char *albuf = NULL, *zero_buf = NULL;
 	int err = 0, err1 = 0, ioflags = 0;
 	pfs_bda_t bda = -1L, albda = -1L;
 	size_t allen = 0, iolen = 0, left = 0;
 	const int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 	const size_t dev_bsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
 	const size_t buf_align = pfsdev_get_buf_align(mnt->mnt_ioch_desc);
-	const int write_zero = !!(flags & PFS_IO_WRITE_ZERO);
 	struct rangelock *rl = NULL;
 	void		*cookie[3] = {NULL, NULL, NULL};
 	int		cc = 0;
 	int		blk_lock = 0;
 	const int       is_write = (pfs_blkio_write_segment == iofunc);
+	struct iovec    zero_iov = {0, 0};
 
 	err = 0;
 	ioflags = (len >= 2*PFS_FRAG_SIZE) ? IO_NOWAIT : 0;
 	if (flags & PFS_IO_DMA_ON)
 		ioflags |= IO_DMABUF;
-	if (flags & PFS_IO_WRITE_ZERO)
-		ioflags |= IO_ZERO;
-
+	if (flags & PFS_IO_WRITE_ZERO) {
+		/*
+		 * 对于写零请求，如果设备支持写零，则使用设备能力，否则申请一个
+		 * zero buffer
+		 */
+		if (caps & DEV_CAP_ZERO)
+			ioflags |= IO_ZERO;
+		else {
+			zero_buf = (char *)pfs_iomem_alloc(PFS_FRAG_SIZE, socket);
+			PFS_VERIFY(zero_buf != NULL);
+			memset(zero_buf, 0, PFS_FRAG_SIZE);
+			zero_iov.iov_base = zero_buf;
+			zero_iov.iov_len = PFS_FRAG_SIZE;
+		}
+	} else if (iov == NULL) {
+		pfs_etrace("iov is NULL");
+		abort();
+	}
 	if (is_write && !(flags & PFS_IO_NO_LOCK)) {
 		/* for mode 0, because curve supports 512 bytes sector io,
 		 * if our write-unit is larger than the 512, we have to use
@@ -261,12 +277,21 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 			PFS_VERIFY(albuf != NULL);
 		}
 
+		struct iovec *tmp_iov = NULL;
+		int tmp_iov_cnt = 0;
+		if (!(flags & PFS_IO_WRITE_ZERO)) {
+			tmp_iov = *iov;
+			tmp_iov_cnt = *iovcnt;
+		} else {
+			tmp_iov = &zero_iov;
+			tmp_iov_cnt = 1;
+		}
 		err = (*iofunc)(mnt->mnt_ioch_desc, albda, allen, albuf, bda,
-		    iolen, *iov, *iovcnt, ioflags);
+		    iolen, tmp_iov, tmp_iov_cnt, ioflags);
 		if (err < 0)
 			break;
 
-		if (!(ioflags & IO_ZERO) && !(flags & PFS_IO_ZERO_BUF))
+		if (!(flags & PFS_IO_WRITE_ZERO))
 			forward_iovec_iter(iov, iovcnt, iolen);
 
 		off += iolen;
@@ -277,10 +302,10 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	if (blk_lock)
 		pfs_block_unlock(mnt, blkno, rl, cookie, cc);
 
-	if (albuf) {
+	if (albuf)
 		pfs_iomem_free(albuf);
-		albuf = NULL;
-	}
+	if (zero_buf)
+		pfs_iomem_free(zero_buf);
 
 	ERR_UPDATE(err, err1);
 	if (err < 0) {
@@ -299,6 +324,7 @@ pfs_blkio_read(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
 	ssize_t iolen = 0;
 
 	PFS_ASSERT(off + len <= mnt->mnt_blksize);
+	PFS_ASSERT(iov != NULL);
 	iolen = pfs_blkio_execute(mnt, iov, iovcnt, blkno, off, len,
 	    pfs_blkio_read_segment, flags);
 	return iolen;
@@ -308,42 +334,6 @@ ssize_t
 pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
     pfs_blkno_t blkno, off_t off, ssize_t len, int flags)
 {
-	ssize_t iolen = 0;
-	void *zerobuf = NULL;
-	const size_t buf_align = pfsdev_get_buf_align(mnt->mnt_ioch_desc);
-	const int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
-	const int cap = pfsdev_get_cap(mnt->mnt_ioch_desc);
-	struct iovec tmpiov = {0, 0}, *tmpiovp = NULL;
-	int tmpiovcnt = 0;
-
-	PFS_ASSERT(off + len <= mnt->mnt_blksize);
-	if (iov == NULL || *iov == NULL) {
-		// NULL iov means zero-filling
-		if (cap & DEV_CAP_ZERO) // device supports zero-filling
-			flags |= PFS_IO_WRITE_ZERO;
-		else if (!(flags & PFS_IO_WRITE_ZERO)) {
-			// allocate a zero-filled buffer
-			zerobuf = pfs_iomem_alloc(PFS_FRAG_SIZE, socket);
-			memset(zerobuf, 0, PFS_FRAG_SIZE);
-			PFS_VERIFY(zerobuf != NULL);
-			tmpiov.iov_base = zerobuf;
-			tmpiov.iov_len = PFS_FRAG_SIZE;
-			flags |= PFS_IO_DMA_ON | PFS_IO_ZERO_BUF;
-		} else {
-			// caller asks device to write-zero
-		}
-		tmpiovp = &tmpiov;
-		iov = &tmpiovp;
-		tmpiovcnt = 1;
-		iovcnt = &tmpiovcnt;
-	}
-
-	iolen = pfs_blkio_execute(mnt, iov, iovcnt, blkno, off, len,
+	return pfs_blkio_execute(mnt, iov, iovcnt, blkno, off, len,
 	    pfs_blkio_write_segment, flags);
-
-	if (zerobuf) {
-		pfs_iomem_free(zerobuf);
-		zerobuf = NULL;
-	}
-	return iolen;
 }
