@@ -247,8 +247,12 @@ pfs_config_file_read(const char *config_path, pfs_config_t **config)
 
 	while (!feof(fp)) {
 		//if empty line, forward
-		if (fgets(buff, sizeof(buff), fp) == NULL)
-			continue;
+		if (fgets(buff, sizeof(buff), fp) == NULL) {
+			if (ferror(fp)) {
+				pfs_etrace("error load config file from %s\n", config_path);
+			}
+			break;
+		}
 
 		//if space, forward
 		for (p = buff; *p && isspace(*p); ++p);
