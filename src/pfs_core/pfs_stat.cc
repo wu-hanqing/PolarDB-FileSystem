@@ -208,6 +208,8 @@ out:
 static inline void
 pfs_stat_add(int64_t stat_time, int stat_type, uint64_t stat_latency)
 {
+	PFS_VERIFY(stat_type < MNT_STAT_TYPE_COUNT);
+
 	__atomic_fetch_add(&mount_stat[stat_time % MNT_STAT_SIZE][stat_type],
 	    (stat_latency << COUNT_SHIFT) | 1ull, __ATOMIC_RELAXED);
 }
@@ -216,6 +218,9 @@ static inline void
 pfs_file_type_stat_add(int64_t stat_time, int stat_type, int file_type,
     uint64_t stat_latency)
 {
+	PFS_VERIFY(file_type < FILE_TYPE_COUNT);
+	PFS_VERIFY(stat_type < MNT_STAT_FILE_SPEC_TYPE_COUNT);
+
 	__atomic_fetch_add(
 	    &mount_file_type_stat
 	    [stat_time % MNT_STAT_SIZE][stat_type][file_type],
@@ -363,8 +368,6 @@ pfs_mntstat_store(struct timeval* stat_begin, struct timeval* stat_end,
 		file_type = pfs_tls_get_stat_file_type();
 		if (FILE_PFS_INITED == file_type)
 			return;
-		PFS_VERIFY(file_type < FILE_TYPE_COUNT);
-		PFS_VERIFY(stat_type < MNT_STAT_FILE_SPEC_TYPE_COUNT);
 		pfs_file_type_stat_add(stat_end->tv_sec, stat_type,
 		    file_type, stat_latency);
 		if (io_size != 0) {
