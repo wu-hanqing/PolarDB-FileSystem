@@ -144,7 +144,8 @@ pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 	}
 
 	PFS_ASSERT(albda == bda);
-	pfs_reset_iovcnt(iov, len, &iovcnt, false);
+	if (iov)
+		pfs_reset_iovcnt(iov, len, &iovcnt, false);
 	err = pfsdev_pwritev_flags(iodesc, iov, iovcnt, len, bda, ioflags);
 	return err;
 }
@@ -223,7 +224,6 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	size_t allen = 0, iolen = 0, left = 0;
 	const int socket = pfsdev_get_socket_id(mnt->mnt_ioch_desc);
 	const size_t dev_bsize = pfsdev_get_write_unit(mnt->mnt_ioch_desc);
-	const size_t buf_align = pfsdev_get_buf_align(mnt->mnt_ioch_desc);
 	struct rangelock *rl = NULL;
 	void		*cookie[3] = {NULL, NULL, NULL};
 	int		cc = 0;
@@ -283,8 +283,10 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 			tmp_iov = *iov;
 			tmp_iov_cnt = *iovcnt;
 		} else {
-			tmp_iov = &zero_iov;
-			tmp_iov_cnt = 1;
+			if (!(ioflags & IO_ZERO)) {
+				tmp_iov = &zero_iov;
+				tmp_iov_cnt = 1;
+			}
 		}
 		err = (*iofunc)(mnt->mnt_ioch_desc, albda, allen, albuf, bda,
 		    iolen, tmp_iov, tmp_iov_cnt, ioflags);
