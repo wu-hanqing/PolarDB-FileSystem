@@ -242,6 +242,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 			memset(zero_buf, 0, PFS_FRAG_SIZE);
 			zero_iov.iov_base = zero_buf;
 			zero_iov.iov_len = PFS_FRAG_SIZE;
+			ioflags |= IO_DMABUF;
 		}
 	} else if (iov == NULL) {
 		pfs_etrace("iov is NULL");
@@ -249,7 +250,7 @@ pfs_blkio_execute(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt, pfs_blkno_t
 	}
 	if (is_write && !(flags & PFS_IO_NO_LOCK)) {
 		/* for mode 0, because curve supports 512 bytes sector io,
-		 * if our write-unit is larger than the 512, we have to use
+		 * if hardware sector is larger than the 512, we have to use
 		 * io range-lock to do read-merge-write
 		 */
 		if (block_io_atomic == 0)
