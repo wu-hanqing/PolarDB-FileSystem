@@ -311,7 +311,7 @@ pfs_ratecheck(struct timeval *lasttime, const struct timeval *mininterval)
 	return (rv);
 }
 
-void pfs_copy_from_buf_to_iovec(struct iovec *iovec, const void *_buf, size_t len)
+void pfs_copy_from_buf_to_iovec(const struct iovec *iovec, const void *_buf, size_t len)
 {
     const char *buf = (const char *)_buf;
     int i = 0;
@@ -341,7 +341,7 @@ void pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, size_t le
     }
 }
 
-void pfs_reset_iovcnt(struct iovec *iovec, size_t len, int *iovcnt, bool reset_iov)
+size_t pfs_reset_iovcnt(struct iovec *iovec, size_t len, int *iovcnt, bool reset_iov)
 {
 	int i = 0;
 
@@ -357,12 +357,14 @@ void pfs_reset_iovcnt(struct iovec *iovec, size_t len, int *iovcnt, bool reset_i
 			if (reset_iov)
 				iovec[i].iov_len = len;
 			i++;
+			len = 0;
 			break;
 		}
 		len -= iovec[i].iov_len;
 		i++;
 	}
 	*iovcnt = i;
+	return len;
 }
 
 size_t pfs_getpagesize(void)

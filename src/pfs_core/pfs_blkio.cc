@@ -34,7 +34,7 @@
 
 typedef int pfs_blkio_fn_t(
     int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
-    pfs_bda_t bda, size_t len, struct iovec *iov, int iovcnt, int ioflags);
+    pfs_bda_t bda, size_t len, const struct iovec *iov, int iovcnt, int ioflags);
 
 /* 
  * 0: block mode (chunk server)
@@ -100,7 +100,7 @@ pfs_blkio_align(pfs_mount_t *mnt, int ioflags, int is_write, pfs_bda_t data_bda,
 
 static int
 pfs_blkio_read_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
-    pfs_bda_t bda, size_t len, struct iovec *iov, int iovcnt, int ioflags)
+    pfs_bda_t bda, size_t len, const struct iovec *iov, int iovcnt, int ioflags)
 {
 	int err = 0;
 
@@ -116,14 +116,13 @@ pfs_blkio_read_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 	}
 
 	PFS_ASSERT(albda == bda);
-	pfs_reset_iovcnt(iov, len, &iovcnt, false);
 	err = pfsdev_preadv_flags(iodesc, iov, iovcnt, len, bda, ioflags);
 	return err;
 }
 
 static int
 pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
-    pfs_bda_t bda, size_t len, struct iovec *iov, int iovcnt, int ioflags)
+    pfs_bda_t bda, size_t len, const struct iovec *iov, int iovcnt, int ioflags)
 {
 	int err = 0;
 
@@ -144,8 +143,6 @@ pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 	}
 
 	PFS_ASSERT(albda == bda);
-	if (iov)
-		pfs_reset_iovcnt(iov, len, &iovcnt, false);
 	err = pfsdev_pwritev_flags(iodesc, iov, iovcnt, len, bda, ioflags);
 	return err;
 }

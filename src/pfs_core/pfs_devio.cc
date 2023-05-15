@@ -391,7 +391,10 @@ pfs_io_create(pfs_dev_t *dev, int op, const struct iovec *iov, int iovcnt, size_
 			io->io_iov = io->io_iovspace;
 		}
 		memcpy(io->io_iov, iov, sizeof(struct iovec) * iovcnt);
-		pfs_reset_iovcnt(io->io_iov, len, &iovcnt, true);
+		size_t remain = pfs_reset_iovcnt(io->io_iov, len, &iovcnt, true);
+		if (remain) {
+			pfs_etrace("iov space is not large enough, it should be larger than %ld, remaining is %ld", len, remain);
+		}
 		io->io_iovcnt = iovcnt;
 	} else {
 		io->io_iov = NULL;
