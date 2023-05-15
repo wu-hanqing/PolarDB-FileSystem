@@ -334,6 +334,8 @@ ssize_t
 pfs_blkio_write(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
     pfs_blkno_t blkno, off_t off, ssize_t len, int flags)
 {
+	PFS_ASSERT(off + len <= mnt->mnt_blksize);
+	PFS_ASSERT(iov != NULL || (flags & PFS_IO_WRITE_ZERO));
 	return pfs_blkio_execute(mnt, iov, iovcnt, blkno, off, len,
 	    pfs_blkio_write_segment, flags);
 }
