@@ -93,7 +93,7 @@ typedef struct pfs_spdk_dev {
     pthread_mutex_t dk_work_mutex;
     pfs_futex_event_t dk_event;
     int         dk_running;
-    char        dk_path[PFS_MAX_PBDLEN];
+    char        dk_path[PFS_MAX_PBDLEN+1];
 } pfs_spdk_dev_t;
 
 struct pfs_spdk_iocb {
