@@ -317,13 +317,10 @@ ssize_t
 pfs_blkio_read(pfs_mount_t *mnt, struct iovec **iov, int *iovcnt,
     pfs_blkno_t blkno, off_t off, ssize_t len, int flags)
 {
-	ssize_t iolen = 0;
-
 	PFS_ASSERT(off + len <= mnt->mnt_blksize);
 	PFS_ASSERT(iov != NULL);
-	iolen = pfs_blkio_execute(mnt, iov, iovcnt, blkno, off, len,
+	return pfs_blkio_execute(mnt, iov, iovcnt, blkno, off, len,
 	    pfs_blkio_read_segment, flags);
-	return iolen;
 }
 
 ssize_t
