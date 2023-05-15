@@ -345,16 +345,24 @@ void pfs_reset_iovcnt(struct iovec *iovec, size_t len, int *iovcnt, bool reset_i
 {
 	int i = 0;
 
+	if (*iovcnt == 0) {
+		fprintf(stderr, "bad iovcnt %d, should >= 0\n", *iovcnt);
+		abort();
+	}
+
 	for (;;) {
+		if (*iovcnt != 0 && i >= *iovcnt)
+			break;
 		if (iovec[i].iov_len >= len) {
 			if (reset_iov)
 				iovec[i].iov_len = len;
+			i++;
 			break;
 		}
 		len -= iovec[i].iov_len;
 		i++;
 	}
-	*iovcnt = i+1;
+	*iovcnt = i;
 }
 
 size_t pfs_getpagesize(void)
