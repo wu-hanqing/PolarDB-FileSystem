@@ -74,9 +74,6 @@ pfs_blkio_align(pfs_mount_t *mnt, int ioflags, int is_write, pfs_bda_t data_bda,
 		/* data_bda是硬件IO单位的倍数, 我们可以直接从这个data_bda位置
 		 * 开始IO
 		 */
-		//if (ioflags & (IO_DMABUF | IO_ZERO)) {
-		//fragsize = PFS_MAXPHYS;
-		//}
 		aligned_bda = data_bda;
 		*op_len = MIN(fragsize, data_len);
 		*io_len = roundup2(*op_len, sectsize);
