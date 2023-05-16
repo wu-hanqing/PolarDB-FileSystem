@@ -109,6 +109,7 @@ typedef struct pfs_inode {
 	pfs_mutex_t in_mtx;
 	pfs_mutex_t in_mtx_rpl;
 	pfs_cond_t 	in_cond;
+	pfs_rwlock_t	in_io_prot;
 	pfs_avl_node_t	in_node;
 	TAILQ_ENTRY(pfs_inode) in_next;
 	pfs_mount_t 	*in_mnt;
@@ -258,5 +259,23 @@ pfs_inodephy_get_pvtid(pfs_mount_t *mnt, pfs_inode_phy_t *phyin)
 }
 
 bool pfs_inode_writemodify_inprogress2(pfs_inode_t *in);
+
+static inline void
+pfs_inode_io_wrlock(pfs_inode_t *in)
+{
+	rwlock_wrlock(&in->in_io_prot);
+}
+
+static inline void
+pfs_inode_io_rdlock(pfs_inode_t *in)
+{
+	rwlock_rdlock(&in->in_io_prot);
+}
+
+static inline void
+pfs_inode_io_unlock(pfs_inode_t *in)
+{
+	rwlock_unlock(&in->in_io_prot);
+}
 
 #endif	/* _PFS_INODE_H_ */

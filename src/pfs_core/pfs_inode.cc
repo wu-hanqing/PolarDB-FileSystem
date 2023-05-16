@@ -1311,6 +1311,7 @@ pfs_inode_destroy(pfs_inode_t *in)
 	PFS_ASSERT(in->in_cbdone == true);
 	mutex_destroy(&in->in_mtx);
 	cond_destroy(&in->in_cond);
+	rwlock_destroy(&in->in_io_prot);
 	pfs_inode_destroy_index(in);
 	pfs_inode_writemodify_fini(&in->in_write_modify);
 	pfs_inode_dxredo_fini(&in->in_dx_redo);
@@ -1352,6 +1353,7 @@ pfs_inode_create(pfs_mount_t *mnt, pfs_ino_t ino)
 		mutex_init(&in->in_mtx);
 		mutex_init(&in->in_mtx_rpl);
 		cond_init(&in->in_cond, NULL);
+		rwlock_init(&in->in_io_prot, NULL);
 		in->in_rpl_lock_thd = 0;
 		in->in_sync_ver = 0;
 		in->in_rpl_ver = 0;
@@ -1528,6 +1530,7 @@ pfs_inode_release(pfs_mount_t *mnt, pfs_ino_t ino, uint64_t btime,
 	do {
 		tls_write_begin(mnt);
 		if (in) {
+			pfs_inode_io_wrlock(in);
 			pfs_inode_lock(in);
 			err = pfs_inode_sync_first(in, PFS_INODET_FILE, btime, false);
 			if (err < 0)
@@ -1542,8 +1545,10 @@ pfs_inode_release(pfs_mount_t *mnt, pfs_ino_t ino, uint64_t btime,
 		}
 		err = pfs_inodephy_release(mnt, ino, btime);
 	end:
-		if (in)
+		if (in) {
 			pfs_inode_unlock(in);
+			pfs_inode_io_unlock(in);
+		}
 		tls_write_end(err);
 		if (err == -ENOENT) {
 			pfs_etrace("inode %ld, seems to be remotely removed "

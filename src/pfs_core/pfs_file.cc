@@ -1153,10 +1153,18 @@ pfs_file_xftruncate(pfs_file_t *file, off_t len)
 	 */
 	do {
 		tls_write_begin(mnt);
+		/*
+		 * Here we exclusivly lock io rwlock, because in pwrite path,
+		 * inode is unlocked if it needn't to change meta data,
+		 * but we don't want to deallocate the block they are operating
+		 * on
+		 */
+		pfs_inode_io_wrlock(in);
 		pfs_inode_lock(in);
 		fsize = pfs_file_truncate(in, len, file->f_btime);
 		err = fsize < 0 ? fsize : 0;
 		pfs_inode_unlock(in);
+		pfs_inode_io_unlock(in);
 		tls_write_end(err);
 	} while (err == 0 && fsize != len);
 	MNT_STAT_END(MNT_STAT_FILE_TRUNCATE);
@@ -1184,10 +1192,12 @@ pfs_file_xpread(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 
 	rlen = -1;
 	tls_read_begin(mnt);
+	pfs_inode_io_rdlock(in);
 	pfs_inode_lock(in);
 	rlen = pfs_file_read(in, iov, iovcnt, len, off2, true, file->f_btime, flags);
 	err = rlen < 0 ? rlen : 0;
 	pfs_inode_unlock(in);
+	pfs_inode_io_unlock(in);
 	tls_read_end(err);
 	if (rlen > 0 && (flags & PFS_IO_DMA_ON))
 		MNT_STAT_END_BANDWIDTH(MNT_STAT_FILE_READ_DMA, rlen);
@@ -1233,10 +1243,12 @@ pfs_file_xpwrite(pfs_file_t *file, const struct iovec *iov, int iovcnt,
 	 * hurt performance.
 	 */
 	// tls_read_begin(mnt);
+	pfs_inode_io_rdlock(in);
 	pfs_inode_lock(in);
 	wlen = pfs_file_write(in, iov, iovcnt, len, &off2, true, file->f_btime, flags);
 	err = wlen < 0 ? wlen : 0;
 	pfs_inode_unlock(in);
+	pfs_inode_io_unlock(in);
 	// tls_read_end(mnt);
 
 	if (!pfs_inode_writemodify_inprogress2(in))

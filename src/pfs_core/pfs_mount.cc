@@ -1182,7 +1182,12 @@ pfs_orphans_inode_reclaim(void *data, pfs_metaobj_phy_t *mo)
 	pfs_inode_phy_t *phyin = MO2IN(mo);
 	int err = 0;
 	if (PHYIN_ISORPHAN(phyin)) {
-		if (PHYIN_IS_LARGE_FILE(phyin)) {
+		// XXX DON'T release inode under meta data lock only,
+		// we want to exclusivly lock the inode io_prot lock
+		// when freeing blocks to avoid the case other threads still
+		//  writing data to the blocks.
+		//if (PHYIN_IS_LARGE_FILE(phyin)) {
+		if (true) {
 			if (args->or_large_orphan_fcount < MAX_NLARGEORPHAN) {
 				args->or_array[args->or_large_orphan_fcount].
 				    or_large_orphan_fino = mo->mo_number;
@@ -1190,11 +1195,11 @@ pfs_orphans_inode_reclaim(void *data, pfs_metaobj_phy_t *mo)
 				    or_large_orphan_fbtime = phyin->in_btime;
 			}
 			++args->or_large_orphan_fcount;
-			return;
+		} else {
+			err = pfs_inodephy_release(mnt, mo->mo_number, phyin->in_btime);
+			//We can not return error.
+			PFS_VERIFY(err >= 0);
 		}
-		err = pfs_inodephy_release(mnt, mo->mo_number, phyin->in_btime);
-		//We can not return error.
-		PFS_VERIFY(err >= 0);
 	}
 }
 
