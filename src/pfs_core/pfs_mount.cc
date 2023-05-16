@@ -982,6 +982,7 @@ pfs_put_inode(pfs_mount_t *mnt, pfs_inode_t *in)
 	MNT_STAT_BEGIN();
 	INODE_LIST_LOCK(mnt);
 	--in->in_refcnt;
+	PFS_ASSERT(in->in_refcnt >= 0);
 	if ((int)pfs_avl_numnodes(&mnt->mnt_inodetree) <=
 	    inodetree_lru_size) {
 		if (in->in_refcnt == 0) {
