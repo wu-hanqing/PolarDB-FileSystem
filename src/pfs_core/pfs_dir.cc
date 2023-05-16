@@ -691,8 +691,11 @@ pfs_memdir_before_rename(pfs_mount_t *mnt, nameinfo_t *oldnamei,
 	if (err == 0) {
 		if (nin->in_ino == 0)
 			ERR_RETVAL(EBUSY);
-		if (flags & RENAME_NOREPLACE)
+		if (flags & RENAME_NOREPLACE) {
+			pfs_inode_put(nin);
+			pfs_inode_put(ndirin);
 			ERR_RETVAL(EEXIST);	
+		}
 	} else if (err == -ENOENT) {
 		if (pfs_namei_broken_path(newnamei))
 			return err; 	/* name path broken in the middle */
