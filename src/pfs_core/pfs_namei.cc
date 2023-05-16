@@ -69,11 +69,12 @@ instk_push(struct instack *stk, pfs_mount_t *mnt, pfs_ino_t ino, uint64_t btime,
 	}
 
 	if (stk->s_vec == NULL || stk->s_i >= stk->s_size) {
-		stk->s_size += INSTK_INC;
-		stk->s_vec = (struct stkent *)pfs_mem_realloc(stk->s_vec,
-		    stk->s_size * sizeof(*stk->s_vec), M_INSTK_VEC);
-		if (stk->s_vec == NULL)
+		struct stkent *tmp = (struct stkent *)pfs_mem_realloc(stk->s_vec,
+		    (stk->s_size + INSTK_INC) * sizeof(*stk->s_vec), M_INSTK_VEC);
+		if (NULL == tmp)
 			ERR_RETVAL(ENOMEM);
+		stk->s_vec = tmp;
+		stk->s_size += INSTK_INC;
 	}
 
 	/* increase reference count */
