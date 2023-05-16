@@ -777,7 +777,7 @@ pfs_inode_dx_add(pfs_mount_t *mnt, pfs_avl_tree_t *dxroot, uint32_t nmhash,
 
 	first = (pfs_dxent_t *)pfs_avl_find(dxroot, ent, NULL);
 	if (first == NULL) {
-		pfs_avl_add(dxroot, ent);
+		PFS_ASSERT(pfs_avl_add(dxroot, ent) == 0);
 	} else {
 		// XXX for convenience, we do not append to tail
 		ent->e_next = first->e_next;
@@ -803,7 +803,7 @@ pfs_inode_dx_del(pfs_avl_tree_t *dxroot, uint32_t nmhash, pfs_ino_t ino, bool is
 		pfs_avl_remove(dxroot, ent);
 		/* tree updated here and do not use pfs_avl_insert */
 		if (ent->e_next != NULL)
-			pfs_avl_add(dxroot, ent->e_next);
+			PFS_ASSERT(pfs_avl_add(dxroot, ent->e_next) == 0);
 	} else {
 		PFS_ASSERT(prev != NULL && prev->e_next == ent);
 		prev->e_next = ent->e_next;
@@ -833,7 +833,7 @@ pfs_inode_dx_del_self(pfs_avl_tree_t *dxroot, uint32_t nmhash, pfs_ino_t ino, bo
 		pfs_avl_remove(dxroot, ent);
 		/* tree updated here and do not use pfs_avl_insert */
 		if (ent->e_next != NULL)
-			pfs_avl_add(dxroot, ent->e_next);
+			PFS_ASSERT(pfs_avl_add(dxroot, ent->e_next) == 0);
 	} else {
 		PFS_ASSERT(prev != NULL && prev->e_next == ent);
 		prev->e_next = ent->e_next;
