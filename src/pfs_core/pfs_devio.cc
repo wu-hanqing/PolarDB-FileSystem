@@ -385,17 +385,23 @@ pfs_io_create(pfs_dev_t *dev, int op, const struct iovec *iov, int iovcnt, size_
 	io = pfs_io_alloc();
 	io->io_dev = dev;
 	if (iov) {
-		if (iovcnt > PFSDEV_IOV_MAX) {
-			io->io_iov = (struct iovec *)pfs_mem_dalloc(sizeof(struct iovec) * iovcnt, M_DEV_IOVEC);
+		int need_iovcnt = pfs_iovcnt_needed(iov, iovcnt, len);
+		if (need_iovcnt == -1) {
+			pfs_etrace("iovec is not enough according to given len: %ld\n", len);
+			abort();
+		}
+		if (need_iovcnt > PFSDEV_IOV_MAX) {
+			io->io_iov = (struct iovec *)pfs_mem_dalloc(sizeof(struct iovec) * need_iovcnt, M_DEV_IOVEC);
 		} else {
 			io->io_iov = io->io_iovspace;
 		}
-		memcpy(io->io_iov, iov, sizeof(struct iovec) * iovcnt);
-		size_t remain = pfs_reset_iovcnt(io->io_iov, len, &iovcnt, true);
-		if (remain) {
-			pfs_etrace("iov space is not large enough, it should be larger than %ld, remaining is %ld", len, remain);
+		
+		int rc = pfs_iov_copy_with_len(iov, need_iovcnt, io->io_iov, len);
+		if (rc != need_iovcnt) {
+			pfs_etrace("internal error, iovec is not enough");
+			abort();
 		}
-		io->io_iovcnt = iovcnt;
+		io->io_iovcnt = need_iovcnt;
 	} else {
 		io->io_iov = NULL;
 		io->io_iovcnt = 0;

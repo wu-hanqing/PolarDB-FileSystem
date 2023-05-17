@@ -341,30 +341,50 @@ void pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, size_t le
     }
 }
 
-size_t pfs_reset_iovcnt(struct iovec *iovec, size_t len, int *iovcnt, bool reset_iov)
+/*
+ * Calculate how many existing iovecs are needed for length of bytes.
+ * Return: >= 0 success
+ *         < 0 failure, iovec is not enough
+ */
+int pfs_iovcnt_needed(const struct iovec *iov, int iovcnt, size_t len)
 {
 	int i = 0;
 
-	if (*iovcnt == 0) {
-		fprintf(stderr, "bad iovcnt %d, should >= 0\n", *iovcnt);
-		abort();
-	}
-
-	for (;;) {
-		if (*iovcnt != 0 && i >= *iovcnt)
-			break;
-		if (iovec[i].iov_len >= len) {
-			if (reset_iov)
-				iovec[i].iov_len = len;
-			i++;
+	for (i = 0; i < iovcnt && len > 0; ++i) {
+		if (iov[i].iov_len >= len) {
 			len = 0;
-			break;
+		} else {
+			len -= iov[i].iov_len;
 		}
-		len -= iovec[i].iov_len;
-		i++;
 	}
-	*iovcnt = i;
-	return len;
+	if (len == 0)
+		return i;
+	return -1;
+}
+
+/*
+ * Copy iovec for length of bytes, last iov is adjusted according to argument
+ * len.
+ * Return: >= 0 success
+ *         < 0 failure, iovec is not enough
+ */
+int pfs_iov_copy_with_len(const struct iovec *src, int iovcnt,
+	struct iovec *dst, size_t len)
+{
+	int i = 0;
+
+	for (i = 0; i < iovcnt && len > 0; ++i) {
+		dst[i] = src[i];
+		if (dst[i].iov_len >= len) {
+			dst[i].iov_len = len;
+			len = 0;
+		} else {
+			len -= dst[i].iov_len;
+		}
+	}
+	if (len == 0)
+		return i;
+	return -1;
 }
 
 size_t pfs_getpagesize(void)
