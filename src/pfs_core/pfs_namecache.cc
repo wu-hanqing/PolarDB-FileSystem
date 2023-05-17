@@ -98,7 +98,7 @@ static u_long numrejects;
 
 /* Number of names kept in hash table */
 static int64_t nc_max = DEFAULT_NC_MAX;
-static int64_t nc_enable = PFS_OPT_ENABLE;
+static int64_t nc_enable = PFS_OPT_DISABLE;
 static int64_t nc_lru_window = 100000; /* microseconds */
 static int64_t nc_max_bucket_len = SEARCH_DEPTH * 50; /* microseconds */
 static int nc_expanding;
