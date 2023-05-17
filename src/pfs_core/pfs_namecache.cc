@@ -114,7 +114,7 @@ struct expand_info_ctl {
 static expand_info_ctl *expand_info;
 
 PFS_OPTION_REG(nc_max, "8192", pfs_check_lval_normal);
-PFS_OPTION_REG(nc_enable, "1", pfs_check_lval_switch);
+PFS_OPTION_REG(nc_enable, "0", pfs_check_lval_switch);
 PFS_OPTION_REG(nc_lru_window, "100000", pfs_check_lval_normal);
 PFS_OPTION_REG(nc_max_bucket_len, "200", pfs_check_lval_normal);
 
@@ -333,8 +333,10 @@ pfs_namecache_enter(pfs_mount_t *mnt, pfs_ino_t parent_ino,
 	int bucket_len = 0;
 
 	/* pfs_option_set can not handle value <= 0 */
-	if (nc_enable == PFS_OPT_DISABLE)
+	if (nc_enable == PFS_OPT_DISABLE) {
+		printf("giveup\n");
 		return;
+	}
 
 	if (name[0] == '\0') {
 		return;
