@@ -97,19 +97,19 @@ pfs_init_failed(pfs_mount_t *mnt)
 inline void
 mountentry_rdlock(mountentry_t *me)
 {
-	pfs_brwlock_rdlock(&me->me_rwlock);
+	PFS_ASSERT(pfs_brwlock_rdlock(&me->me_rwlock) == 0);
 }
 
 inline void
 mountentry_wrlock(mountentry_t *me)
 {
-	pfs_brwlock_wrlock(&me->me_rwlock);
+	PFS_ASSERT(pfs_brwlock_wrlock(&me->me_rwlock) == 0);
 }
 
 inline void
 mountentry_unlock(mountentry_t *me)
 {
-	pfs_brwlock_unlock(&me->me_rwlock);
+	PFS_ASSERT(pfs_brwlock_unlock(&me->me_rwlock) == 0);
 }
 
 inline void
