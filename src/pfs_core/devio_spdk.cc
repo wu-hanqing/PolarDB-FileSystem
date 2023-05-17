@@ -1002,7 +1002,7 @@ pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
             pfs_timespecadd(&ts, &timeout, &ts);
             int err = pfs_event_timedwait(&dkioq->dkq_done_ev, &ts);
             if (err) {
-		        pfs_fatal("wait io time runing out, err:%d/n", err);
+	        pfs_fatal("wait io time runing out, err:%d\n", err);
             }
             for (iocb = __atomic_exchange_n(&dkioq->dkq_done_q, NULL,
                     __ATOMIC_ACQUIRE); iocb; iocb = next) {
