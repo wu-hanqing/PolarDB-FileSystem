@@ -723,13 +723,13 @@ pfs_spdk_dev_io_pwrite(void *arg)
     dkdev = iocb->cb_dev;
     io = iocb->cb_pfs_io;
     if (io->io_flags & IO_ZERO) {
-    	rc = spdk_bdev_write_zeroes(dkdev->dk_desc, dkdev->dk_ioch,
+        rc = spdk_bdev_write_zeroes(dkdev->dk_desc, dkdev->dk_ioch,
             io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
     } else if (iocb->cb_dma_buf) {
-    	rc = spdk_bdev_write(dkdev->dk_desc, dkdev->dk_ioch, iocb->cb_dma_buf,
-        	io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
+        rc = spdk_bdev_write(dkdev->dk_desc, dkdev->dk_ioch, iocb->cb_dma_buf,
+            io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
     } else {
-	    rc = spdk_bdev_writev(dkdev->dk_desc, dkdev->dk_ioch, io->io_iov,
+        rc = spdk_bdev_writev(dkdev->dk_desc, dkdev->dk_ioch, io->io_iov,
             io->io_iovcnt, io->io_bda, io->io_len, pfs_spdk_dev_io_done, iocb);
     }
     if (rc == ENOMEM) {
@@ -877,7 +877,7 @@ pfs_spdk_dev_send_iocb(pfs_spdk_dev_t *dkdev, pfs_spdk_iocb_t *iocb)
 
     if (dkdev->dk_poller_handle == NULL) {
         if (FLAGS_pfs_spdk_driver_poll_delay != 0)
-	        pfs_futex_event_set(&dkdev->dk_event);
+            pfs_futex_event_set(&dkdev->dk_event);
     } else {
         dkdev->dk_driver_poller.notify_callback(dkdev->dk_poller_handle);
     }
@@ -1002,7 +1002,7 @@ pfs_spdk_dev_wait_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
             pfs_timespecadd(&ts, &timeout, &ts);
             int err = pfs_event_timedwait(&dkioq->dkq_done_ev, &ts);
             if (err) {
-	        pfs_fatal("wait io time runing out, err:%d\n", err);
+                pfs_fatal("wait io time runing out, err:%d\n", err);
             }
             for (iocb = __atomic_exchange_n(&dkioq->dkq_done_q, NULL,
                     __ATOMIC_ACQUIRE); iocb; iocb = next) {
