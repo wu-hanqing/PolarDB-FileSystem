@@ -40,7 +40,7 @@ uint64_t		pfs_devs_epoch;
 pfs_dev_t		*pfs_devs[PFS_MAX_NCHD];
 static pthread_mutex_t		pfs_devs_mtx;
 
-static __thread SLIST_HEAD(, pfs_devio) tls_free_devio = {NULL};
+static __thread SLIST_HEAD(, pfs_devio) tls_free_devio = SLIST_HEAD_INITIALIZER(tls_free_devio);
 static int __thread tls_free_devio_num = 0;
 
 /* disable iostat by default */

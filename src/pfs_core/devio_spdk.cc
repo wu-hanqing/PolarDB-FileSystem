@@ -139,7 +139,7 @@ PFS_OPTION_REG2(pfs_spdk_driver_auto_bind, FLAGS_pfs_spdk_driver_auto_bind_cpu,
 	OPT_INT, 0, OPT_INT);
 
 #define PFS_MAX_CACHED_SPDK_IOCB        128
-static __thread SLIST_HEAD(, pfs_spdk_iocb) tls_free_iocb = {NULL};
+static __thread SLIST_HEAD(, pfs_spdk_iocb) tls_free_iocb = SLIST_HEAD_INITIALIZER(tls_free_iocb);
 static __thread int tls_free_iocb_num = 0;
 
 #define error_time_interval {FLAGS_pfs_spdk_driver_error_interval, 0}
