@@ -143,6 +143,10 @@ static __thread int tls_free_iocb_num = 0;
 
 #define error_time_interval {FLAGS_pfs_spdk_driver_error_interval, 0}
 
+static void pfs_spdk_dev_io_pread(void *arg);
+static void pfs_spdk_dev_io_pwrite(void *arg);
+static void pfs_spdk_dev_io_trim(void *arg);
+static void pfs_spdk_dev_io_flush(void *arg);
 static void pfs_spdk_dev_io_fini_pread(void *iocb);
 static void pfs_spdk_dev_io_fini_pwrite(void *iocb);
 static void pfs_spdk_dev_io_fini_trim(void *iocb);
@@ -615,6 +619,7 @@ pfs_spdk_dev_io_prep_pread(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     } else {
         iocb->cb_dma_buf = NULL;
     }
+    iocb->cb_io_op = pfs_spdk_dev_io_pread;
     iocb->cb_io_done = pfs_spdk_dev_io_fini_pread;
     return 0;
 }
@@ -702,6 +707,7 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     } else {
         iocb->cb_dma_buf = NULL;
     }
+    iocb->cb_io_op = pfs_spdk_dev_io_pwrite;
     iocb->cb_io_done = pfs_spdk_dev_io_fini_pwrite;
     return 0;
 }
@@ -764,6 +770,7 @@ pfs_spdk_dev_io_prep_trim(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
+    iocb->cb_io_op = pfs_spdk_dev_io_trim;
     iocb->cb_io_done = pfs_spdk_dev_io_fini_trim;
     return 0;
 }
@@ -813,6 +820,7 @@ pfs_spdk_dev_io_prep_flush(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_bda));
     PFS_ASSERT(pfs_spdk_dev_dio_aligned(dkdev, io->io_len));
 
+    iocb->cb_io_op = pfs_spdk_dev_io_flush;
     iocb->cb_io_done = pfs_spdk_dev_io_fini_flush;
     return 0;
 }
@@ -852,14 +860,11 @@ pfs_spdk_dev_io_fini_flush(void *arg)
 }
 
 static void
-pfs_spdk_dev_send_iocb(pfs_spdk_dev_t *dkdev,
-    spdk_msg_fn fn,
-    pfs_spdk_iocb_t *iocb)
+pfs_spdk_dev_send_iocb(pfs_spdk_dev_t *dkdev, pfs_spdk_iocb_t *iocb)
 {
     pfs_spdk_iocb_t *head;
     int count;
 
-    iocb->cb_io_op = fn;
     head = __atomic_load_n(&dkdev->dk_incoming, __ATOMIC_RELAXED);
     for (;;) {
         iocb->cb_next = head;
@@ -933,25 +938,21 @@ pfs_spdk_dev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
         err = pfs_spdk_dev_io_prep_pread(dkdev, io, iocb);
         if (err)
             goto fail;
-        fn = pfs_spdk_dev_io_pread;
         break;
     case PFSDEV_REQ_WR:
         err = pfs_spdk_dev_io_prep_pwrite(dkdev, io, iocb);
         if (err)
             goto fail;
-        fn = pfs_spdk_dev_io_pwrite;
         break;
     case PFSDEV_REQ_TRIM:
         err = pfs_spdk_dev_io_prep_trim(dkdev, io, iocb);
         if (err)
             goto fail;
-        fn = pfs_spdk_dev_io_trim;
         break;
     case PFSDEV_REQ_FLUSH:
         err = pfs_spdk_dev_io_prep_flush(dkdev, io, iocb);
         if (err)
             goto fail;
-        fn = pfs_spdk_dev_io_flush;
         break;
 
     default:
@@ -961,7 +962,7 @@ pfs_spdk_dev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
         PFS_ASSERT("unsupported io type" == NULL);
     }
 
-    pfs_spdk_dev_send_iocb(dkdev, fn, iocb);
+    pfs_spdk_dev_send_iocb(dkdev, iocb);
     if (err) {
 fail:
         /* io submit failure */
