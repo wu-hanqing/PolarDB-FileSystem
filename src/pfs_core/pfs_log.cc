@@ -23,8 +23,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <rte_memcpy.h>
-
 #include "pfs_devio.h"
 #include "pfs_dir.h"
 #include "pfs_file.h"
@@ -970,7 +968,7 @@ static ssize_t pfs_log_writebuf_fill(pfs_log_t *log, char *buf, size_t len,
 	size_t out_len = -1LL;
 	char *out_buf = pfs_log_writebuf_get(log, offset, len, &out_len);
 	if (out_buf) {
-		rte_memcpy(out_buf, buf, out_len);
+		memcpy(out_buf, buf, out_len);
 		log->log_writebuf_dirty = 1;
 	}
 	return out_len;

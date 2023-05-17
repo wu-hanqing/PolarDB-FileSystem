@@ -36,7 +36,6 @@
 #include <spdk/nvme.h>
 
 #include <rte_common.h>
-#include <rte_memcpy.h>
 #include <rte_thread.h>
 #include <rte_pause.h>
 #include <rte_prefetch.h>

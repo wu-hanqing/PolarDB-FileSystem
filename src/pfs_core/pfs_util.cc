@@ -29,8 +29,6 @@
 #include "pfs_memory.h"
 #include "pfs_trace.h"
 
-#include "rte_memcpy.h"
-
 #include "pfs_errno_wrapper.h"
 
 /*-
@@ -319,7 +317,7 @@ void pfs_copy_from_buf_to_iovec(const struct iovec *iovec, const void *_buf, siz
 
     while (len > 0) {
         cpbytes = RTE_MIN(iovec[i].iov_len, len);
-        rte_memcpy(iovec[i].iov_base, buf, cpbytes);
+        memcpy(iovec[i].iov_base, buf, cpbytes);
         buf += cpbytes;
         len -= cpbytes;
         i++;
@@ -334,7 +332,7 @@ void pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, size_t le
 
     while (len > 0) {
         cpbytes = RTE_MIN(iovec[i].iov_len, len);
-        rte_memcpy(buf, iovec[i].iov_base, cpbytes);
+        memcpy(buf, iovec[i].iov_base, cpbytes);
         buf += cpbytes;
         len -= cpbytes;
         i++;

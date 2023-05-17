@@ -16,7 +16,6 @@
 #include <sys/param.h>
 
 #include <rte_memory.h>
-#include <rte_memcpy.h>
 #include <rte_malloc.h>
 
 #include "pfs_blkio.h"
