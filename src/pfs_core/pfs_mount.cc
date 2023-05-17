@@ -974,8 +974,8 @@ pfs_get_inode(pfs_mount_t *mnt, pfs_ino_t ino)
 	return in;
 }
 
-void
-pfs_put_inode(pfs_mount_t *mnt, pfs_inode_t *in)
+static void
+do_pfs_put_inode(pfs_mount_t *mnt, pfs_inode_t *in, bool finish)
 {
 	bool need_free = false;
 	PFS_ASSERT(in != NULL);
@@ -983,8 +983,8 @@ pfs_put_inode(pfs_mount_t *mnt, pfs_inode_t *in)
 	INODE_LIST_LOCK(mnt);
 	--in->in_refcnt;
 	PFS_ASSERT(in->in_refcnt >= 0);
-	if ((int)pfs_avl_numnodes(&mnt->mnt_inodetree) <=
-	    inodetree_lru_size) {
+	if (!finish && ((int)pfs_avl_numnodes(&mnt->mnt_inodetree) <=
+	    inodetree_lru_size)) {
 		if (in->in_refcnt == 0) {
 			//make in easier to be swap out.
 			TAILQ_REMOVE(&mnt->mnt_inodelist, in, in_next);
@@ -1008,6 +1008,18 @@ pfs_put_inode(pfs_mount_t *mnt, pfs_inode_t *in)
 	if (need_free)
 		pfs_inode_destroy(in);
 	MNT_STAT_END(MNT_STAT_CONTAINER_INODE_PUT);
+}
+
+void
+pfs_put_inode(pfs_mount_t *mnt, pfs_inode_t *in)
+{
+	do_pfs_put_inode(mnt, in, false);
+}
+
+void
+pfs_put_inode_finish(pfs_mount_t *mnt, pfs_inode_t *in)
+{
+	do_pfs_put_inode(mnt, in, true);
 }
 
 pfs_inode_t *

@@ -1173,8 +1173,6 @@ pfs_memdir_unload(pfs_mount_t *mnt)
 	rootin = pfs_get_inode(mnt, 0);
 	if (rootin == NULL)	/* maybe mount failed */
 		return;
-	pfs_put_inode(mnt, rootin);
-
-	/* trigger destroy() */
-	pfs_inode_put(rootin);
+	/* wish to trigger destroy() */
+	pfs_put_inode_finish(mnt, rootin);
 }
