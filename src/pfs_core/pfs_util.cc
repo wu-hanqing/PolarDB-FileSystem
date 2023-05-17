@@ -309,34 +309,36 @@ pfs_ratecheck(struct timeval *lasttime, const struct timeval *mininterval)
 	return (rv);
 }
 
-void pfs_copy_from_buf_to_iovec(const struct iovec *iovec, const void *_buf, size_t len)
+size_t pfs_copy_from_buf_to_iovec(const struct iovec *iovec, int iovcnt, const void *_buf, size_t len)
 {
     const char *buf = (const char *)_buf;
     int i = 0;
     int cpbytes = 0;
 
-    while (len > 0) {
+    while (i < iovcnt && len > 0) {
         cpbytes = RTE_MIN(iovec[i].iov_len, len);
         memcpy(iovec[i].iov_base, buf, cpbytes);
         buf += cpbytes;
         len -= cpbytes;
         i++;
     }
+    return len;
 }
 
-void pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, size_t len)
+size_t pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, int iovcnt, size_t len)
 {
     char *buf = (char *)_buf;
     int i = 0;
     int cpbytes = 0;
 
-    while (len > 0) {
+    while (i < iovcnt && len > 0) {
         cpbytes = RTE_MIN(iovec[i].iov_len, len);
         memcpy(buf, iovec[i].iov_base, cpbytes);
         buf += cpbytes;
         len -= cpbytes;
         i++;
     }
+    return len;
 }
 
 /*

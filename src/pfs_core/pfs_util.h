@@ -159,8 +159,8 @@ iovec_bytes(const struct iovec *iov, int cnt)
 
 int  pfs_strtol(const char* sval, int64_t* ival);
 int  pfs_strtoi(const char* sval, int32_t* ival);
-void pfs_copy_from_buf_to_iovec(const struct iovec *iovec, const void *_buf, size_t len);
-void pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, size_t len);
+size_t pfs_copy_from_buf_to_iovec(const struct iovec *iovec, int iovcnt, const void *_buf, size_t len);
+size_t pfs_copy_from_iovec_to_buf(void *_buf, const struct iovec *iovec, int iovcnt, size_t len);
 int pfs_iovcnt_needed(const struct iovec *iov, int iovcnt, size_t len);
 int pfs_iov_copy_with_len(const struct iovec *src, int iovcnt,
 	struct iovec *dst, size_t len);

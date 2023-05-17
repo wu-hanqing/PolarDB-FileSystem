@@ -659,7 +659,11 @@ pfs_spdk_dev_io_fini_pread(void *arg)
     pfs_devio_t *io = iocb->cb_pfs_io;
     pfs_spdk_ioq_t *dkioq = (pfs_spdk_ioq_t *)io->io_queue;
     if (io->io_error == 0 && !(io->io_flags & IO_DMABUF) && iocb->cb_dma_buf) {
-        pfs_copy_from_buf_to_iovec(io->io_iov, iocb->cb_dma_buf, io->io_len);
+        size_t remain = pfs_copy_from_buf_to_iovec(io->io_iov, io->io_iovcnt, iocb->cb_dma_buf, io->io_len);
+        if (remain) {
+            pfs_etrace("internal error, not enough iovec, %ld bytes remaining", remain);
+            abort();
+        }
     }
     pfs_spdk_dev_deq_inflight_io(dkioq, io);
     pfs_spdk_dev_enq_complete_io(dkioq, io);
@@ -690,7 +694,11 @@ pfs_spdk_dev_io_prep_pwrite(pfs_spdk_dev_t *dkdev, pfs_devio_t *io,
             }
             return -ENOBUFS;
         }
-        pfs_copy_from_iovec_to_buf(iocb->cb_dma_buf, io->io_iov, io->io_len);
+        size_t remain = pfs_copy_from_iovec_to_buf(iocb->cb_dma_buf, io->io_iov, io->io_iovcnt, io->io_len);
+        if (remain) {
+            pfs_etrace("internal error, not enough iovec, %ld bytes remaining", remain);
+            abort();
+        }
     } else {
         iocb->cb_dma_buf = NULL;
     }

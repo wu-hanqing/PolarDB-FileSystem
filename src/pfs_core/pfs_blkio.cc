@@ -107,7 +107,11 @@ pfs_blkio_read_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 		err = pfsdev_pread_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
 		if (err < 0)
 			return err;
-		pfs_copy_from_buf_to_iovec(iov, &albuf[bda - albda], len);
+		size_t remain = pfs_copy_from_buf_to_iovec(iov, iovcnt, &albuf[bda - albda], len);
+		if (remain) {
+			pfs_etrace("internal error, not enough iovec, %ld bytes remaining", remain);
+			abort();
+		}
 		return 0;
 	}
 
@@ -131,8 +135,13 @@ pfs_blkio_write_segment(int iodesc, pfs_bda_t albda, size_t allen, char *albuf,
 			return err;
 		if (ioflags & IO_ZERO)
 			memset(&albuf[bda - albda], 0, len);
-		else
-			pfs_copy_from_iovec_to_buf(&albuf[bda - albda], iov, len);
+		else {
+			size_t remain = pfs_copy_from_iovec_to_buf(&albuf[bda - albda], iov, iovcnt, len);
+			if (remain) {
+				pfs_etrace("internal error, not enough iovec, %ld bytes remaining", remain);
+				abort();
+			}
+		}
 		err = pfsdev_pwrite_flags(iodesc, albuf, allen, albda, IO_WAIT|IO_DMABUF);
 		MNT_STAT_END_BANDWIDTH(MNT_STAT_FILE_WRITE_PAD, len);
 		return err;
