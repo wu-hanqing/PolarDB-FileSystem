@@ -54,9 +54,6 @@
 
 #include "pfs_errno_wrapper.h"
 
-#define BUF_TYPE "pfs_iobuf"
-#define io_buf io_iov[0].iov_base
-
 extern "C" {
 // FIXME
 // The following function is declared in bdev_nvme.h which is not
@@ -953,7 +950,7 @@ pfs_spdk_dev_submit_io(pfs_dev_t *dev, pfs_ioq_t *ioq, pfs_devio_t *io)
     default:
         err = EINVAL;
         pfs_etrace("invalid io task! op: %d, bufp: %p, len: %zu, bda%lu\n",
-            io->io_op, io->io_buf, io->io_len, io->io_bda);
+            io->io_op, io->io_iov[0].iov_base, io->io_iov[0].iov_len, io->io_bda);
         PFS_ASSERT("unsupported io type" == NULL);
     }
 
