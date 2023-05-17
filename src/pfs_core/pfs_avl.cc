@@ -125,10 +125,9 @@ void *pfs_avl_prev(pfs_avl_tree_t *tree, void *data)
 }
 
 void
-pfs_avl_destroy(pfs_avl_tree_t *tree)                                           
+pfs_avl_destroy(pfs_avl_tree_t *tree)
 {
 	PFS_ASSERT(tree);
 	PFS_ASSERT(tree->avl_numnodes == 0);
 	PFS_ASSERT(RB_EMPTY(&tree->rb_root));
 }
-
