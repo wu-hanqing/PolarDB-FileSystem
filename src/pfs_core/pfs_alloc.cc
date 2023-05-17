@@ -44,9 +44,11 @@ pfs_anode_nfree_inc(pfs_anode_t *an, uint64_t val, int delta)
 	 * When delta is +1/-1, we just flip the bit, or else not.
 	 * Pay attention that "delta" is not 64bit integer.
 	 */
-	if (an->an_children == 0)
+	if (an->an_children == 0) {
+		PFS_ASSERT(val / AN_FREE_BMP_SHIFT < pfs_arraysize(an->an_free_bmp));
 		an->an_free_bmp[val / AN_FREE_BMP_SHIFT] ^=
 		    ((delta & 1ull) << (val % AN_FREE_BMP_SHIFT));
+	}
 }
 
 static bool
