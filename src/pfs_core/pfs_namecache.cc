@@ -334,7 +334,6 @@ pfs_namecache_enter(pfs_mount_t *mnt, pfs_ino_t parent_ino,
 
 	/* pfs_option_set can not handle value <= 0 */
 	if (nc_enable == PFS_OPT_DISABLE) {
-		printf("giveup\n");
 		return;
 	}
 
