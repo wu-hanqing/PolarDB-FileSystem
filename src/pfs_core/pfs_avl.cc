@@ -38,7 +38,7 @@ data2node(const void *data, size_t off)
 	return (pfs_avl_node_t *)((uintptr_t)data + off);
 }
 
-static int
+static inline int
 cmp(struct pfs_avl_tree_head *head, pfs_avl_node *_elem, pfs_avl_node *_tree_node)
 {
 	pfs_avl_tree_t *t = container_of(head, pfs_avl_tree_t, rb_root);
