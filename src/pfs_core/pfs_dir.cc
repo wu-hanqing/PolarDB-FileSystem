@@ -504,6 +504,14 @@ pfs_dir_read(pfs_mount_t *mnt, DIR *dir, struct dirent *den_result, bool isplus)
 	 * Here we do not output the inner type to avoid visiting inode.
 	 */
 	den_result->d_type = DT_UNKNOWN;
+	{
+		pfs_inode_phy_t *phyin;
+		phyin = pfs_meta_get_inode(mnt, de->de_ino, NULL);
+		if (phyin) {
+			den_result->d_type = ((phyin->in_type == PFS_INODET_DIR) ? DT_DIR : DT_REG);
+		}
+	}
+
 	pfs_direntry_getname(mnt, de, den_result->d_name,
 	    sizeof(den_result->d_name));
 	pfs_dbgtrace("readdir %p to %s\n", dir, den_result->d_name);
