@@ -84,6 +84,9 @@ int main(int argc, char **argv)
 				stk.push(my_path);
 				continue;
 			}
+			if (dent->d_type == DT_UNKNOWN) {
+				printf("unknown inode type: %ld %s\n", dent->d_ino, my_path.c_str());
+			}
 			auto it = ino_map.find(dent->d_ino);
 			if (it != ino_map.end()) {
 				errx(1, "repeated ino %ld, path1: %s, path2: %s",
