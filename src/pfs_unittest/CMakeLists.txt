@@ -84,3 +84,25 @@ target_link_libraries(pfs_pwrite_zero
     pthread
 )
 
+add_executable(
+	pfs_check_dentry
+	pfs_check_dentry.cc
+)
+add_dependencies(pfs_check_dentry glog_prj)
+
+target_link_libraries(pfs_check_dentry
+    -Wl,--disable-new-dtags                                                     
+    -Wl,--push-state                                                            
+    -Wl,--no-as-needed                                                          
+    -Wl,--whole-archive                                                         
+    -Bstatic                                                                    
+    pfs
+    -Wl,--no-whole-archive                                                      
+    -Wl,--pop-state                                                             
+    ${BRPC_LIBS}
+    ${SPDK_LIBS}
+    ${SPDK_DEPS}
+    gflags
+    pthread
+)
+
