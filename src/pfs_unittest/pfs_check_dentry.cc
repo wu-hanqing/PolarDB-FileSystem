@@ -97,6 +97,7 @@ int main(int argc, char **argv)
 				printf("add %ld %s\n", dent->d_ino, my_path.c_str());
 			}
 		}
+		pfs_closedir(d);
 	}
 	pfs_umount(pbdname.c_str());
 	pfs_spdk_cleanup();
