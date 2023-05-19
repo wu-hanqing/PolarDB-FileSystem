@@ -917,6 +917,11 @@ pfs_log_trim(pfs_log_t *log)
 	return 0;
 }
 
+static void pfs_log_writebuf_invalid(pfs_log_t *log)
+{
+	log->log_writebuf_off = -1LL;
+}
+
 static int pfs_log_writebuf_flush(pfs_log_t *log)
 {
 	pfs_file_t *logf = log->log_file;
@@ -925,8 +930,11 @@ static int pfs_log_writebuf_flush(pfs_log_t *log)
 	if (log->log_writebuf_dirty) {
 		wlen = pfs_file_pwrite(logf, log->log_writebuf, log->log_writebuf_sz,
 				log->log_writebuf_off, PFS_IO_DMA_ON);
-		if ((size_t)wlen != log->log_writebuf_sz)
+		if ((size_t)wlen != log->log_writebuf_sz) {
+			pfs_etrace("pfs can not write log file, expected: %ld, got %ld\n",
+				wlen, log->log_writebuf_sz);
 			return -EIO;
+		}
 		log->log_writebuf_dirty = 0;
 	}
 	return 0; 
@@ -940,7 +948,7 @@ static char *pfs_log_writebuf_get(pfs_log_t *log, uint64_t offset, size_t len,
 	ssize_t rlen, wlen;
 
 	if (offset < log->log_writebuf_off ||
-			offset >= log->log_writebuf_off + log->log_writebuf_sz) {
+		offset >= log->log_writebuf_off + log->log_writebuf_sz) {
 		if (pfs_log_writebuf_flush(log)) {
 			return NULL;
 		}
@@ -948,10 +956,12 @@ static char *pfs_log_writebuf_get(pfs_log_t *log, uint64_t offset, size_t len,
 			/* if the buffer will not be fully overwritten */
 			rlen = pfs_file_pread(logf, log->log_writebuf, log->log_writebuf_sz,
 					align_off, PFS_IO_DMA_ON);
-			if (rlen <= 0) {
+			if ((size_t)rlen != log->log_writebuf_sz) {
+				pfs_log_writebuf_invalid(log);
+				pfs_etrace("pfs can not read log, expected %ld, got %ld\n",
+					   rlen, log->log_writebuf_sz);
 				return NULL;
 			}
-			PFS_ASSERT((size_t)rlen == log->log_writebuf_sz);
 		}
 		log->log_writebuf_off = align_off;
 	}
@@ -970,6 +980,8 @@ static ssize_t pfs_log_writebuf_fill(pfs_log_t *log, char *buf, size_t len,
 	if (out_buf) {
 		memcpy(out_buf, buf, out_len);
 		log->log_writebuf_dirty = 1;
+	} else {
+		return -EIO;
 	}
 	return out_len;
 }
