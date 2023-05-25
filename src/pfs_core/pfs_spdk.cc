@@ -44,7 +44,7 @@
 #include <spdk/json.h>
 #include <spdk/rpc.h>
 
-#include <sys/user.h>	// For PAGE_SIZE and PAGE_MASK
+#include <sys/user.h>   // For PAGE_SIZE and PAGE_MASK
 #include <sys/param.h>  // For roundup
 
 #include "pfs_errno_wrapper.h"
@@ -76,7 +76,7 @@ PFS_OPTION_REG2(spdk_hugepage_single_segments, FLAGS_spdk_hugepage_single_segmen
 
 static int FLAGS_spdk_unlink_hugepage = 0;
 PFS_OPTION_REG2(spdk_unlink_hugepage, FLAGS_spdk_unlink_hugepage,
-	OPT_INT, 0, OPT_INT);
+    OPT_INT, 0, OPT_INT);
 
 static char *FLAGS_spdk_hugedir;
 PFS_OPTION_REG2(spdk_hugedir, FLAGS_spdk_hugedir, OPT_STR, "", OPT_CSTR);
@@ -132,7 +132,7 @@ struct spdk_thread_node {
 };
 
 static TAILQ_HEAD(,spdk_thread_node) g_gc_list =
-	TAILQ_HEAD_INITIALIZER(g_gc_list);
+    TAILQ_HEAD_INITIALIZER(g_gc_list);
 
 static bool g_init_stop = false;
 static pthread_t g_init_thread_id = 0;
@@ -377,7 +377,7 @@ pfs_spdk_gc_thread(struct spdk_thread *spdk_thread)
         spdk_set_thread(NULL);
 
     struct spdk_thread_node *node =
-	(struct spdk_thread_node *)malloc(sizeof(*node));
+        (struct spdk_thread_node *)malloc(sizeof(*node));
     node->thread = spdk_thread;
     // kill spdk thread in gc thread context
     pthread_mutex_lock(&g_gc_mutex);
@@ -462,7 +462,7 @@ gc_service(void *arg)
             while (spdk_thread_poll(tmp, 0, 0))
                 ;
             if (spdk_thread_is_exited(tmp)) {
-		auto next = TAILQ_NEXT(node, link);
+                auto next = TAILQ_NEXT(node, link);
                 TAILQ_REMOVE(&g_gc_list, node, link);
                 const char *name = spdk_thread_get_name(tmp);
                 if (name)
@@ -472,9 +472,9 @@ gc_service(void *arg)
                 spdk_thread_destroy(tmp);
                 spdk_set_thread(NULL);
                 free(node);
-		node = next;
+                node = next;
             } else {
-		node = TAILQ_NEXT(node, link);
+                node = TAILQ_NEXT(node, link);
             }
         }
         spdk_set_thread(spdk_thread);
@@ -580,7 +580,7 @@ out:
             rc = spdk_log_set_flag(tok);
             if (rc < 0) {
                 pfs_etrace("unknown spdk log flag %s\n", tok);
-		free(log_flags);
+                free(log_flags);
                 goto out;
             }
         } while ((tok = strtok(NULL, ",")) != NULL);
@@ -684,8 +684,8 @@ pfs_spdk_dump_devices(void)
              spdk_bdev_get_physical_block_size(bdev),  
              spdk_bdev_get_optimal_io_boundary(bdev),
              spdk_bdev_get_write_unit_size(bdev),
-	         spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_WRITE_ZEROES),
-	         spdk_bdev_get_buf_align(bdev),
+             spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_WRITE_ZEROES),
+             spdk_bdev_get_buf_align(bdev),
              cpuset_str);
         free(cpuset_str);
     }
@@ -755,7 +755,7 @@ pfs_spdk_shutdown_rpc_thread(void)
 
     rc = pthread_join(g_rpc_thread_id, NULL);
     if (rc)
-	    pfs_etrace("can not join spdk rpc service thread, %s\n", strerror(rc));
+        pfs_etrace("can not join spdk rpc service thread, %s\n", strerror(rc));
 }
 
 static void
@@ -771,7 +771,7 @@ pfs_spdk_shutdown_gc_thread(void)
 
     rc = pthread_join(g_gc_thread_id, NULL);
     if (rc)
-	    pfs_etrace("can not join spdk rpc service thread, %s\n", strerror(rc));
+        pfs_etrace("can not join spdk rpc service thread, %s\n", strerror(rc));
 }
 
 void
@@ -858,11 +858,11 @@ pfs_get_dev_local_cpus(struct spdk_bdev *bdev, cpu_set_t *set)
 static int
 json_write_cb(void *cb_ctx, const void *data, size_t size)
 {
-	FILE *f = (FILE*) cb_ctx;
-	size_t rc;
+    FILE *f = (FILE*) cb_ctx;
+    size_t rc;
 
-	rc = fwrite(data, 1, size, f);
-	return rc == size ? 0 : -1;
+    rc = fwrite(data, 1, size, f);
+    return rc == size ? 0 : -1;
 }
 
 // return memory must be freed by caller
@@ -1030,116 +1030,116 @@ pfs_cpuset_to_string(const cpu_set_t *mask)
 int
 pfs_parse_set(const char *input, cpu_set_t *set)
 {
-	unsigned idx;
-	const char *str = input;
-	char *end = NULL;
-	unsigned min, max;
+    unsigned idx;
+    const char *str = input;
+    char *end = NULL;
+    unsigned min, max;
 
-	CPU_ZERO(set);
+    CPU_ZERO(set);
 
-	while (isblank(*str))
-		str++;
+    while (isblank(*str))
+        str++;
 
-	/* only digit or left bracket is qualify for start point */
-	if ((!isdigit(*str) && *str != '(') || *str == '\0')
-		return -1;
+    /* only digit or left bracket is qualify for start point */
+    if ((!isdigit(*str) && *str != '(') || *str == '\0')
+        return -1;
 
-	/* process single number or single range of number */
-	if (*str != '(') {
-		errno = 0;
-		idx = strtoul(str, &end, 10);
-		if (errno || end == NULL || idx >= CPU_SETSIZE)
-			return -1;
-		else {
-			while (isblank(*end))
-				end++;
+    /* process single number or single range of number */
+    if (*str != '(') {
+        errno = 0;
+        idx = strtoul(str, &end, 10);
+        if (errno || end == NULL || idx >= CPU_SETSIZE)
+            return -1;
+        else {
+            while (isblank(*end))
+                end++;
 
-			min = idx;
-			max = idx;
-			if (*end == '-') {
-				/* process single <number>-<number> */
-				end++;
-				while (isblank(*end))
-					end++;
-				if (!isdigit(*end))
-					return -1;
+            min = idx;
+            max = idx;
+            if (*end == '-') {
+                /* process single <number>-<number> */
+                end++;
+                while (isblank(*end))
+                    end++;
+                if (!isdigit(*end))
+                    return -1;
 
-				errno = 0;
-				idx = strtoul(end, &end, 10);
-				if (errno || end == NULL || idx >= CPU_SETSIZE)
-					return -1;
-				max = idx;
-				while (isblank(*end))
-					end++;
-				if (*end != ',' && *end != '\0')
-					return -1;
-			}
+                errno = 0;
+                idx = strtoul(end, &end, 10);
+                if (errno || end == NULL || idx >= CPU_SETSIZE)
+                    return -1;
+                max = idx;
+                while (isblank(*end))
+                    end++;
+                if (*end != ',' && *end != '\0')
+                    return -1;
+            }
 
-			if (*end != ',' && *end != '\0' &&
-			    *end != '@')
-				return -1;
+            if (*end != ',' && *end != '\0' &&
+                *end != '@')
+                return -1;
 
-			for (idx = RTE_MIN(min, max);
-			     idx <= RTE_MAX(min, max); idx++)
-				CPU_SET(idx, set);
+            for (idx = RTE_MIN(min, max);
+                 idx <= RTE_MAX(min, max); idx++)
+                CPU_SET(idx, set);
 
-			return end - input;
-		}
-	}
+            return end - input;
+        }
+    }
 
-	/* process set within bracket */
-	str++;
-	while (isblank(*str))
-		str++;
-	if (*str == '\0')
-		return -1;
+    /* process set within bracket */
+    str++;
+    while (isblank(*str))
+        str++;
+    if (*str == '\0')
+        return -1;
 
-	min = RTE_MAX_LCORE;
-	do {
+    min = RTE_MAX_LCORE;
+    do {
 
-		/* go ahead to the first digit */
-		while (isblank(*str))
-			str++;
-		if (!isdigit(*str))
-			return -1;
+        /* go ahead to the first digit */
+        while (isblank(*str))
+            str++;
+        if (!isdigit(*str))
+            return -1;
 
-		/* get the digit value */
-		errno = 0;
-		idx = strtoul(str, &end, 10);
-		if (errno || end == NULL || idx >= CPU_SETSIZE)
-			return -1;
+        /* get the digit value */
+        errno = 0;
+        idx = strtoul(str, &end, 10);
+        if (errno || end == NULL || idx >= CPU_SETSIZE)
+            return -1;
 
-		/* go ahead to separator '-',',' and ')' */
-		while (isblank(*end))
-			end++;
-		if (*end == '-') {
-			if (min == RTE_MAX_LCORE)
-				min = idx;
-			else /* avoid continuous '-' */
-				return -1;
-		} else if ((*end == ',') || (*end == ')')) {
-			max = idx;
-			if (min == RTE_MAX_LCORE)
-				min = idx;
-			for (idx = RTE_MIN(min, max);
-			     idx <= RTE_MAX(min, max); idx++)
-				CPU_SET(idx, set);
+        /* go ahead to separator '-',',' and ')' */
+        while (isblank(*end))
+            end++;
+        if (*end == '-') {
+            if (min == RTE_MAX_LCORE)
+                min = idx;
+            else /* avoid continuous '-' */
+                return -1;
+        } else if ((*end == ',') || (*end == ')')) {
+            max = idx;
+            if (min == RTE_MAX_LCORE)
+                min = idx;
+            for (idx = RTE_MIN(min, max);
+                 idx <= RTE_MAX(min, max); idx++)
+                CPU_SET(idx, set);
 
-			min = RTE_MAX_LCORE;
-		} else
-			return -1;
+            min = RTE_MAX_LCORE;
+        } else
+            return -1;
 
-		str = end + 1;
-	} while (*end != '\0' && *end != ')');
+        str = end + 1;
+    } while (*end != '\0' && *end != ')');
 
-	/*
-	 * to avoid failure that tail blank makes end character check fail
-	 * in eal_parse_lcores( )
-	 */
-	while (isblank(*str))
-		str++;
+    /*
+     * to avoid failure that tail blank makes end character check fail
+     * in eal_parse_lcores( )
+     */
+    while (isblank(*str))
+        str++;
 
-	return str - input;
+    return str - input;
 }
 
 static unsigned
@@ -1190,40 +1190,40 @@ pfs_cpuset_socket_id(cpu_set_t *cpusetp)
 static int
 __pfs_is_spdk_mem(const void *p, size_t size)
 {
-	const char *cp = (const char *)p;
-	size_t left = size;
-	while (left > 0) {
-		size_t tmp = left;
-		if (spdk_vtophys(cp, &tmp) == SPDK_VTOPHYS_ERROR)
-			return 0;
-		cp += tmp;
-		left -= tmp;
-	}
+    const char *cp = (const char *)p;
+    size_t left = size;
+    while (left > 0) {
+        size_t tmp = left;
+        if (spdk_vtophys(cp, &tmp) == SPDK_VTOPHYS_ERROR)
+            return 0;
+        cp += tmp;
+        left -= tmp;
+    }
 
-	return 1;
+    return 1;
 }
 
 static int
 __pfs_is_spdk_memv(const struct iovec *iov, int iovcnt)
 {
-	for (int i = 0; i < iovcnt; ++i) {
-		if (!__pfs_is_spdk_mem(iov[i].iov_base, iov[i].iov_len))
-			return 0;
-	}
+    for (int i = 0; i < iovcnt; ++i) {
+        if (!__pfs_is_spdk_mem(iov[i].iov_base, iov[i].iov_len))
+            return 0;
+    }
 
-	return 1;
+    return 1;
 }
 
 extern "C" int
 pfs_is_spdk_mem(const void *p, size_t size)
 {
-	return __pfs_is_spdk_mem(p, size);
+    return __pfs_is_spdk_mem(p, size);
 }
 
 extern "C" int
 pfs_is_spdk_memv(const struct iovec *iov, int iovcnt)
 {
-	return __pfs_is_spdk_memv(iov, iovcnt);
+    return __pfs_is_spdk_memv(iov, iovcnt);
 }
 
 static inline bool                                                              
