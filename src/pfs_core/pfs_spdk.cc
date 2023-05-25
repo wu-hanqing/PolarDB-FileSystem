@@ -565,12 +565,11 @@ out:
         goto out;
     }
 
-    // [ Important. please don't remove following code.
-    // by default, dpdk binds every its lcore thread to its physical cpu
-    // with 1:1 mapping, unfortunately curve is not a typical dpdk application,
-    // we should unbind it from its core.
+    // [ Important.
+    // please don't remove following code. DPDK may only bind process to
+    // one cpu, the code fix the problem.
     spdk_unaffinitize_thread();
-    // end important ]
+    // end Important ]
 
     if (!pfs_empty_string(FLAGS_spdk_log_flags)) {
         // duplicate string
