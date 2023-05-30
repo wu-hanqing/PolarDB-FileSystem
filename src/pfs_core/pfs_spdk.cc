@@ -340,6 +340,8 @@ pfs_spdk_init_subsys_start(void *arg)
         pfs_spdk_init_subsys_done, param, true);
 }
 
+// Update the time point to wait
+// @param ts in-out
 static void
 pfs_spdk_calc_timeout(struct spdk_thread *spdk_thread, uint64_t polltime, struct timespec *ts)
 {
@@ -353,10 +355,12 @@ pfs_spdk_calc_timeout(struct spdk_thread *spdk_thread, uint64_t polltime, struct
     now = spdk_get_ticks();
 
     if (timeout == 0) {
+        // no next poller, use polltime instead
         timeout = now + (polltime * spdk_get_ticks_hz()) / SPDK_SEC_TO_NSEC;
     }
 
     if (timeout > now) {
+        // if timeout > now, add the delta to ts
         timeout = ((timeout - now) * SPDK_SEC_TO_NSEC) / spdk_get_ticks_hz() +
               ts->tv_sec * SPDK_SEC_TO_NSEC + ts->tv_nsec;
 
