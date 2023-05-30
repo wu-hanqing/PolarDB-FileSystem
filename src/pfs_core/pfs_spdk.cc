@@ -254,7 +254,9 @@ pfs_generate_json_file(void)
         return -1;
     }
 
-const char* fmt = R"foo({
+    char *s = NULL;
+    int n = asprintf(&s,
+R"foo({
     "subsystems":
     [
         {
@@ -280,14 +282,8 @@ const char* fmt = R"foo({
             ]
         }
     ]
-})foo";
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-nonliteral"
-    char *s = NULL;
-    int n = asprintf(&s, fmt, FLAGS_spdk_nvme_controller,
-                     FLAGS_spdk_nvme_controller);
-#pragma GCC diagnostic pop
+})foo",
+    FLAGS_spdk_nvme_controller, FLAGS_spdk_nvme_controller);
     int rc = write(fd, s, n); 
     if (rc == -1)
         pfs_etrace("cannot write file %s, %s", temp, strerror(errno));
